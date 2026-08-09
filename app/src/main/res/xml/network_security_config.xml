@@ -1,27 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The gateway speaks plain HTTP; confidentiality comes from the WireGuard
-  tunnel, not from TLS. That is fine over a tailnet and unacceptable anywhere
-  else, so cleartext is denied by default and re-enabled only for Tailscale
-  MagicDNS names.
+  Transport security is the operator's decision, not this app's.
 
-  Consequence worth knowing: a bare tailnet IP (100.x.y.z) will NOT connect.
-  Android's network security config matches domains, not address ranges, so
-  there is no way to express "the CGNAT range" here. Use the MagicDNS name
-  (host.tailnet-name.ts.net), which Tailscale enables by default, or put TLS
-  in front of the gateway.
+  A gateway can reasonably be reached over a WireGuard/Tailscale tunnel, a VPN,
+  a LAN, or a TLS-terminating reverse proxy on a public name. Those have very
+  different threat models, and only the person running the server knows which
+  one applies. Pinning the app to one of them — as an earlier version did, by
+  permitting cleartext solely for *.ts.net — silently broke every other valid
+  topology, including a plain LAN address and a self-hosted domain.
+
+  So cleartext is permitted and the app says so instead: when the configured
+  address uses http://, the settings screen states that the traffic is
+  unencrypted unless the network itself provides encryption. Making the risk
+  visible is honest; making the choice for the user is not.
+
+  https:// is unaffected and is always the safer option where a certificate is
+  available.
 -->
-<network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
-
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">ts.net</domain>
-    </domain-config>
-
-    <!-- adb reverse / emulator loopback during development only. -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">localhost</domain>
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">10.0.2.2</domain>
-    </domain-config>
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      Both lint warnings below are the deliberate outcome of the note above:
+      InsecureBaseConfiguration fires on permitting cleartext, and
+      AcceptsUserCertificates on trusting user-installed CAs. Suppressed rather
+      than silently ignored, so the intent is recorded next to the decision.
+    -->
+    <base-config
+        cleartextTrafficPermitted="true"
+        tools:ignore="InsecureBaseConfiguration">
+        <trust-anchors>
+            <certificates src="system" />
+            <!-- A private CA is normal in self-hosted setups; without this, an
+                 https:// gateway with a self-signed chain would force a rebuild
+                 of the app rather than a change of setting. -->
+            <certificates src="user" tools:ignore="AcceptsUserCertificates" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>

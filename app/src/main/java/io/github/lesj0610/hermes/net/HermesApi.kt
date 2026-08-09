@@ -5,6 +5,7 @@ import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -114,6 +115,71 @@ class HermesApi(
         return client.get(url("/api/sessions/$sessionId/messages")) {
             auth?.let { header(HttpHeaders.Authorization, it) }
         }.decode { body<MessageListResponse>().data }
+    }
+
+    // ── operational surface ───────────────────────────────────────────────
+
+    /**
+     * What this gateway supports. Read once at connect so panels the server
+     * cannot serve are hidden rather than left to fail with 404s.
+     */
+    suspend fun capabilities(): Capabilities {
+        val auth = bearer()
+        return client.get(url("/v1/capabilities")) {
+            auth?.let { header(HttpHeaders.Authorization, it) }
+        }.decode { body() }
+    }
+
+    suspend fun healthDetailed(): DetailedHealth {
+        val auth = bearer()
+        return client.get(url("/health/detailed")) {
+            auth?.let { header(HttpHeaders.Authorization, it) }
+        }.decode { body() }
+    }
+
+    suspend fun toolsets(): List<Toolset> {
+        val auth = bearer()
+        return client.get(url("/v1/toolsets")) {
+            auth?.let { header(HttpHeaders.Authorization, it) }
+        }.decode { body<ToolsetListResponse>().data }
+    }
+
+    suspend fun skills(): List<Skill> {
+        val auth = bearer()
+        return client.get(url("/v1/skills")) {
+            auth?.let { header(HttpHeaders.Authorization, it) }
+        }.decode { body<SkillListResponse>().data }
+    }
+
+    // ── scheduled jobs ────────────────────────────────────────────────────
+
+    suspend fun jobs(includeDisabled: Boolean = true): List<Job> {
+        val auth = bearer()
+        return client.get(url("/api/jobs")) {
+            auth?.let { header(HttpHeaders.Authorization, it) }
+            parameter("include_disabled", includeDisabled)
+        }.decode { body<JobListResponse>().jobs }
+    }
+
+    suspend fun pauseJob(jobId: String) = jobAction(jobId, "pause")
+
+    suspend fun resumeJob(jobId: String) = jobAction(jobId, "resume")
+
+    /** Fires the job now. Does not alter its schedule. */
+    suspend fun runJob(jobId: String) = jobAction(jobId, "run")
+
+    private suspend fun jobAction(jobId: String, action: String) {
+        val auth = bearer()
+        client.post(url("/api/jobs/$jobId/$action")) {
+            auth?.let { header(HttpHeaders.Authorization, it) }
+        }.decode { }
+    }
+
+    suspend fun deleteJob(jobId: String) {
+        val auth = bearer()
+        client.delete(url("/api/jobs/$jobId")) {
+            auth?.let { header(HttpHeaders.Authorization, it) }
+        }.decode { }
     }
 
     // ── runs ──────────────────────────────────────────────────────────────

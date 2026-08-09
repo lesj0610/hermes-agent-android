@@ -8,7 +8,7 @@ Claude Android / Codex Android 수준의 모바일 에이전트 앱. 백엔드�
 
 핵심 원칙:
 
-1. **원본 무수정** — `/ssd512g/hermes-agent` 포크에 diff 0. 백엔드 쪽 작업은 설정 활성화뿐.
+1. **원본 무수정** — Hermes Agent 저장소에 diff 0. 백엔드 쪽 작업은 설정 활성화뿐.
 2. **얇은 래퍼** — 에이전트 로직·툴·스킬·메모리는 전부 서버가 소유. 앱은 전송·표시·승인만 담당.
 3. **유지보수 최소** — 업스트림이 움직여도 앱이 깨지지 않도록 안정된 HTTP 계약에만 의존.
 
@@ -129,35 +129,42 @@ CORS 허용 헤더는 `Authorization, Content-Type, Idempotency-Key`.
 
 ## 2. 백엔드 준비
 
-**현재 서버에서는 추가 작업이 없다.** api_server 플랫폼이 이미 8642에서 돌고 있고,
-`/health`는 `{"status":"ok","platform":"hermes-agent","version":"0.20.0"}`을,
-`/v1/models`는 키 없이 401을 반환한다 — 즉 인증까지 정상 동작 중이다.
-
-새로 켜야 하는 환경이라면:
-
 1. gateway 설정에서 `api_server` 플랫폼 활성화
 2. `API_SERVER_KEY` 시크릿 설정 (앱이 쓸 강한 랜덤 토큰)
 3. `platforms.api_server.max_concurrent_runs` 기본값 10 — 폰 단독 사용이면 그대로 둔다
 4. gateway 재시작
 
-포크 소스 변경 없음. `config.yaml` + 시크릿만.
+에이전트 소스 변경 없음. `config.yaml` + 시크릿만.
+
+동작 확인은 두 줄이면 된다. `/health`는 인증 없이 응답하므로 도달성만,
+`/v1/models`는 키 없이 401을 반환하므로 인증이 살아 있는지를 각각 증명한다.
+
+```bash
+curl -s http://<gateway>:8642/health
+curl -s -o /dev/null -w '%{http_code}\n' http://<gateway>:8642/v1/models   # 401 이어야 정상
+```
 
 ---
 
 ## 3. 네트워크
 
-**Tailscale 터널 전용.** 포트 공개 노출·역프록시 없음.
+**접속 경로는 앱이 정하지 않는다.** 사용자가 정한다.
 
-- 앱은 서버의 tailnet 주소로 접속. 게이트웨이 기본 포트는 **8642**
-- 폰에 Tailscale 앱 설치 + 같은 tailnet 로그인이 전제
-- 평문 HTTP는 기본 차단이고 `res/xml/network_security_config.xml`에서
-  MagicDNS 도메인(`*.ts.net`)에만 허용한다. 전역 `cleartextTrafficPermitted=true`는 쓰지 않는다
+게이트웨이에 닿는 방법은 여러 가지가 있고 — VPN·메시 터널, LAN, 공개 도메인 앞의
+TLS 역프록시 — 위협 모델이 서로 다르다. 어느 쪽이 적절한지는 서버를 운영하는
+사람만 안다. 앱은 주소를 받아서 붙을 뿐이다.
+
+- 게이트웨이 기본 포트는 **8642**
+- `http://`, `https://` 둘 다 지원한다. 사설 CA도 신뢰하므로 자체 서명 인증서를
+  쓰는 구성에서 앱을 다시 빌드할 필요가 없다
 - 서버 미도달과 인증 실패를 구분해서 표시한다. `/health`는 인증이 없어서
   도달성만 증명하므로, 키 검증은 `/v1/models`를 한 번 더 찔러서 판정한다
 
-**알아둘 제약**: 맨 IP(`100.x.y.z`)로는 접속되지 않는다. Android network
-security config는 도메인만 매칭할 수 있고 CGNAT 대역을 표현할 문법이 없다.
-Tailscale이 기본 제공하는 MagicDNS 이름을 쓰거나, 게이트웨이 앞에 TLS를 둬야 한다.
+**초기 구현의 오류 기록**: 처음에는 `network_security_config.xml`에서 평문을
+`*.ts.net`에만 허용했다. Tailscale을 쓰는 구성 하나만 상정한 결정이었고, LAN 주소나
+자체 도메인 같은 다른 정상적인 구성을 전부 조용히 막았다. 지금은 평문을 허용하되
+**설정 화면에서 `http://` 사용 시 암호화되지 않는다는 사실을 표시**한다.
+위험을 보이게 하는 것은 정직하지만, 선택을 대신 하는 것은 아니다.
 
 ---
 

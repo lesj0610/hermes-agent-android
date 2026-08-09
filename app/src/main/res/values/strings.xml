@@ -67,6 +67,7 @@
     <string name="settings_api_key">API key</string>
     <string name="settings_api_key_hint">API_SERVER_KEY</string>
     <string name="settings_save">Save</string>
+    <string name="settings_cleartext_notice">Plain HTTP: the connection itself is not encrypted, so confidentiality comes from the network you route it over.</string>
     <string name="settings_model">Model</string>
     <string name="settings_model_default">Server default</string>
     <string name="settings_version">Version</string>
@@ -94,6 +95,33 @@
     <string name="connection_not_configured">Not set up</string>
     <string name="connection_not_configured_help">Enter the gateway address and API key to begin.</string>
     <string name="connection_latency">%1$d ms</string>
+
+    <!-- Scheduled jobs -->
+    <string name="cron_title">Schedule</string>
+    <string name="cron_empty">No scheduled jobs.</string>
+    <string name="cron_run_now">Run now</string>
+    <string name="cron_pause">Pause</string>
+    <string name="cron_resume">Resume</string>
+    <string name="cron_delete">Delete</string>
+    <string name="cron_delete_title">Delete this job?</string>
+    <string name="cron_delete_body">“%1$s” will stop running. This cannot be undone from here.</string>
+    <string name="cron_delete_confirm">Delete</string>
+
+    <!-- Gateway -->
+    <string name="gateway_title">Gateway</string>
+    <string name="gateway_state">State</string>
+    <string name="gateway_active_agents">Active agents</string>
+    <string name="gateway_pid">Process</string>
+    <string name="gateway_exit_reason">Shutting down</string>
+    <plurals name="gateway_toolsets">
+        <item quantity="one">Toolsets · %1$d enabled</item>
+        <item quantity="other">Toolsets · %1$d enabled</item>
+    </plurals>
+    <plurals name="gateway_skills">
+        <item quantity="one">Skills · %1$d</item>
+        <item quantity="other">Skills · %1$d</item>
+    </plurals>
+    <string name="gateway_none">Nothing reported.</string>
 
     <!-- Errors -->
     <string name="error_run_failed">The run failed.</string>

@@ -41,6 +41,8 @@ import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.data.TranscriptItem
 import io.github.lesj0610.hermes.ui.chat.ApprovalSheet
 import io.github.lesj0610.hermes.ui.chat.ChatPane
+import io.github.lesj0610.hermes.ui.cron.CronPane
+import io.github.lesj0610.hermes.ui.gateway.GatewayPane
 import io.github.lesj0610.hermes.ui.components.StatusBar
 import io.github.lesj0610.hermes.ui.components.ToolCard
 import io.github.lesj0610.hermes.ui.sessions.SessionsPane
@@ -62,7 +64,17 @@ fun HermesShell(
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val models by viewModel.models.collectAsStateWithLifecycle()
     val pane by viewModel.pane.collectAsStateWithLifecycle()
+    val jobs by viewModel.jobs.collectAsStateWithLifecycle()
+    val health by viewModel.health.collectAsStateWithLifecycle()
+    val toolsets by viewModel.toolsets.collectAsStateWithLifecycle()
+    val skills by viewModel.skills.collectAsStateWithLifecycle()
+    val capabilities by viewModel.capabilities.collectAsStateWithLifecycle()
     val colors = LocalRunColors.current
+
+    // Absence of a capability report is not a denial: an older gateway that
+    // does not answer /v1/capabilities still serves these routes.
+    val showCron = capabilities?.jobsAdmin != false
+    val showGateway = capabilities?.healthDetailed != false
 
     // UI scale is applied outside the measurement below on purpose. Scaling the
     // density changes how many dp the window is worth, so enlarging the UI
@@ -106,6 +118,8 @@ fun HermesShell(
                                     expanded -> stringResource(R.string.app_name)
                                     pane == Pane.Sessions -> stringResource(R.string.sessions_title)
                                     pane == Pane.Settings -> stringResource(R.string.settings_title)
+                                    pane == Pane.Cron -> stringResource(R.string.cron_title)
+                                    pane == Pane.Gateway -> stringResource(R.string.gateway_title)
                                     else -> stringResource(R.string.nav_chat)
                                 },
                                 style = MaterialTheme.typography.titleMedium,
@@ -134,6 +148,16 @@ fun HermesShell(
                         if (expanded || pane == Pane.Sessions) {
                             TextButton(onClick = { viewModel.openSession(null) }) {
                                 Text(stringResource(R.string.action_new_session))
+                            }
+                        }
+                        if (showCron) {
+                            TextButton(onClick = { viewModel.show(Pane.Cron) }) {
+                                Text(stringResource(R.string.cron_title))
+                            }
+                        }
+                        if (showGateway) {
+                            TextButton(onClick = { viewModel.show(Pane.Gateway) }) {
+                                Text(stringResource(R.string.gateway_title))
                             }
                         }
                         TextButton(onClick = { viewModel.show(Pane.Settings) }) {
@@ -168,7 +192,17 @@ fun HermesShell(
                         )
 
                         Column(Modifier.weight(1f)) {
-                            if (pane == Pane.Settings) {
+                            if (pane == Pane.Cron) {
+                                CronPane(
+                                    jobs = jobs,
+                                    onPause = viewModel::pauseJob,
+                                    onResume = viewModel::resumeJob,
+                                    onRun = viewModel::runJob,
+                                    onDelete = viewModel::deleteJob,
+                                )
+                            } else if (pane == Pane.Gateway) {
+                                GatewayPane(health = health, toolsets = toolsets, skills = skills)
+                            } else if (pane == Pane.Settings) {
                                 SettingsPane(
                                     settings = settings,
                                     connection = connection,
@@ -224,6 +258,20 @@ fun HermesShell(
                         onSend = viewModel::send,
                         onStop = viewModel::stop,
                         onDismissError = viewModel::dismissError,
+                        modifier = content,
+                    )
+                    Pane.Cron -> CronPane(
+                        jobs = jobs,
+                        onPause = viewModel::pauseJob,
+                        onResume = viewModel::resumeJob,
+                        onRun = viewModel::runJob,
+                        onDelete = viewModel::deleteJob,
+                        modifier = content,
+                    )
+                    Pane.Gateway -> GatewayPane(
+                        health = health,
+                        toolsets = toolsets,
+                        skills = skills,
                         modifier = content,
                     )
                     Pane.Settings -> SettingsPane(

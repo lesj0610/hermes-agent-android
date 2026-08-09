@@ -24,3 +24,9 @@ local.properties
 # layout, hardware, and what else runs on it, none of which belongs in a public
 # repository. env.sh and sdk.sh carry everything a build actually needs.
 /ENVIRONMENT.md
+
+# Release runbook and risk register. Kept local for two reasons: the console
+# steps only concern whoever publishes the build, and the risk section is an
+# adverse analysis of this project's own naming — publishing your own "this may
+# infringe" note helps nobody and can be quoted straight back at you.
+/PLAY.md

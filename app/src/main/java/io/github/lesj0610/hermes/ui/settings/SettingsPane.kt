@@ -100,6 +100,18 @@ fun SettingsPane(
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
             )
+            // States the fact without steering the choice: which transport is
+            // appropriate depends on the network this gateway sits on, and only
+            // the operator knows that.
+            if (baseUrl.trim().startsWith("http://", ignoreCase = true)) {
+                Text(
+                    text = stringResource(R.string.settings_cleartext_notice),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.awaiting,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+
             Button(
                 onClick = { onSaveServer(baseUrl, token) },
                 modifier = Modifier.padding(top = 10.dp),

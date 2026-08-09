@@ -15,7 +15,7 @@ from the machine.
 | | |
 |---|---|
 | Backend | Existing gateway `api_server` platform (default port 8642). No patches to the agent, no companion server |
-| Transport | Bearer-authenticated HTTP + SSE over a Tailscale tunnel |
+| Transport | Bearer-authenticated HTTP + SSE. How the device reaches the gateway is your call |
 | Phone | One pane at a time: sessions → chat → settings |
 | Tablet | Desktop-style shell: session rail, transcript, activity rail, bottom status bar |
 | Languages | English, Korean — shipped by the app itself, independent of the agent's locale support |
@@ -24,9 +24,16 @@ from the machine.
 
 - A running Hermes Agent gateway with the `api_server` platform enabled and
   `API_SERVER_KEY` set
-- Tailscale on both the server and the device (MagicDNS name, not a bare
-  `100.x` address — see DESIGN.md §3)
+- Any network path from the device to that gateway — a VPN or mesh tunnel, a
+  LAN, or a TLS reverse proxy on a public name. The app does not prescribe one;
+  it accepts whatever address you give it
 - Android 8.0 (API 26) or newer
+
+The app will connect over plain `http://` and tells you in Settings when it is
+doing so, because in that case the confidentiality of the traffic comes from
+the network rather than from the connection. Whether that is acceptable depends
+on which of the paths above you chose, which is why it is your call and not a
+setting baked into the build.
 
 ## Build
 
@@ -53,7 +60,6 @@ That is why the two scripts exist separately instead of one shared env file.
 | File | Contents |
 |---|---|
 | [DESIGN.md](DESIGN.md) | Backend contract, event mapping, architecture, the constraints this project refuses to break |
-| [PLAY.md](PLAY.md) | Google Play release requirements and open risks |
 | [design/mockup.html](design/mockup.html) | Screen mockups |
 
 ## License

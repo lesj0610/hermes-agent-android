@@ -75,44 +75,33 @@ class LayoutEditorTest {
     }
 
     @Test
-    fun `a two-pane window exposes the panel that has no rail to live in`() {
-        // The bug: a Fold unfolded to two panes drew only the left rail, so the
-        // panel assigned to the right one had neither a rail nor a button.
+    fun `the drawer lists every panel that has a pane of its own`() {
+        // Reachability no longer depends on window size: the drawer carries the
+        // same destinations everywhere, which is what fixed panels being
+        // stranded in a two-pane window.
         val options = railPanelOptions(showCron = true, showGateway = true, showDashboard = true)
-        val unreachable = unreachablePanels(options, visibleRails = listOf(RailPanel.Sessions))
 
         assertEquals(
-            listOf(RailPanel.Activity, RailPanel.Cron, RailPanel.Gateway, RailPanel.Dashboard),
-            unreachable,
+            listOf(Pane.Sessions, Pane.Cron, Pane.Gateway, Pane.Dashboard),
+            drawerDestinations(options).map { it.second },
         )
     }
 
     @Test
-    fun `a three-pane window only exposes what neither rail shows`() {
-        val options = railPanelOptions(showCron = true, showGateway = true, showDashboard = true)
-        val unreachable = unreachablePanels(
-            options,
-            visibleRails = listOf(RailPanel.Sessions, RailPanel.Activity),
-        )
+    fun `the drawer omits activity, which has no pane of its own`() {
+        // Activity is a view of the open transcript, already in the centre.
+        val options = railPanelOptions(showCron = false, showGateway = false)
 
-        assertEquals(listOf(RailPanel.Cron, RailPanel.Gateway, RailPanel.Dashboard), unreachable)
+        assertEquals(listOf(RailPanel.Sessions), drawerDestinations(options).map { it.first })
     }
 
     @Test
-    fun `hiding a rail makes its panel reachable again from the top bar`() {
-        val options = railPanelOptions(showCron = true, showGateway = false, showDashboard = false)
-        val unreachable = unreachablePanels(options, visibleRails = listOf(RailPanel.None))
-
-        assertEquals(listOf(RailPanel.Sessions, RailPanel.Activity, RailPanel.Cron), unreachable)
-    }
-
-    @Test
-    fun `a phone exposes everything, since it draws no rails`() {
-        val options = railPanelOptions(showCron = true, showGateway = true, showDashboard = false)
+    fun `the drawer drops panels this gateway cannot serve`() {
+        val options = railPanelOptions(showCron = false, showGateway = true, showDashboard = false)
 
         assertEquals(
-            listOf(RailPanel.Sessions, RailPanel.Activity, RailPanel.Cron, RailPanel.Gateway),
-            unreachablePanels(options, visibleRails = emptyList()),
+            listOf(Pane.Sessions, Pane.Gateway),
+            drawerDestinations(options).map { it.second },
         )
     }
 

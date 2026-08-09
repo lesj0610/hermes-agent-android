@@ -64,7 +64,11 @@ That is why the two scripts exist separately instead of one shared env file.
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache License 2.0 — see [LICENSE](LICENSE), [NOTICE](NOTICE) and
+[THIRD-PARTY.md](THIRD-PARTY.md).
+
+The launcher icon is the Hermes Agent desktop icon, redistributed under that
+project's MIT licence. Everything else here is original.
 
 Chosen over MIT for two clauses that matter to a project like this one: §6 says
 plainly that the licence grants no trademark rights, and §3 carries a patent

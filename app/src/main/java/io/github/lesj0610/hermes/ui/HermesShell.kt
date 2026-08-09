@@ -12,10 +12,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -41,6 +46,11 @@ import io.github.lesj0610.hermes.core.RAIL_WIDTH_MIN
 import io.github.lesj0610.hermes.core.RailPanel
 import io.github.lesj0610.hermes.core.RailSide
 import io.github.lesj0610.hermes.ui.components.PaneDivider
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import io.github.lesj0610.hermes.ui.components.DrawerDestination
+import io.github.lesj0610.hermes.ui.components.DrawerSection
+import io.github.lesj0610.hermes.ui.components.HamburgerIcon
 import io.github.lesj0610.hermes.ui.components.RailHost
 import io.github.lesj0610.hermes.ui.components.railPanelLabel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -173,6 +183,83 @@ fun HermesShell(
         }
         val commitRails = { viewModel.setRailWidths(sessionRail, activityRail) }
 
+        val drawerState = rememberDrawerState(DrawerValue.Closed)
+        val drawerScope = rememberCoroutineScope()
+
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.background) {
+                    Text(
+                        text = stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(start = 20.dp, top = 22.dp, bottom = 2.dp),
+                    )
+                    Text(
+                        text = settings.model.ifBlank {
+                            stringResource(R.string.settings_model_default)
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.muted,
+                        modifier = Modifier.padding(start = 20.dp, bottom = 10.dp),
+                    )
+                    HorizontalDivider(color = colors.line)
+
+                    DrawerSection(stringResource(R.string.drawer_go_to))
+                    // Every destination is listed, including ones a rail is
+                    // already showing. Working out which entries a given window
+                    // happens to omit is harder than reading a stable list.
+                    drawerDestinations(railOptions).forEach { (panel, target) ->
+                        DrawerDestination(
+                            label = railPanelLabel(panel),
+                            selected = pane == target,
+                            onClick = {
+                                viewModel.show(target)
+                                drawerScope.launch { drawerState.close() }
+                            },
+                        )
+                    }
+                    DrawerDestination(
+                        label = stringResource(R.string.nav_chat),
+                        selected = pane == Pane.Chat,
+                        onClick = {
+                            viewModel.show(Pane.Chat)
+                            drawerScope.launch { drawerState.close() }
+                        },
+                    )
+                    DrawerDestination(
+                        label = stringResource(R.string.nav_settings),
+                        selected = pane == Pane.Settings,
+                        onClick = {
+                            viewModel.show(Pane.Settings)
+                            drawerScope.launch { drawerState.close() }
+                        },
+                    )
+
+                    DrawerSection(stringResource(R.string.drawer_actions))
+                    DrawerDestination(
+                        label = stringResource(R.string.action_new_session),
+                        selected = false,
+                        onClick = {
+                            viewModel.openSession(null)
+                            drawerScope.launch { drawerState.close() }
+                        },
+                    )
+                    if (expanded) {
+                        DrawerDestination(
+                            label = stringResource(
+                                if (editingLayout) R.string.layout_done else R.string.layout_edit,
+                            ),
+                            selected = editingLayout,
+                            onClick = {
+                                editingLayout = !editingLayout
+                                drawerScope.launch { drawerState.close() }
+                            },
+                        )
+                    }
+                }
+            },
+        ) {
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -180,7 +267,6 @@ fun HermesShell(
                         Column {
                             Text(
                                 text = when {
-                                    expanded -> stringResource(R.string.app_name)
                                     pane == Pane.Sessions -> stringResource(R.string.sessions_title)
                                     pane == Pane.Settings -> stringResource(R.string.settings_title)
                                     pane == Pane.Cron -> stringResource(R.string.cron_title)
@@ -194,10 +280,12 @@ fun HermesShell(
                         }
                     },
                     navigationIcon = {
-                        if (!expanded && pane != Pane.Sessions) {
-                            TextButton(onClick = { viewModel.show(Pane.Sessions) }) {
-                                Text(stringResource(R.string.action_back))
-                            }
+                        // One menu, one place, at every window size. Spreading
+                        // destinations across the bar cluttered the tablet
+                        // layout and still left two-pane windows with panels
+                        // that had no entry at all.
+                        IconButton(onClick = { drawerScope.launch { drawerState.open() } }) {
+                            HamburgerIcon()
                         }
                     },
                     actions = {
@@ -206,50 +294,8 @@ fun HermesShell(
                                 text = model,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(end = 8.dp),
+                                modifier = Modifier.padding(end = 12.dp),
                             )
-                        }
-                        // A run belongs to a session, so starting a fresh one is
-                        // reachable wherever the session list is.
-                        if (expanded || pane == Pane.Sessions) {
-                            TextButton(onClick = { viewModel.openSession(null) }) {
-                                Text(stringResource(R.string.action_new_session))
-                            }
-                        }
-                        // Offered when nothing on screen already shows them.
-                        // A two-pane window draws one rail, so the panel
-                        // assigned to the other would otherwise be unreachable
-                        // — as would anything hidden in the layout editor.
-                        unreachablePanels(railOptions, visibleRails).forEach { panel ->
-                            val target = when (panel) {
-                                RailPanel.Sessions -> Pane.Sessions
-                                RailPanel.Cron -> Pane.Cron
-                                RailPanel.Gateway -> Pane.Gateway
-                                RailPanel.Dashboard -> Pane.Dashboard
-                                // Activity has no pane of its own; it belongs to
-                                // the transcript, which is already on screen.
-                                RailPanel.Activity, RailPanel.None -> null
-                            }
-                            if (target != null) {
-                                TextButton(onClick = { viewModel.show(target) }) {
-                                    Text(railPanelLabel(panel))
-                                }
-                            }
-                        }
-                        // Rails only exist in a multi-pane window; there is
-                        // nothing to arrange otherwise.
-                        if (expanded) {
-                            TextButton(onClick = { editingLayout = !editingLayout }) {
-                                Text(
-                                    stringResource(
-                                        if (editingLayout) R.string.layout_done
-                                        else R.string.layout_edit,
-                                    ),
-                                )
-                            }
-                        }
-                        TextButton(onClick = { viewModel.show(Pane.Settings) }) {
-                            Text(stringResource(R.string.nav_settings))
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -431,6 +477,7 @@ fun HermesShell(
                     )
                 }
             }
+        }
         }
 
         // The sheet sits above whichever layout is showing: an approval blocks

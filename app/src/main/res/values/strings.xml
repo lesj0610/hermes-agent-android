@@ -36,6 +36,8 @@
     <string name="approval_choice_deny">Deny</string>
 
     <!-- Layout editor -->
+    <string name="drawer_go_to">Go to</string>
+    <string name="drawer_actions">Actions</string>
     <string name="layout_title">Layout</string>
     <string name="layout_edit">Arrange</string>
     <string name="layout_done">Done</string>

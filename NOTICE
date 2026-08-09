@@ -1,10 +1,22 @@
 Hermes Agent for Android
 Copyright 2026 SeongJun Lee
 
-This product includes software developed as an unofficial client for
-Hermes Agent (https://github.com/NousResearch/hermes-agent).
+This product is an unofficial client for Hermes Agent
+(https://github.com/NousResearch/hermes-agent). It is not affiliated with or
+endorsed by Nous Research.
 
-No source code, artwork, or branding from that project is included here.
-"Hermes Agent" and the Nous Research name, logo, and mascot are the marks of
-their respective owners and are not licensed by this project. This client is
-not affiliated with or endorsed by Nous Research.
+No source code from that project is included here; the client was written
+against the gateway's HTTP surface.
+
+--------------------------------------------------------------------------------
+Bundled third-party artwork
+
+The launcher icon is the Hermes Agent desktop application icon
+(apps/desktop/assets/icon.ico), redistributed under the MIT licence of the
+Hermes Agent project:
+
+    Copyright (c) 2025 Nous Research
+    Licensed under the MIT License. The full licence text is in THIRD-PARTY.md.
+
+The MIT licence grants copyright permission only. It does not grant rights in
+the Nous Research name, logo or marks, which remain those of their owners.

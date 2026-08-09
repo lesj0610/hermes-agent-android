@@ -29,23 +29,20 @@ fun railPanelOptions(
     }
 
 /**
- * Panels that need a top-bar entry because nothing on screen shows them.
+ * Panel destinations for the navigation drawer, paired with the pane each opens.
  *
- * The rule is "not currently visible", not "the window is small". Getting that
- * wrong left panels unreachable: a two-pane window draws only the left rail, so
- * whatever was assigned to the right one had no rail to appear in *and* no
- * button to open it. Hiding a rail in the layout editor did the same thing.
- *
- * [visibleRails] is what the shell is actually drawing right now — one entry in
- * a two-pane window, two in a three-pane one, none on a phone.
+ * Activity is excluded: it has no pane of its own — it is a view of the open
+ * transcript, which the centre already shows. [RailPanel.None] is not a place.
  */
-fun unreachablePanels(
-    available: List<RailPanel>,
-    visibleRails: List<RailPanel>,
-): List<RailPanel> =
-    available.filter { panel ->
-        // None is not a destination, and the transcript is always the centre.
-        panel != RailPanel.None && panel !in visibleRails
+fun drawerDestinations(available: List<RailPanel>): List<Pair<RailPanel, Pane>> =
+    available.mapNotNull { panel ->
+        when (panel) {
+            RailPanel.Sessions -> panel to Pane.Sessions
+            RailPanel.Cron -> panel to Pane.Cron
+            RailPanel.Gateway -> panel to Pane.Gateway
+            RailPanel.Dashboard -> panel to Pane.Dashboard
+            RailPanel.Activity, RailPanel.None -> null
+        }
     }
 
 /**

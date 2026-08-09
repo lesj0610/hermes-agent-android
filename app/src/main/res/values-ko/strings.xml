@@ -31,6 +31,8 @@
     <string name="approval_choice_always">항상</string>
     <string name="approval_choice_deny">거부</string>
 
+    <string name="drawer_go_to">이동</string>
+    <string name="drawer_actions">동작</string>
     <string name="layout_title">레이아웃</string>
     <string name="layout_edit">배치</string>
     <string name="layout_done">완료</string>

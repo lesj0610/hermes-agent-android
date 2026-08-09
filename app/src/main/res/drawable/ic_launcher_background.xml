@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launcher background: the app's own slate ground.
+
+  Original artwork. Deliberately shares nothing with the upstream Hermes Agent
+  banner or mascot — those are Nous Research's brand marks, and an unofficial
+  client wearing them would read as the official app. See PLAY.md §3.1.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#10161A"
+        android:pathData="M0,0h108v108h-108z" />
+
+    <!-- Faint ground rules; they read as texture at launcher size, not as lines. -->
+    <path
+        android:fillColor="#19222A"
+        android:pathData="M0,26h108v2h-108z" />
+    <path
+        android:fillColor="#19222A"
+        android:pathData="M0,80h108v2h-108z" />
+</vector>

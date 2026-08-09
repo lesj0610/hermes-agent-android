@@ -1,0 +1,1292 @@
+<title>Hermes Android — 디자인 시안 v1</title>
+
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     Hermes Android — design mockup
+     Palette: slate ground + brass accent (Hermes / caduceus),
+     steel-blue biased neutrals. Semantic colors are separate
+     from the accent and only ever encode run state.
+     ───────────────────────────────────────────────────────────── */
+
+  :root {
+    /* page chrome — themed */
+    --ground:    #EEF1F3;
+    --surface:   #FFFFFF;
+    --surface-2: #F4F6F8;
+    --line:      #D5DDE2;
+    --text:      #131B21;
+    --muted:     #5C6C77;
+    --brass:     #8E6516;
+    --brass-soft:#F0E5CE;
+
+    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+    /* app surface — fixed. The app commits to a dark ground in
+       both page themes; see the note under the screens. */
+    --app-bg:    #10161A;
+    --app-panel: #19222A;
+    --app-panel2:#212C35;
+    --app-line:  #2B3843;
+    --app-text:  #E4EBF0;
+    --app-muted: #8FA0AC;
+    --app-brass: #D2A354;
+    --app-ok:    #6FA97B;
+    --app-warn:  #E0A83C;
+    --app-bad:   #CB6058;
+
+    --r-sm: 8px;
+    --r-md: 14px;
+    --r-lg: 22px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:    #0D1317;
+      --surface:   #141C22;
+      --surface-2: #1B242B;
+      --line:      #27333B;
+      --text:      #E2E9EE;
+      --muted:     #8B9CA8;
+      --brass:     #D2A354;
+      --brass-soft:#2A2213;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:    #0D1317;
+    --surface:   #141C22;
+    --surface-2: #1B242B;
+    --line:      #27333B;
+    --text:      #E2E9EE;
+    --muted:     #8B9CA8;
+    --brass:     #D2A354;
+    --brass-soft:#2A2213;
+  }
+
+  :root[data-theme="light"] {
+    --ground:    #EEF1F3;
+    --surface:   #FFFFFF;
+    --surface-2: #F4F6F8;
+    --line:      #D5DDE2;
+    --text:      #131B21;
+    --muted:     #5C6C77;
+    --brass:     #8E6516;
+    --brass-soft:#F0E5CE;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 72px;
+  }
+
+  /* ── masthead ─────────────────────────────────────────────── */
+
+  .masthead { display: flex; flex-direction: column; gap: 18px; }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--brass);
+  }
+
+  h1 {
+    font-size: clamp(30px, 5vw, 46px);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-weight: 620;
+    text-wrap: balance;
+    max-width: 16ch;
+  }
+
+  .lede {
+    max-width: 62ch;
+    color: var(--muted);
+    font-size: 16.5px;
+  }
+
+  .facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  .fact {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 5px 11px;
+  }
+
+  /* ── section scaffolding ──────────────────────────────────── */
+
+  section { display: flex; flex-direction: column; gap: 26px; }
+
+  .sec-head { display: flex; flex-direction: column; gap: 7px; }
+
+  .sec-head h2 {
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .sec-head p { color: var(--muted); max-width: 66ch; font-size: 15px; }
+
+  .rule { height: 1px; background: var(--line); }
+
+  /* ── phone frames ─────────────────────────────────────────── */
+
+  .screens {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+    gap: 40px 32px;
+  }
+
+  .screen { display: flex; flex-direction: column; gap: 14px; }
+
+  .phone {
+    width: 100%;
+    max-width: 292px;
+    aspect-ratio: 9 / 19.3;
+    margin-inline: auto;
+    background: var(--app-bg);
+    color: var(--app-text);
+    border: 1px solid var(--app-line);
+    border-radius: 30px;
+    padding: 8px 7px;
+    box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.75);
+    display: flex;
+    overflow: hidden;
+  }
+
+  .glass {
+    flex: 1;
+    border-radius: 24px;
+    background: var(--app-bg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    font-size: 12px;
+  }
+
+  .caption { display: flex; flex-direction: column; gap: 4px; max-width: 292px; margin-inline: auto; }
+  .caption b { font-size: 14px; font-weight: 600; }
+  .caption span { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+  /* status bar */
+  .statusbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 14px 3px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--app-muted);
+    letter-spacing: 0.04em;
+  }
+  .sigdots { display: flex; gap: 3px; align-items: flex-end; }
+  .sigdots i { display: block; width: 2.5px; background: var(--app-muted); border-radius: 1px; }
+  .sigdots i:nth-child(1) { height: 4px; }
+  .sigdots i:nth-child(2) { height: 6px; }
+  .sigdots i:nth-child(3) { height: 8px; }
+  .batt { width: 16px; height: 8px; border: 1px solid var(--app-muted); border-radius: 2px; position: relative; }
+  .batt::after { content: ""; position: absolute; inset: 1.5px; right: 6px; background: var(--app-muted); border-radius: 1px; }
+
+  /* app bar */
+  .appbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px 10px;
+    border-bottom: 1px solid var(--app-line);
+  }
+  .appbar .title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .appbar .title b { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+  .appbar .title span { font-family: var(--font-mono); font-size: 9.5px; color: var(--app-muted); }
+  .icon-btn {
+    width: 26px; height: 26px;
+    display: grid; place-items: center;
+    border-radius: 8px;
+    color: var(--app-muted);
+    flex: none;
+  }
+  .icon-btn svg { width: 15px; height: 15px; }
+
+  .chip {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.02em;
+    border: 1px solid var(--app-line);
+    border-radius: 999px;
+    padding: 3px 8px;
+    color: var(--app-muted);
+    white-space: nowrap;
+    flex: none;
+  }
+  .chip.brass { color: var(--app-brass); border-color: color-mix(in srgb, var(--app-brass) 45%, transparent); }
+
+  /* thread */
+  .thread {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    padding: 13px 12px;
+    overflow: hidden;
+  }
+
+  .bubble {
+    align-self: flex-end;
+    max-width: 82%;
+    background: var(--app-panel2);
+    border-radius: 14px 14px 4px 14px;
+    padding: 8px 11px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .reply { font-size: 12px; line-height: 1.62; color: var(--app-text); }
+  .reply .dim { color: var(--app-muted); }
+
+  .caret {
+    display: inline-block;
+    width: 6px; height: 13px;
+    background: var(--app-brass);
+    vertical-align: -2px;
+    margin-left: 2px;
+    animation: blink 1.05s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .caret { animation: none; } }
+
+  /* tool card */
+  .tool {
+    border: 1px solid var(--app-line);
+    border-left: 2px solid var(--app-muted);
+    border-radius: var(--r-sm);
+    background: var(--app-panel);
+    overflow: hidden;
+  }
+  .tool.running { border-left-color: var(--app-brass); }
+  .tool.done    { border-left-color: var(--app-ok); }
+  .tool.blocked { border-left-color: var(--app-warn); }
+
+  .tool-head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 9px;
+  }
+  .tool-head .name {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .tool-head .state {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+  }
+  .tool.running .state { color: var(--app-brass); }
+  .tool.done .state    { color: var(--app-ok); }
+  .tool.blocked .state { color: var(--app-warn); }
+
+  .tool-body {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.55;
+    color: var(--app-muted);
+    padding: 0 9px 8px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .progress {
+    height: 2px;
+    background: var(--app-line);
+    position: relative;
+    overflow: hidden;
+  }
+  .progress::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 42%;
+    background: var(--app-brass);
+    animation: slide 1.6s ease-in-out infinite;
+  }
+  @keyframes slide { 0% { transform: translateX(-105%); } 100% { transform: translateX(240%); } }
+  @media (prefers-reduced-motion: reduce) { .progress::after { animation: none; width: 42%; } }
+
+  /* composer */
+  .composer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 11px 12px;
+    border-top: 1px solid var(--app-line);
+  }
+  .field {
+    flex: 1;
+    background: var(--app-panel);
+    border: 1px solid var(--app-line);
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-size: 11.5px;
+    color: var(--app-muted);
+  }
+  .send {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: var(--app-brass);
+    color: #14181B;
+    display: grid; place-items: center;
+    flex: none;
+  }
+  .send svg { width: 14px; height: 14px; }
+
+  .stopbar {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    margin: 0 11px 10px;
+    border: 1px solid color-mix(in srgb, var(--app-bad) 45%, transparent);
+    color: var(--app-bad);
+    border-radius: 999px;
+    padding: 6px;
+    font-size: 11px;
+    font-weight: 550;
+  }
+  .stopbar span { width: 8px; height: 8px; border-radius: 2px; background: currentColor; }
+
+  /* approval sheet */
+  .scrim { position: absolute; inset: 0; background: rgba(6, 10, 13, 0.66); }
+
+  .sheet {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    background: var(--app-panel);
+    border-top: 1px solid var(--app-line);
+    border-radius: var(--r-lg) var(--r-lg) 24px 24px;
+    padding: 10px 14px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .grabber { width: 32px; height: 3px; border-radius: 2px; background: var(--app-line); margin: 0 auto 2px; }
+
+  .sheet-eyebrow {
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--app-warn);
+  }
+  .sheet-eyebrow span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  .sheet h3 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+
+  .cmd {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    line-height: 1.6;
+    background: var(--app-bg);
+    border: 1px solid var(--app-line);
+    border-radius: var(--r-sm);
+    padding: 9px 10px;
+    color: var(--app-text);
+    word-break: break-all;
+  }
+  .cmd .flag { color: var(--app-brass); }
+
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--app-muted);
+  }
+
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .choice {
+    border: 1px solid var(--app-line);
+    border-radius: var(--r-sm);
+    padding: 9px 6px;
+    text-align: center;
+    font-size: 11.5px;
+    font-weight: 550;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .choice em {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    font-style: normal;
+    letter-spacing: 0.06em;
+    color: var(--app-muted);
+  }
+  .choice.primary { background: var(--app-brass); border-color: var(--app-brass); color: #14181B; }
+  .choice.primary em { color: rgba(20, 24, 27, 0.62); }
+  .choice.danger { border-color: color-mix(in srgb, var(--app-bad) 50%, transparent); color: var(--app-bad); }
+  .choice.danger em { color: color-mix(in srgb, var(--app-bad) 70%, transparent); }
+
+  /* session list */
+  .list { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  .search {
+    margin: 10px 12px 6px;
+    background: var(--app-panel);
+    border: 1px solid var(--app-line);
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-size: 11.5px;
+    color: var(--app-muted);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .search svg { width: 13px; height: 13px; flex: none; }
+
+  .row {
+    display: flex; gap: 9px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--app-line);
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; flex: none; background: var(--app-muted); }
+  .dot.run  { background: var(--app-brass); }
+  .dot.wait { background: var(--app-warn); }
+  .dot.done { background: var(--app-ok); }
+
+  .row .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .row .body b { font-size: 12px; font-weight: 550; }
+  .row .body p {
+    font-size: 10.5px; color: var(--app-muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .row time {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--app-muted);
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* settings */
+  .settings { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+
+  .group { display: flex; flex-direction: column; gap: 6px; }
+  .group > h4 {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+    padding-left: 2px;
+  }
+  .card {
+    background: var(--app-panel);
+    border: 1px solid var(--app-line);
+    border-radius: var(--r-md);
+    overflow: hidden;
+  }
+  .setting {
+    display: flex; align-items: center; gap: 9px;
+    padding: 10px 11px;
+    border-bottom: 1px solid var(--app-line);
+  }
+  .setting:last-child { border-bottom: 0; }
+  .setting .k { font-size: 11.5px; flex: none; }
+  .setting .v {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--app-muted);
+    text-align: right;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .setting .v.ok { color: var(--app-ok); }
+
+  .health {
+    display: flex; align-items: center; gap: 8px;
+    background: color-mix(in srgb, var(--app-ok) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--app-ok) 35%, transparent);
+    border-radius: var(--r-md);
+    padding: 9px 11px;
+  }
+  .health .dot { margin-top: 0; }
+  .health b { font-size: 11.5px; font-weight: 600; color: var(--app-ok); }
+  .health span { margin-left: auto; font-family: var(--font-mono); font-size: 9.5px; color: var(--app-muted); }
+
+  /* notification */
+  .lock { flex: 1; display: flex; flex-direction: column; gap: 12px; padding: 20px 12px 12px; }
+  .clock { text-align: center; color: var(--app-text); }
+  .clock b { display: block; font-size: 40px; font-weight: 300; letter-spacing: -0.03em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .clock span { font-size: 11px; color: var(--app-muted); }
+
+  .notif {
+    background: color-mix(in srgb, var(--app-panel) 92%, var(--app-warn));
+    border: 1px solid color-mix(in srgb, var(--app-warn) 40%, transparent);
+    border-radius: var(--r-md);
+    padding: 10px 11px;
+    display: flex; flex-direction: column; gap: 7px;
+  }
+  .notif .head {
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--app-warn);
+  }
+  .notif .head time { margin-left: auto; letter-spacing: 0.02em; }
+  .notif b { font-size: 12px; font-weight: 600; }
+  .notif p { font-family: var(--font-mono); font-size: 10px; color: var(--app-muted); word-break: break-all; }
+  .notif .acts { display: flex; gap: 6px; border-top: 1px solid var(--app-line); padding-top: 8px; }
+  .notif .acts div { flex: 1; text-align: center; font-size: 11px; font-weight: 550; padding: 4px; border-radius: 6px; border: 1px solid var(--app-line); }
+  .notif .acts div.y { color: var(--app-brass); border-color: color-mix(in srgb, var(--app-brass) 45%, transparent); }
+  .notif .acts div.n { color: var(--app-bad); border-color: color-mix(in srgb, var(--app-bad) 45%, transparent); }
+
+  /* ── tablet frame ─────────────────────────────────────────── */
+
+  .tablet-frame {
+    background: var(--app-bg);
+    color: var(--app-text);
+    border: 1px solid var(--app-line);
+    border-radius: 16px;
+    overflow: hidden;
+    font-size: 12px;
+  }
+
+  .tablet-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--app-line);
+  }
+  .tb-title { font-size: 13px; font-weight: 600; }
+  .tb-state { font-family: var(--font-mono); font-size: 9.5px; color: var(--app-ok); }
+  .tb-spacer { flex: 1; }
+  .tb-action { font-size: 11.5px; color: var(--app-muted); }
+
+  .tablet-body { display: grid; grid-template-columns: 210px 1fr 210px; min-height: 330px; }
+
+  .tablet-rail {
+    border-right: 1px solid var(--app-line);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .tablet-rail.right { border-right: 0; border-left: 1px solid var(--app-line); }
+
+  .rail-search {
+    border: 1px solid var(--app-line);
+    border-radius: 999px;
+    padding: 5px 10px;
+    color: var(--app-muted);
+    font-size: 11px;
+  }
+  .rail-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--app-muted);
+  }
+  .rail-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 4px;
+    font-size: 11.5px;
+    border-radius: 6px;
+  }
+  .rail-row.active { background: var(--app-panel); color: var(--app-brass); }
+  .rail-row .dot { margin-top: 0; }
+
+  .tablet-center {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .tablet-composer {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--app-line);
+  }
+  .send-sm {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--app-brass); flex: none;
+  }
+
+  .tablet-status {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 6px 14px;
+    border-top: 1px solid var(--app-line);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--app-muted);
+  }
+  .tablet-status .dot { margin-top: 0; }
+  .tablet-status .accent { color: var(--app-brass); }
+  .ts-spacer { flex: 1; }
+
+  @media (max-width: 720px) {
+    .tablet-body { grid-template-columns: 1fr; }
+    .tablet-rail { border-right: 0; border-bottom: 1px solid var(--app-line); }
+    .tablet-rail.right { border-left: 0; border-top: 1px solid var(--app-line); }
+  }
+
+  /* ── reference tables ─────────────────────────────────────── */
+
+  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 560px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  th {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    background: var(--surface-2);
+  }
+  td code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--brass);
+    background: var(--brass-soft);
+    padding: 1.5px 5px;
+    border-radius: 4px;
+  }
+  td .note { color: var(--muted); font-size: 12.5px; display: block; margin-top: 3px; }
+
+  /* tokens */
+  .tokens { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 12px; }
+  .swatch {
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .swatch .fill { height: 54px; }
+  .swatch .info { padding: 9px 11px; display: flex; flex-direction: column; gap: 2px; }
+  .swatch .info b { font-size: 12.5px; font-weight: 600; }
+  .swatch .info span { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); letter-spacing: 0.02em; }
+
+  .note-box {
+    border-left: 2px solid var(--brass);
+    background: var(--surface);
+    border-radius: 0 var(--r-sm) var(--r-sm) 0;
+    padding: 13px 16px;
+    color: var(--muted);
+    font-size: 14px;
+    max-width: 72ch;
+  }
+  .note-box b { color: var(--text); font-weight: 600; }
+
+  footer {
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Hermes Android · 디자인 시안 v1</div>
+    <h1>폰 안에 들어간 에이전트</h1>
+    <p class="lede">
+      백엔드는 기존 Hermes Agent를 수정 없이 그대로 쓴다. 앱은 <code style="font-family:var(--font-mono);font-size:13px">/v1/runs</code>
+      스트림을 받아 표시하고, 도구 승인을 되돌려 보내는 일만 한다. 화면 설계는 Hermes 웹 대시보드를 따르지 않고
+      Claude·Codex 안드로이드 앱을 기준으로 새로 잡았다.
+    </p>
+    <div class="facts">
+      <span class="fact">compileSdk 37.1</span>
+      <span class="fact">minSdk 26</span>
+      <span class="fact">Compose Material 3</span>
+      <span class="fact">Tailscale 전용</span>
+      <span class="fact">백엔드 diff 0</span>
+    </div>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <h2>화면</h2>
+      <p>
+        다섯 개 화면이 앱의 전부다. 대화가 중심이고, 승인은 대화를 가로막는 시트로, 나머지는 그 주변에 붙는다.
+        앱은 두 테마 모두에서 어두운 바탕으로 고정한다 — 실행 로그와 코드가 화면의 대부분을 차지하기 때문이다.
+      </p>
+    </div>
+
+    <div class="screens">
+
+      <!-- 1. 대화 -->
+      <div class="screen">
+        <div class="phone">
+          <div class="glass">
+            <div class="statusbar">
+              <span>21:36</span>
+              <span style="display:flex; align-items:center; gap:6px;">
+                <span class="sigdots"><i></i><i></i><i></i></span>
+                <span class="batt"></span>
+              </span>
+            </div>
+
+            <div class="appbar">
+              <span class="icon-btn" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+              </span>
+              <span class="title">
+                <b>FP4 dequant 벤치</b>
+                <span>세션 · 4분 전</span>
+              </span>
+              <span class="chip brass">Opus 5</span>
+            </div>
+
+            <div class="thread">
+              <div class="bubble">디코드 커널 벤치 한 번 돌려주고 이전 결과랑 비교해줘</div>
+
+              <div class="reply">
+                벤치 스크립트부터 확인하겠습니다.
+              </div>
+
+              <div class="tool done">
+                <div class="tool-head">
+                  <span class="name">read_file</span>
+                  <span class="state">완료</span>
+                </div>
+                <div class="tool-body">bench/decode_fp4.py · 214줄</div>
+              </div>
+
+              <div class="tool running">
+                <div class="progress"></div>
+                <div class="tool-head">
+                  <span class="name">bash</span>
+                  <span class="state">실행 중 · 38초</span>
+                </div>
+                <div class="tool-body">python bench/decode_fp4.py --seq 4096 --iters 50
+[24/50] 1.83 ms/iter</div>
+              </div>
+
+              <div class="reply">
+                중간 결과는 <span class="dim">1.83 ms/iter</span><span class="caret"></span>
+              </div>
+            </div>
+
+            <div class="stopbar"><span></span>중단</div>
+
+            <div class="composer">
+              <span class="icon-btn" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              </span>
+              <span class="field">메시지 입력</span>
+              <span class="send" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <b>대화</b>
+          <span>도구 실행은 왼쪽 색 띠로 상태를 말한다. 실행 중은 황동, 완료는 초록. 실행 중에는 컴포저 위에 중단 바가 올라온다.</span>
+        </div>
+      </div>
+
+      <!-- 2. 승인 -->
+      <div class="screen">
+        <div class="phone">
+          <div class="glass">
+            <div class="statusbar">
+              <span>21:37</span>
+              <span style="display:flex; align-items:center; gap:6px;">
+                <span class="sigdots"><i></i><i></i><i></i></span>
+                <span class="batt"></span>
+              </span>
+            </div>
+
+            <div class="appbar">
+              <span class="icon-btn" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+              </span>
+              <span class="title">
+                <b>FP4 dequant 벤치</b>
+                <span>승인 대기</span>
+              </span>
+              <span class="chip">일시정지</span>
+            </div>
+
+            <div class="thread">
+              <div class="reply">이전 결과 파일을 덮어쓰기 전에 백업하겠습니다.</div>
+              <div class="tool blocked">
+                <div class="tool-head">
+                  <span class="name">bash</span>
+                  <span class="state">승인 대기</span>
+                </div>
+                <div class="tool-body">rm -rf bench/results.old</div>
+              </div>
+            </div>
+
+            <div class="scrim"></div>
+
+            <div class="sheet">
+              <div class="grabber"></div>
+              <div class="sheet-eyebrow"><span></span>승인 필요</div>
+              <h3>셸 명령을 실행합니다</h3>
+              <div class="cmd">rm <span class="flag">-rf</span> bench/results.old</div>
+              <div class="meta-row">
+                <span>cwd /ssd512g/kv-bench</span>
+                <span>run 8f2a·c1</span>
+              </div>
+              <div class="choices">
+                <div class="choice primary">이번만<em>once</em></div>
+                <div class="choice">이 세션<em>session</em></div>
+                <div class="choice">항상<em>always</em></div>
+                <div class="choice danger">거부<em>deny</em></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <b>승인 시트</b>
+          <span>버튼 구성은 앱이 정하지 않는다. 서버가 <code style="font-family:var(--font-mono);font-size:11.5px">choices</code> 배열로 내려준 것만 그대로 그린다. 정책이 바뀌면 버튼이 저절로 따라간다.</span>
+        </div>
+      </div>
+
+      <!-- 3. 알림 -->
+      <div class="screen">
+        <div class="phone">
+          <div class="glass">
+            <div class="statusbar">
+              <span>21:37</span>
+              <span style="display:flex; align-items:center; gap:6px;">
+                <span class="sigdots"><i></i><i></i><i></i></span>
+                <span class="batt"></span>
+              </span>
+            </div>
+
+            <div class="lock">
+              <div class="clock">
+                <b>21:37</b>
+                <span>8월 9일 일요일</span>
+              </div>
+
+              <div class="notif">
+                <div class="head">
+                  <span>Hermes · 승인 대기</span>
+                  <time>지금</time>
+                </div>
+                <b>셸 명령을 실행할까요?</b>
+                <p>rm -rf bench/results.old</p>
+                <div class="acts">
+                  <div class="y">이번만</div>
+                  <div>이 세션</div>
+                  <div class="n">거부</div>
+                </div>
+              </div>
+
+              <div class="notif" style="background:var(--app-panel); border-color:var(--app-line);">
+                <div class="head" style="color:var(--app-ok);">
+                  <span>Hermes · 완료</span>
+                  <time>21:31</time>
+                </div>
+                <b>KV 캐시 프로파일 정리됨</b>
+                <p>3개 도구 · 1분 12초</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <b>잠금 화면 알림</b>
+          <span>앱을 열지 않고 승인을 끝낼 수 있어야 한다. 알림 액션이 곧바로 승인 응답을 보낸다. 실행은 포그라운드 서비스가 붙들고 있어 앱이 내려가도 끊기지 않는다.</span>
+        </div>
+      </div>
+
+      <!-- 4. 세션 -->
+      <div class="screen">
+        <div class="phone">
+          <div class="glass">
+            <div class="statusbar">
+              <span>21:38</span>
+              <span style="display:flex; align-items:center; gap:6px;">
+                <span class="sigdots"><i></i><i></i><i></i></span>
+                <span class="batt"></span>
+              </span>
+            </div>
+
+            <div class="appbar">
+              <span class="title"><b>세션</b><span>연결됨 · tailnet</span></span>
+              <span class="icon-btn" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              </span>
+            </div>
+
+            <div class="list">
+              <div class="search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                세션 검색
+              </div>
+
+              <div class="row">
+                <span class="dot run"></span>
+                <span class="body">
+                  <b>FP4 dequant 벤치</b>
+                  <p>중간 결과는 1.83 ms/iter…</p>
+                </span>
+                <time>지금</time>
+              </div>
+
+              <div class="row">
+                <span class="dot wait"></span>
+                <span class="body">
+                  <b>게이트웨이 로그 점검</b>
+                  <p>승인 대기 · bash</p>
+                </span>
+                <time>21:12</time>
+              </div>
+
+              <div class="row">
+                <span class="dot done"></span>
+                <span class="body">
+                  <b>Termux 설치 경로 확인</b>
+                  <p>완료 · 도구 5개</p>
+                </span>
+                <time>어제</time>
+              </div>
+
+              <div class="row">
+                <span class="dot done"></span>
+                <span class="body">
+                  <b>cron 잡 정리</b>
+                  <p>완료 · 도구 2개</p>
+                </span>
+                <time>8월 7일</time>
+              </div>
+
+              <div class="row">
+                <span class="dot"></span>
+                <span class="body">
+                  <b>PR 리뷰 초안</b>
+                  <p>취소됨</p>
+                </span>
+                <time>8월 5일</time>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <b>세션 목록</b>
+          <span>왼쪽 점 하나가 상태를 전부 말한다. 승인 대기는 목록에서부터 눈에 띄어야 하므로 호박색을 쓴다.</span>
+        </div>
+      </div>
+
+      <!-- 5. 설정 -->
+      <div class="screen">
+        <div class="phone">
+          <div class="glass">
+            <div class="statusbar">
+              <span>21:39</span>
+              <span style="display:flex; align-items:center; gap:6px;">
+                <span class="sigdots"><i></i><i></i><i></i></span>
+                <span class="batt"></span>
+              </span>
+            </div>
+
+            <div class="appbar">
+              <span class="icon-btn" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+              </span>
+              <span class="title"><b>설정</b></span>
+            </div>
+
+            <div class="settings">
+              <div class="health">
+                <span class="dot done"></span>
+                <b>연결됨</b>
+                <span>12 ms</span>
+              </div>
+
+              <div class="group">
+                <h4>서버</h4>
+                <div class="card">
+                  <div class="setting"><span class="k">주소</span><span class="v">hermes.tailnet:9119</span></div>
+                  <div class="setting"><span class="k">API 키</span><span class="v">sk-··········4f2a</span></div>
+                  <div class="setting"><span class="k">버전</span><span class="v">0.17.0</span></div>
+                </div>
+              </div>
+
+              <div class="group">
+                <h4>에이전트</h4>
+                <div class="card">
+                  <div class="setting"><span class="k">모델</span><span class="v">opus-5</span></div>
+                  <div class="setting"><span class="k">툴셋</span><span class="v">기본 · 14개</span></div>
+                  <div class="setting"><span class="k">스킬</span><span class="v">7개 활성</span></div>
+                </div>
+              </div>
+
+              <div class="group">
+                <h4>알림</h4>
+                <div class="card">
+                  <div class="setting"><span class="k">승인 요청</span><span class="v ok">켬</span></div>
+                  <div class="setting"><span class="k">실행 완료</span><span class="v ok">켬</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <b>설정</b>
+          <span>서버 도달 여부가 맨 위에 온다. Tailscale이 끊긴 상태와 서버가 죽은 상태는 다른 문구로 구분한다.</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section>
+    <div class="sec-head">
+      <h2>태블릿</h2>
+      <p>
+        폭 840dp를 넘으면 데스크탑 셸 구조로 바뀐다 — 좌측 세션 레일, 중앙 대화, 우측 활동 레일.
+        데스크탑 앱이 자체 레일을 접는 지점(768px)과도 대체로 맞는 분기점이다.
+      </p>
+    </div>
+
+    <div class="tablet-frame">
+      <div class="tablet-bar">
+        <span class="tb-title">Hermes</span>
+        <span class="tb-state">연결됨</span>
+        <span class="tb-spacer"></span>
+        <span class="chip brass">Opus 5</span>
+        <span class="tb-action">새 세션</span>
+        <span class="tb-action">설정</span>
+      </div>
+      <div class="tablet-body">
+        <div class="tablet-rail">
+          <div class="rail-search">세션 검색</div>
+          <div class="rail-row active"><span class="dot run"></span><span>FP4 dequant 벤치</span></div>
+          <div class="rail-row"><span class="dot wait"></span><span>게이트웨이 로그 점검</span></div>
+          <div class="rail-row"><span class="dot done"></span><span>Termux 설치 경로 확인</span></div>
+          <div class="rail-row"><span class="dot done"></span><span>cron 잡 정리</span></div>
+        </div>
+
+        <div class="tablet-center">
+          <div class="bubble" style="align-self:flex-end;">디코드 커널 벤치 한 번 돌려줘</div>
+          <div class="reply">벤치 스크립트부터 확인하겠습니다.</div>
+          <div class="tool running">
+            <div class="progress"></div>
+            <div class="tool-head"><span class="name">bash</span><span class="state">실행 중 · 38초</span></div>
+            <div class="tool-body">python bench/decode_fp4.py --seq 4096
+[24/50] 1.83 ms/iter</div>
+          </div>
+          <div class="reply">중간 결과는 <span class="dim">1.83 ms/iter</span><span class="caret"></span></div>
+          <div class="tablet-composer"><span class="field">메시지 입력</span><span class="send-sm"></span></div>
+        </div>
+
+        <div class="tablet-rail right">
+          <div class="rail-label">활동</div>
+          <div class="tool running">
+            <div class="tool-head"><span class="name">bash</span><span class="state">실행 중</span></div>
+          </div>
+          <div class="tool done">
+            <div class="tool-head"><span class="name">read_file</span><span class="state">완료 · 0.4초</span></div>
+          </div>
+          <div class="tool done">
+            <div class="tool-head"><span class="name">grep</span><span class="state">완료 · 0.1초</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tablet-status">
+        <span class="dot done"></span>
+        <span>12 ms</span>
+        <span class="accent">실행 중 · 0:38</span>
+        <span>입력 4,182 · 출력 906</span>
+        <span class="ts-spacer"></span>
+        <span>opus-5</span>
+      </div>
+    </div>
+
+    <div class="note-box">
+      <b>없는 기능은 흉내내지 않는다.</b> 데스크탑 우측 레일은 files / terminal / review 탭이지만
+      셋 다 Electron 로컬 접근이라 HTTP로 재현할 수 없다. 그래서 태블릿 우측 레일은 게이트웨이가
+      실제로 노출하는 것 — 열린 세션의 도구 실행 목록 — 을 보여준다.
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section>
+    <div class="sec-head">
+      <h2>서버 이벤트가 화면이 되는 방식</h2>
+      <p>
+        앱에는 자체 상태 기계가 거의 없다. <code style="font-family:var(--font-mono);font-size:13px">/v1/runs/{id}/events</code>가
+        흘리는 아홉 개 프레임이 곧 화면 전환이다. 전부 이름 없는 <code style="font-family:var(--font-mono);font-size:13px">data:</code>
+        프레임이고 종류는 JSON 본문의 <code style="font-family:var(--font-mono);font-size:13px">event</code> 키에 들어 있다.
+      </p>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>이벤트</th><th>화면</th><th>알림</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>message.delta</code></td>
+            <td>어시스턴트 말풍선에 누적<span class="note">대화 본문은 전부 이 경로로 온다. 스트리밍 중에는 끝에 커서 블록</span></td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><code>reasoning.available</code></td>
+            <td>추론 블록으로 접어서 표시</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><code>tool.started</code></td>
+            <td>도구 카드 생성, 왼쪽 띠 황동 + 진행 바</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><code>tool.completed</code></td>
+            <td>같은 카드가 초록(또는 실패 시 빨강)으로, 소요 시간 표시</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><code>approval.request</code></td>
+            <td>승인 시트가 올라오고 대화가 잠긴다<span class="note">도구 카드는 호박색 “승인 대기”로 바뀐다</span></td>
+            <td>고우선 알림 + 액션 버튼</td>
+          </tr>
+          <tr>
+            <td><code>approval.responded</code></td>
+            <td>시트가 내려가고 스트림 재개</td>
+            <td>알림 해제</td>
+          </tr>
+          <tr>
+            <td><code>run.completed</code></td>
+            <td>중단 바 사라지고 컴포저 활성화</td>
+            <td>완료 알림 (설정에서 끔 가능)</td>
+          </tr>
+          <tr>
+            <td><code>run.failed</code></td>
+            <td>인라인 오류 카드</td>
+            <td>실패 알림</td>
+          </tr>
+          <tr>
+            <td><code>run.cancelled</code></td>
+            <td>세션 목록에서 회색 점</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note-box">
+      <b>스트림에 없는 두 가지.</b>
+      <code style="font-family:var(--font-mono);font-size:13px">run.stopping</code>은 이벤트가 아니라 실행 상태값이라
+      <code style="font-family:var(--font-mono);font-size:13px">GET /v1/runs/{id}</code>로만 관측된다.
+      <code style="font-family:var(--font-mono);font-size:13px">hermes.tool.progress</code>는
+      <code style="font-family:var(--font-mono);font-size:13px">/v1/chat/completions</code> 스트림의 named 이벤트이고
+      이 경로에는 나오지 않는다. 파서는 두 형식을 모두 읽지만 앱이 쓰는 경로는 위 아홉 개다.
+    </div>
+
+    <div class="note-box">
+      <b>앱이 정책을 복제하지 않는다.</b> 승인 선택지, 도구 이름, 모델 목록은 전부 서버 응답에서 온다.
+      앱이 고정으로 아는 것은 엔드포인트 경로, 이벤트 이름 일곱 개, 승인 문자열 네 개뿐이다.
+    </div>
+  </section>
+
+  <div class="rule"></div>
+
+  <section>
+    <div class="sec-head">
+      <h2>토큰</h2>
+      <p>바탕은 청록기 도는 슬레이트, 강조는 황동 하나. 상태색은 강조색과 분리해서 실행 상태에만 쓴다.</p>
+    </div>
+
+    <div class="tokens">
+      <div class="swatch">
+        <div class="fill" style="background:#10161A;"></div>
+        <div class="info"><b>바탕</b><span>#10161A</span></div>
+      </div>
+      <div class="swatch">
+        <div class="fill" style="background:#19222A;"></div>
+        <div class="info"><b>패널</b><span>#19222A</span></div>
+      </div>
+      <div class="swatch">
+        <div class="fill" style="background:#D2A354;"></div>
+        <div class="info"><b>황동 · 강조</b><span>#D2A354</span></div>
+      </div>
+      <div class="swatch">
+        <div class="fill" style="background:#E0A83C;"></div>
+        <div class="info"><b>승인 대기</b><span>#E0A83C</span></div>
+      </div>
+      <div class="swatch">
+        <div class="fill" style="background:#6FA97B;"></div>
+        <div class="info"><b>완료</b><span>#6FA97B</span></div>
+      </div>
+      <div class="swatch">
+        <div class="fill" style="background:#CB6058;"></div>
+        <div class="info"><b>실패 · 거부</b><span>#CB6058</span></div>
+      </div>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>역할</th><th>서체</th><th>쓰임</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>본문</td>
+            <td>Roboto / 시스템 산세리프</td>
+            <td>대화, 제목, 버튼. 안드로이드 기본 서체를 그대로 쓴다</td>
+          </tr>
+          <tr>
+            <td>계기용 고정폭</td>
+            <td>Roboto Mono</td>
+            <td>명령, 경로, 도구 이름, 상태 라벨, 시각<span class="note">기계가 만든 문자열과 사람이 쓴 문장을 서체로 구분한다</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>시안 v1 · 2026-08-09 · /ssd512g/hermes-android/design/mockup.html</footer>
+
+</div>

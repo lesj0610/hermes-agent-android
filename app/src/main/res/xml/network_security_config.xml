@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The gateway speaks plain HTTP; confidentiality comes from the WireGuard
+  tunnel, not from TLS. That is fine over a tailnet and unacceptable anywhere
+  else, so cleartext is denied by default and re-enabled only for Tailscale
+  MagicDNS names.
+
+  Consequence worth knowing: a bare tailnet IP (100.x.y.z) will NOT connect.
+  Android's network security config matches domains, not address ranges, so
+  there is no way to express "the CGNAT range" here. Use the MagicDNS name
+  (host.tailnet-name.ts.net), which Tailscale enables by default, or put TLS
+  in front of the gateway.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">ts.net</domain>
+    </domain-config>
+
+    <!-- adb reverse / emulator loopback during development only. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

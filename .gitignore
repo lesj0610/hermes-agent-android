@@ -1,0 +1,26 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Release signing material. Never commit these — an upload key in git means
+# anyone with repo access can publish as this app.
+/keystore.properties
+*.jks
+*.keystore
+
+# Build-environment notes. Kept local: the file records this machine's disk
+# layout, hardware, and what else runs on it, none of which belongs in a public
+# repository. env.sh and sdk.sh carry everything a build actually needs.
+/ENVIRONMENT.md

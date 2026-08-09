@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Product name; identical in every locale. Matches the Play listing title
+         minus the "for Android" suffix, which brand guidelines keep out of the
+         app name itself. -->
+    <string name="app_name" translatable="false">Hermes Agent</string>
+
+    <!-- Navigation -->
+    <string name="nav_chat">Chat</string>
+    <string name="nav_settings">Settings</string>
+    <string name="action_back">Back</string>
+    <string name="action_new_session">New session</string>
+
+    <!-- Chat -->
+    <string name="chat_input_hint">Message</string>
+    <string name="chat_send">Send</string>
+    <string name="chat_stop">Stop</string>
+    <string name="chat_stopping">Stopping…</string>
+    <string name="chat_empty_title">Nothing here yet</string>
+    <string name="chat_empty_body">Send a message to start a run.</string>
+    <string name="chat_reasoning">Reasoning</string>
+
+    <!-- Tool cards -->
+    <string name="tool_running">Running</string>
+    <string name="tool_awaiting">Awaiting approval</string>
+    <string name="tool_completed">Done</string>
+    <string name="tool_failed">Failed</string>
+    <string name="tool_duration">%1$.1fs</string>
+
+    <!-- Approval -->
+    <string name="approval_title">Approval needed</string>
+    <string name="approval_subtitle">The agent wants to run this.</string>
+    <string name="approval_choice_once">Once</string>
+    <string name="approval_choice_session">This session</string>
+    <string name="approval_choice_always">Always</string>
+    <string name="approval_choice_deny">Deny</string>
+
+    <!-- Tablet right rail -->
+    <string name="rail_activity">Activity</string>
+    <string name="rail_activity_empty">Tool calls show up here.</string>
+
+    <!-- Sessions -->
+    <string name="sessions_title">Sessions</string>
+    <string name="sessions_search">Search sessions</string>
+    <string name="sessions_empty">No sessions yet.</string>
+    <plurals name="sessions_tool_count">
+        <item quantity="one">%1$d tool</item>
+        <item quantity="other">%1$d tools</item>
+    </plurals>
+    <string name="sessions_untitled">Untitled session</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_group_server">Server</string>
+    <string name="settings_group_agent">Agent</string>
+    <string name="settings_group_notifications">Notifications</string>
+    <string name="settings_group_language">Language</string>
+    <string name="settings_base_url">Address</string>
+    <string name="settings_base_url_hint">http://hermes.tailnet:8642</string>
+    <string name="settings_api_key">API key</string>
+    <string name="settings_api_key_hint">API_SERVER_KEY</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_model">Model</string>
+    <string name="settings_model_default">Server default</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_notify_approvals">Approval requests</string>
+    <string name="settings_notify_completion">Run finished</string>
+    <string name="settings_language_system">Follow system</string>
+    <string name="settings_group_permissions">Permissions</string>
+    <string name="permission_notifications">Notifications</string>
+    <string name="permission_notifications_why">Without this, an approval request never reaches you and the agent waits forever.</string>
+    <string name="permission_background">Keep running in background</string>
+    <string name="permission_background_why">Opens battery settings. Set Hermes to unrestricted so a long run is not frozen mid-stream.</string>
+    <string name="permission_grant">Allow</string>
+    <string name="permission_granted">Allowed</string>
+
+    <!-- Status bar (tablet) -->
+    <string name="status_tokens">in %1$d · out %2$d</string>
+
+    <!-- Connection -->
+    <string name="connection_connected">Connected</string>
+    <string name="connection_checking">Checking…</string>
+    <string name="connection_unreachable">Server unreachable</string>
+    <string name="connection_unreachable_help">The gateway did not answer. Check that Tailscale is connected and the address is right.</string>
+    <string name="connection_unauthorized">Unauthorized</string>
+    <string name="connection_unauthorized_help">The server rejected the API key.</string>
+    <string name="connection_not_configured">Not set up</string>
+    <string name="connection_not_configured_help">Enter the gateway address and API key to begin.</string>
+    <string name="connection_latency">%1$d ms</string>
+
+    <!-- Errors -->
+    <string name="error_run_failed">The run failed.</string>
+    <string name="error_dismiss">Dismiss</string>
+
+    <!-- Notifications -->
+    <string name="notif_channel_approvals">Approval requests</string>
+    <string name="notif_channel_approvals_desc">Asks before the agent runs a tool.</string>
+    <string name="notif_channel_runs">Run status</string>
+    <string name="notif_channel_runs_desc">Keeps a run alive while the app is in the background.</string>
+    <string name="notif_approval_title">Run this command?</string>
+    <string name="notif_running_title">Agent running</string>
+    <string name="notif_running_body">Streaming from the gateway.</string>
+    <string name="notif_finished_title">Run finished</string>
+    <string name="notif_failed_title">Run failed</string>
+</resources>

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  한국어 문자열. 이 파일은 앱이 단독으로 소유한다.
+  Hermes 에이전트가 한국어를 지원하든 말든 이 화면들은 한국어로 동작한다.
+  근거는 core/Language.kt 주석 참고.
+-->
+<resources>
+    <string name="nav_chat">대화</string>
+    <string name="nav_settings">설정</string>
+    <string name="action_back">뒤로</string>
+    <string name="action_new_session">새 세션</string>
+
+    <string name="chat_input_hint">메시지 입력</string>
+    <string name="chat_send">보내기</string>
+    <string name="chat_stop">중단</string>
+    <string name="chat_stopping">중단하는 중…</string>
+    <string name="chat_empty_title">아직 아무것도 없습니다</string>
+    <string name="chat_empty_body">메시지를 보내면 실행이 시작됩니다.</string>
+    <string name="chat_reasoning">추론</string>
+
+    <string name="tool_running">실행 중</string>
+    <string name="tool_awaiting">승인 대기</string>
+    <string name="tool_completed">완료</string>
+    <string name="tool_failed">실패</string>
+    <string name="tool_duration">%1$.1f초</string>
+
+    <string name="approval_title">승인 필요</string>
+    <string name="approval_subtitle">에이전트가 아래를 실행하려 합니다.</string>
+    <string name="approval_choice_once">이번만</string>
+    <string name="approval_choice_session">이 세션</string>
+    <string name="approval_choice_always">항상</string>
+    <string name="approval_choice_deny">거부</string>
+
+    <string name="rail_activity">활동</string>
+    <string name="rail_activity_empty">도구 실행이 여기 표시됩니다.</string>
+
+    <string name="sessions_title">세션</string>
+    <string name="sessions_search">세션 검색</string>
+    <string name="sessions_empty">세션이 없습니다.</string>
+    <!-- 한국어는 수 구분이 없으므로 other 하나만 둔다. -->
+    <plurals name="sessions_tool_count">
+        <item quantity="other">도구 %1$d개</item>
+    </plurals>
+    <string name="sessions_untitled">제목 없는 세션</string>
+
+    <string name="settings_title">설정</string>
+    <string name="settings_group_server">서버</string>
+    <string name="settings_group_agent">에이전트</string>
+    <string name="settings_group_notifications">알림</string>
+    <string name="settings_group_language">언어</string>
+    <string name="settings_base_url">주소</string>
+    <string name="settings_base_url_hint">http://hermes.tailnet:8642</string>
+    <string name="settings_api_key">API 키</string>
+    <string name="settings_api_key_hint">API_SERVER_KEY</string>
+    <string name="settings_save">저장</string>
+    <string name="settings_model">모델</string>
+    <string name="settings_model_default">서버 기본값</string>
+    <string name="settings_version">버전</string>
+    <string name="settings_notify_approvals">승인 요청</string>
+    <string name="settings_notify_completion">실행 완료</string>
+    <string name="settings_language_system">시스템 설정 따름</string>
+    <string name="settings_group_permissions">권한</string>
+    <string name="permission_notifications">알림</string>
+    <string name="permission_notifications_why">없으면 승인 요청이 전달되지 않아 에이전트가 계속 멈춰 있습니다.</string>
+    <string name="permission_background">백그라운드 유지</string>
+    <string name="permission_background_why">배터리 설정을 엽니다. Hermes를 제한 없음으로 두면 긴 실행이 도중에 멈추지 않습니다.</string>
+    <string name="permission_grant">허용</string>
+    <string name="permission_granted">허용됨</string>
+
+    <string name="status_tokens">입력 %1$d · 출력 %2$d</string>
+
+    <string name="connection_connected">연결됨</string>
+    <string name="connection_checking">확인 중…</string>
+    <string name="connection_unreachable">서버에 닿지 않음</string>
+    <string name="connection_unreachable_help">게이트웨이가 응답하지 않았습니다. Tailscale 연결 상태와 주소를 확인하세요.</string>
+    <string name="connection_unauthorized">인증 실패</string>
+    <string name="connection_unauthorized_help">서버가 API 키를 거부했습니다.</string>
+    <string name="connection_not_configured">설정 필요</string>
+    <string name="connection_not_configured_help">게이트웨이 주소와 API 키를 입력하세요.</string>
+    <string name="connection_latency">%1$d ms</string>
+
+    <string name="error_run_failed">실행이 실패했습니다.</string>
+    <string name="error_dismiss">닫기</string>
+
+    <string name="notif_channel_approvals">승인 요청</string>
+    <string name="notif_channel_approvals_desc">에이전트가 도구를 실행하기 전에 묻습니다.</string>
+    <string name="notif_channel_runs">실행 상태</string>
+    <string name="notif_channel_runs_desc">앱이 백그라운드에 있어도 실행을 유지합니다.</string>
+    <string name="notif_approval_title">이 명령을 실행할까요?</string>
+    <string name="notif_running_title">에이전트 실행 중</string>
+    <string name="notif_running_body">게이트웨이에서 스트리밍 중입니다.</string>
+    <string name="notif_finished_title">실행 완료</string>
+    <string name="notif_failed_title">실행 실패</string>
+</resources>

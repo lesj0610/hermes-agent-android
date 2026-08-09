@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launcher foreground: an "H" whose crossbar is an arrow travelling from the
+  left post into the right one — a message in transit, which is the whole job
+  of this app (carry a run to the phone, carry an approval back).
+
+  Original geometry, drawn for this project. Not derived from the upstream
+  banner wordmark or the desktop app's mascot: those are Nous Research brand
+  marks, which MIT does not license for use as someone else's product identity
+  and which Play's impersonation policy would read as a claim of officialness.
+  See PLAY.md §3.1.
+
+  Two constraints shaped the drawing:
+   - Single fill colour with real transparent gaps, never overlapping shapes of
+     different colours. The same drawable is the <monochrome> layer, and the
+     system flattens that to one tint — anything relying on colour contrast
+     would disappear there.
+   - Everything sits inside the 66dp adaptive-icon safe zone (x,y within
+     21..87), so no mask crops the mark.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Left post -->
+    <path
+        android:fillColor="#D2A354"
+        android:pathData="M28,28h12v52h-12z" />
+
+    <!-- Right post -->
+    <path
+        android:fillColor="#D2A354"
+        android:pathData="M68,28h12v52h-12z" />
+
+    <!-- Crossbar as an arrow shaft -->
+    <path
+        android:fillColor="#D2A354"
+        android:pathData="M40,50h18v8h-18z" />
+
+    <!-- Arrow head, arriving at the right post -->
+    <path
+        android:fillColor="#D2A354"
+        android:pathData="M58,44l11,10l-11,10z" />
+</vector>

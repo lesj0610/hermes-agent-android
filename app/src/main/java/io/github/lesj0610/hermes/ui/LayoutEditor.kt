@@ -29,6 +29,26 @@ fun railPanelOptions(
     }
 
 /**
+ * Panels that need a top-bar entry because nothing on screen shows them.
+ *
+ * The rule is "not currently visible", not "the window is small". Getting that
+ * wrong left panels unreachable: a two-pane window draws only the left rail, so
+ * whatever was assigned to the right one had no rail to appear in *and* no
+ * button to open it. Hiding a rail in the layout editor did the same thing.
+ *
+ * [visibleRails] is what the shell is actually drawing right now — one entry in
+ * a two-pane window, two in a three-pane one, none on a phone.
+ */
+fun unreachablePanels(
+    available: List<RailPanel>,
+    visibleRails: List<RailPanel>,
+): List<RailPanel> =
+    available.filter { panel ->
+        // None is not a destination, and the transcript is always the centre.
+        panel != RailPanel.None && panel !in visibleRails
+    }
+
+/**
  * The next panel when the rail's cycle button is tapped.
  *
  * Wraps around, and tolerates a current value that is no longer offered — which

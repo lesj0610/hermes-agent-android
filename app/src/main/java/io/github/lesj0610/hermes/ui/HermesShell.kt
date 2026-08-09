@@ -42,6 +42,7 @@ import io.github.lesj0610.hermes.core.RailPanel
 import io.github.lesj0610.hermes.core.RailSide
 import io.github.lesj0610.hermes.ui.components.PaneDivider
 import io.github.lesj0610.hermes.ui.components.RailHost
+import io.github.lesj0610.hermes.ui.components.railPanelLabel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.data.TranscriptItem
@@ -153,6 +154,14 @@ fun HermesShell(
         )
         val expanded = layout != ShellLayout.Single
 
+        // What the shell is actually drawing, which is what decides whether a
+        // panel still needs a top-bar entry to be reachable.
+        val visibleRails = when (layout) {
+            ShellLayout.Triple -> listOf(leftPanel, rightPanel)
+            ShellLayout.Dual -> listOf(leftPanel)
+            ShellLayout.Single -> emptyList()
+        }
+
         // Rail widths live in transient state while a divider is being dragged
         // and are written back once the gesture ends. Persisting per frame would
         // queue a DataStore write per pixel of travel.
@@ -207,22 +216,24 @@ fun HermesShell(
                                 Text(stringResource(R.string.action_new_session))
                             }
                         }
-                        // On a multi-pane window these live in the rails, so the
-                        // top bar only offers them where they have nowhere else
-                        // to be.
-                        if (!expanded && showCron) {
-                            TextButton(onClick = { viewModel.show(Pane.Cron) }) {
-                                Text(stringResource(R.string.cron_title))
+                        // Offered when nothing on screen already shows them.
+                        // A two-pane window draws one rail, so the panel
+                        // assigned to the other would otherwise be unreachable
+                        // — as would anything hidden in the layout editor.
+                        unreachablePanels(railOptions, visibleRails).forEach { panel ->
+                            val target = when (panel) {
+                                RailPanel.Sessions -> Pane.Sessions
+                                RailPanel.Cron -> Pane.Cron
+                                RailPanel.Gateway -> Pane.Gateway
+                                RailPanel.Dashboard -> Pane.Dashboard
+                                // Activity has no pane of its own; it belongs to
+                                // the transcript, which is already on screen.
+                                RailPanel.Activity, RailPanel.None -> null
                             }
-                        }
-                        if (!expanded && showGateway) {
-                            TextButton(onClick = { viewModel.show(Pane.Gateway) }) {
-                                Text(stringResource(R.string.gateway_title))
-                            }
-                        }
-                        if (!expanded && showDashboard) {
-                            TextButton(onClick = { viewModel.show(Pane.Dashboard) }) {
-                                Text(stringResource(R.string.dashboard_title))
+                            if (target != null) {
+                                TextButton(onClick = { viewModel.show(target) }) {
+                                    Text(railPanelLabel(panel))
+                                }
                             }
                         }
                         // Rails only exist in a multi-pane window; there is
@@ -293,6 +304,7 @@ fun HermesShell(
                                 SettingsPane(
                                     settings = settings,
                                     connection = connection,
+                                    dashboardState = dashboardState,
                                     models = models,
                                     onSaveServer = viewModel::saveServer,
                                     onSaveDashboard = viewModel::saveDashboard,
@@ -402,6 +414,7 @@ fun HermesShell(
                     Pane.Settings -> SettingsPane(
                         settings = settings,
                         connection = connection,
+                        dashboardState = dashboardState,
                         models = models,
                         onSaveServer = viewModel::saveServer,
                         onSaveDashboard = viewModel::saveDashboard,

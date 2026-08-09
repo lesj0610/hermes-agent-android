@@ -52,6 +52,8 @@ import io.github.lesj0610.hermes.core.UI_SCALE_MIN
 import io.github.lesj0610.hermes.core.UI_SCALE_STEP
 import io.github.lesj0610.hermes.net.ModelEntry
 import io.github.lesj0610.hermes.ui.Connection
+import io.github.lesj0610.hermes.ui.DashboardState
+import io.github.lesj0610.hermes.ui.components.StatusDot
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
 
 /** Live grant state, re-read whenever the screen resumes. */
@@ -64,6 +66,7 @@ data class PermissionState(
 fun SettingsPane(
     settings: HermesSettings,
     connection: Connection,
+    dashboardState: DashboardState,
     models: List<ModelEntry>,
     permissions: PermissionState,
     onSaveServer: (String, Int, String) -> Unit,
@@ -178,6 +181,13 @@ fun SettingsPane(
                 color = colors.muted,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
+
+            // The dashboard had no status anywhere in settings, so a saved
+            // configuration gave no sign of whether it worked. Its state is
+            // independent of the gateway's — one can be fine while the other
+            // is down — so it needs its own line rather than sharing the
+            // connection banner above.
+            DashboardStatusLine(dashboardState)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = dashHost,
@@ -339,6 +349,58 @@ fun SettingsPane(
                 granted = permissions.batteryExempt,
                 onGrant = onRequestBackground,
             )
+        }
+    }
+}
+
+/**
+ * Dashboard reachability, stated plainly including the failure reason.
+ *
+ * Kept compact rather than a full banner: the dashboard is optional, and a
+ * second large status block would imply the app is broken when it simply has
+ * nothing configured.
+ */
+@Composable
+private fun DashboardStatusLine(state: DashboardState) {
+    val colors = LocalRunColors.current
+    val (color, label, detail) = when (state) {
+        DashboardState.Off -> Triple(
+            colors.muted,
+            stringResource(R.string.dashboard_status_off),
+            null,
+        )
+        DashboardState.Connecting -> Triple(
+            colors.muted,
+            stringResource(R.string.connection_checking),
+            null,
+        )
+        DashboardState.Ready -> Triple(
+            colors.completed,
+            stringResource(R.string.dashboard_status_ready),
+            null,
+        )
+        is DashboardState.Failed -> Triple(
+            colors.failed,
+            stringResource(R.string.dashboard_failed),
+            state.message.takeIf { it.isNotBlank() },
+        )
+    }
+
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        StatusDot(color, Modifier.padding(top = 5.dp), size = 7)
+        Column {
+            Text(text = label, style = MaterialTheme.typography.bodySmall, color = color)
+            detail?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.muted,
+                )
+            }
         }
     }
 }

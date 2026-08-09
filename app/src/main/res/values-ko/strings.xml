@@ -131,6 +131,8 @@
     <string name="dashboard_skills">스킬 · %1$d개 활성</string>
     <string name="dashboard_not_configured">대시보드가 설정되지 않았습니다. 설정에서 추가하면 프로필과 스킬을 관리할 수 있습니다.</string>
     <string name="dashboard_failed">대시보드에 연결하지 못했습니다.</string>
+    <string name="dashboard_status_off">설정 안 됨 — 선택 사항</string>
+    <string name="dashboard_status_ready">로그인됨</string>
     <string name="dashboard_retry">다시 시도</string>
     <string name="settings_group_dashboard">대시보드 (선택)</string>
     <string name="settings_dashboard_url">주소</string>

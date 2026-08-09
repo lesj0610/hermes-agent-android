@@ -75,6 +75,48 @@ class LayoutEditorTest {
     }
 
     @Test
+    fun `a two-pane window exposes the panel that has no rail to live in`() {
+        // The bug: a Fold unfolded to two panes drew only the left rail, so the
+        // panel assigned to the right one had neither a rail nor a button.
+        val options = railPanelOptions(showCron = true, showGateway = true, showDashboard = true)
+        val unreachable = unreachablePanels(options, visibleRails = listOf(RailPanel.Sessions))
+
+        assertEquals(
+            listOf(RailPanel.Activity, RailPanel.Cron, RailPanel.Gateway, RailPanel.Dashboard),
+            unreachable,
+        )
+    }
+
+    @Test
+    fun `a three-pane window only exposes what neither rail shows`() {
+        val options = railPanelOptions(showCron = true, showGateway = true, showDashboard = true)
+        val unreachable = unreachablePanels(
+            options,
+            visibleRails = listOf(RailPanel.Sessions, RailPanel.Activity),
+        )
+
+        assertEquals(listOf(RailPanel.Cron, RailPanel.Gateway, RailPanel.Dashboard), unreachable)
+    }
+
+    @Test
+    fun `hiding a rail makes its panel reachable again from the top bar`() {
+        val options = railPanelOptions(showCron = true, showGateway = false, showDashboard = false)
+        val unreachable = unreachablePanels(options, visibleRails = listOf(RailPanel.None))
+
+        assertEquals(listOf(RailPanel.Sessions, RailPanel.Activity, RailPanel.Cron), unreachable)
+    }
+
+    @Test
+    fun `a phone exposes everything, since it draws no rails`() {
+        val options = railPanelOptions(showCron = true, showGateway = true, showDashboard = false)
+
+        assertEquals(
+            listOf(RailPanel.Sessions, RailPanel.Activity, RailPanel.Cron, RailPanel.Gateway),
+            unreachablePanels(options, visibleRails = emptyList()),
+        )
+    }
+
+    @Test
     fun `panels needing no capability are unaffected`() {
         assertEquals(
             RailPanel.Sessions,

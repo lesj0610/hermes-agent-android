@@ -146,6 +146,8 @@
     <string name="dashboard_skills">Skills · %1$d enabled</string>
     <string name="dashboard_not_configured">No dashboard configured. Add one in Settings to manage profiles and skills.</string>
     <string name="dashboard_failed">Could not reach the dashboard.</string>
+    <string name="dashboard_status_off">Not configured — optional</string>
+    <string name="dashboard_status_ready">Signed in</string>
     <string name="dashboard_retry">Try again</string>
     <string name="settings_group_dashboard">Dashboard (optional)</string>
     <string name="settings_dashboard_url">Address</string>

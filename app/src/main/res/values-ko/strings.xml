@@ -48,6 +48,13 @@
     <string name="settings_group_agent">에이전트</string>
     <string name="settings_group_notifications">알림</string>
     <string name="settings_group_language">언어</string>
+    <string name="settings_group_display">화면</string>
+    <string name="settings_layout">레이아웃</string>
+    <string name="settings_layout_auto">창 크기에 맞춤</string>
+    <string name="settings_layout_phone">항상 단일 패널</string>
+    <string name="settings_layout_tablet">항상 3분할</string>
+    <string name="settings_ui_scale">UI 배율</string>
+    <string name="settings_ui_scale_why">글자와 여백을 함께 키웁니다.</string>
     <string name="settings_base_url">주소</string>
     <string name="settings_base_url_hint">http://hermes.tailnet:8642</string>
     <string name="settings_api_key">API 키</string>

@@ -8,13 +8,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -29,10 +32,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.core.HermesSettings
 import io.github.lesj0610.hermes.core.Language
+import io.github.lesj0610.hermes.core.LayoutMode
+import io.github.lesj0610.hermes.core.UI_SCALE_MAX
+import io.github.lesj0610.hermes.core.UI_SCALE_MIN
+import io.github.lesj0610.hermes.core.UI_SCALE_STEP
 import io.github.lesj0610.hermes.net.ModelEntry
 import io.github.lesj0610.hermes.ui.Connection
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
@@ -54,6 +63,8 @@ fun SettingsPane(
     onSelectLanguage: (String) -> Unit,
     onToggleApprovals: (Boolean) -> Unit,
     onToggleCompletion: (Boolean) -> Unit,
+    onSelectLayoutMode: (LayoutMode) -> Unit,
+    onSetUiScale: (Float) -> Unit,
     onRequestNotifications: () -> Unit,
     onRequestBackground: () -> Unit,
     modifier: Modifier = Modifier,
@@ -134,6 +145,37 @@ fun SettingsPane(
                     onClick = { onSelectModel(model.id) },
                 )
             }
+        }
+
+        Group(stringResource(R.string.settings_group_display)) {
+            Text(
+                text = stringResource(R.string.settings_layout),
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.muted,
+                modifier = Modifier.padding(bottom = 2.dp),
+            )
+            SelectableRow(
+                label = stringResource(R.string.settings_layout_auto),
+                selected = settings.layoutMode == LayoutMode.Auto,
+                onClick = { onSelectLayoutMode(LayoutMode.Auto) },
+            )
+            SelectableRow(
+                label = stringResource(R.string.settings_layout_phone),
+                selected = settings.layoutMode == LayoutMode.Phone,
+                onClick = { onSelectLayoutMode(LayoutMode.Phone) },
+            )
+            SelectableRow(
+                label = stringResource(R.string.settings_layout_tablet),
+                selected = settings.layoutMode == LayoutMode.Tablet,
+                onClick = { onSelectLayoutMode(LayoutMode.Tablet) },
+            )
+
+            HorizontalDivider(color = colors.line)
+
+            ScaleRow(
+                scale = settings.uiScale,
+                onChange = onSetUiScale,
+            )
         }
 
         Group(stringResource(R.string.settings_group_language)) {
@@ -323,6 +365,53 @@ private fun PermissionRow(
                 Text(stringResource(R.string.permission_grant))
             }
         }
+    }
+}
+
+/**
+ * UI scale stepper.
+ *
+ * Stepper rather than a slider: the useful range is narrow and a slider on a
+ * surface that itself rescales as you drag is unpleasant to aim at.
+ */
+@Composable
+private fun ScaleRow(scale: Float, onChange: (Float) -> Unit) {
+    val colors = LocalRunColors.current
+    Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.settings_ui_scale),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = stringResource(R.string.settings_ui_scale_why),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.muted,
+            )
+        }
+
+        OutlinedButton(
+            onClick = { onChange(scale - UI_SCALE_STEP) },
+            enabled = scale > UI_SCALE_MIN + 0.001f,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        ) { Text("−") }
+
+        Text(
+            text = "${(scale * 100).roundToInt()}%",
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.widthIn(min = 44.dp),
+            textAlign = TextAlign.Center,
+        )
+
+        OutlinedButton(
+            onClick = { onChange(scale + UI_SCALE_STEP) },
+            enabled = scale < UI_SCALE_MAX - 0.001f,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        ) { Text("+") }
     }
 }
 

@@ -21,11 +21,21 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import io.github.lesj0610.hermes.core.LayoutMode
+import io.github.lesj0610.hermes.core.RAIL_WIDTH_MAX
+import io.github.lesj0610.hermes.core.RAIL_WIDTH_MIN
+import io.github.lesj0610.hermes.ui.components.PaneDivider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.data.TranscriptItem
@@ -37,16 +47,6 @@ import io.github.lesj0610.hermes.ui.sessions.SessionsPane
 import io.github.lesj0610.hermes.ui.settings.PermissionState
 import io.github.lesj0610.hermes.ui.settings.SettingsPane
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
-
-/**
- * Width at which the layout switches from phone to tablet.
- *
- * 840dp is the Material expanded breakpoint, and it is also roughly where the
- * desktop app's own rails stop making sense (it collapses both below 768px).
- * Below this the app is one pane at a time; at or above it mirrors the desktop
- * shell: session rail, transcript, activity rail.
- */
-private const val EXPANDED_WIDTH_DP = 840
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,8 +64,37 @@ fun HermesShell(
     val pane by viewModel.pane.collectAsStateWithLifecycle()
     val colors = LocalRunColors.current
 
+    // UI scale is applied outside the measurement below on purpose. Scaling the
+    // density changes how many dp the window is worth, so enlarging the UI
+    // correctly reports less room and can drop a borderline window back to the
+    // single-pane shell — which is what the user asked for by scaling up.
+    val baseDensity = LocalDensity.current
+    val scaled = remember(baseDensity, settings.uiScale) {
+        Density(
+            density = baseDensity.density * settings.uiScale,
+            fontScale = baseDensity.fontScale * settings.uiScale,
+        )
+    }
+
+    CompositionLocalProvider(LocalDensity provides scaled) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val expanded = maxWidth >= EXPANDED_WIDTH_DP.dp
+        val layout = resolveShellLayout(
+            widthDp = maxWidth.value.toInt(),
+            heightDp = maxHeight.value.toInt(),
+            mode = settings.layoutMode,
+        )
+        val expanded = layout != ShellLayout.Single
+
+        // Rail widths live in transient state while a divider is being dragged
+        // and are written back once the gesture ends. Persisting per frame would
+        // queue a DataStore write per pixel of travel.
+        var sessionRail by remember(settings.sessionRailWidth) {
+            mutableFloatStateOf(settings.sessionRailWidth)
+        }
+        var activityRail by remember(settings.activityRailWidth) {
+            mutableFloatStateOf(settings.activityRailWidth)
+        }
+        val commitRails = { viewModel.setRailWidths(sessionRail, activityRail) }
 
         Scaffold(
             topBar = {
@@ -128,9 +157,15 @@ fun HermesShell(
                             sessions = sessions,
                             selectedId = chat.sessionId,
                             onSelect = viewModel::openSession,
-                            modifier = Modifier.width(300.dp),
+                            modifier = Modifier.width(sessionRail.dp),
                         )
-                        VerticalDivider(color = colors.line)
+                        PaneDivider(
+                            onDelta = { delta ->
+                                sessionRail = (sessionRail + delta)
+                                    .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
+                            },
+                            onCommit = commitRails,
+                        )
 
                         Column(Modifier.weight(1f)) {
                             if (pane == Pane.Settings) {
@@ -143,6 +178,8 @@ fun HermesShell(
                                     onSelectLanguage = viewModel::setLanguage,
                                     onToggleApprovals = viewModel::setNotifyApprovals,
                                     onToggleCompletion = viewModel::setNotifyCompletion,
+                                    onSelectLayoutMode = viewModel::setLayoutMode,
+                                    onSetUiScale = viewModel::setUiScale,
                                     permissions = permissions,
                                     onRequestNotifications = onRequestNotifications,
                                     onRequestBackground = onRequestBackground,
@@ -157,8 +194,19 @@ fun HermesShell(
                             }
                         }
 
-                        VerticalDivider(color = colors.line)
-                        ActivityRail(chat.items, Modifier.width(300.dp))
+                        // The activity rail is the first thing to go when the
+                        // window is only medium-wide: it is the least essential
+                        // of the three, and the transcript needs the room more.
+                        if (layout == ShellLayout.Triple) {
+                            PaneDivider(
+                                onDelta = { delta ->
+                                    activityRail = (activityRail - delta)
+                                        .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
+                                },
+                                onCommit = commitRails,
+                            )
+                            ActivityRail(chat.items, Modifier.width(activityRail.dp))
+                        }
                     }
 
                     StatusBar(chat = chat, connection = connection, model = settings.model)
@@ -187,6 +235,8 @@ fun HermesShell(
                         onSelectLanguage = viewModel::setLanguage,
                         onToggleApprovals = viewModel::setNotifyApprovals,
                         onToggleCompletion = viewModel::setNotifyCompletion,
+                        onSelectLayoutMode = viewModel::setLayoutMode,
+                        onSetUiScale = viewModel::setUiScale,
                         permissions = permissions,
                         onRequestNotifications = onRequestNotifications,
                         onRequestBackground = onRequestBackground,
@@ -201,6 +251,7 @@ fun HermesShell(
         chat.pendingApproval?.let { approval ->
             ApprovalSheet(approval = approval, onChoice = viewModel::respondToApproval)
         }
+    }
     }
 }
 

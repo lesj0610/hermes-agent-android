@@ -55,6 +55,13 @@
     <string name="settings_group_agent">Agent</string>
     <string name="settings_group_notifications">Notifications</string>
     <string name="settings_group_language">Language</string>
+    <string name="settings_group_display">Display</string>
+    <string name="settings_layout">Layout</string>
+    <string name="settings_layout_auto">Match window size</string>
+    <string name="settings_layout_phone">Always single pane</string>
+    <string name="settings_layout_tablet">Always three panes</string>
+    <string name="settings_ui_scale">UI scale</string>
+    <string name="settings_ui_scale_why">Scales text and spacing together.</string>
     <string name="settings_base_url">Address</string>
     <string name="settings_base_url_hint">http://hermes.tailnet:8642</string>
     <string name="settings_api_key">API key</string>

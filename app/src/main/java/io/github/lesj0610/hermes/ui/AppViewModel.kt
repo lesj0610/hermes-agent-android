@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import io.github.lesj0610.hermes.core.Graph
 import io.github.lesj0610.hermes.core.HermesSettings
+import io.github.lesj0610.hermes.core.LayoutMode
 import io.github.lesj0610.hermes.data.ChatState
 import io.github.lesj0610.hermes.data.UiError
 import io.github.lesj0610.hermes.net.HermesUnauthorizedException
@@ -139,6 +140,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setNotifyCompletion(enabled: Boolean) {
         viewModelScope.launch { graph.settings.setNotifyCompletion(enabled) }
+    }
+
+    fun setLayoutMode(mode: LayoutMode) {
+        viewModelScope.launch { graph.settings.setLayoutMode(mode) }
+    }
+
+    fun setUiScale(scale: Float) {
+        viewModelScope.launch { graph.settings.setUiScale(scale) }
+    }
+
+    fun setRailWidths(sessionDp: Float, activityDp: Float) {
+        viewModelScope.launch { graph.settings.setRailWidths(sessionDp, activityDp) }
     }
 
     /** Exposed for the settings screen so it can show why a save did not take. */

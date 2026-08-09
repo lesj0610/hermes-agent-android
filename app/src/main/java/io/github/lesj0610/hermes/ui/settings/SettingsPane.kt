@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -31,12 +33,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import io.github.lesj0610.hermes.R
+import io.github.lesj0610.hermes.core.DASHBOARD_DEFAULT_PORT
+import io.github.lesj0610.hermes.core.GATEWAY_DEFAULT_PORT
 import io.github.lesj0610.hermes.core.HermesSettings
+import io.github.lesj0610.hermes.core.coercePort
+import io.github.lesj0610.hermes.core.defaultDashboardHost
+import io.github.lesj0610.hermes.core.parseEndpoint
 import io.github.lesj0610.hermes.core.Language
 import io.github.lesj0610.hermes.core.LayoutMode
 import io.github.lesj0610.hermes.core.UI_SCALE_MAX
@@ -58,8 +66,8 @@ fun SettingsPane(
     connection: Connection,
     models: List<ModelEntry>,
     permissions: PermissionState,
-    onSaveServer: (String, String) -> Unit,
-    onSaveDashboard: (String, String, String) -> Unit,
+    onSaveServer: (String, Int, String) -> Unit,
+    onSaveDashboard: (String, Int, String, String) -> Unit,
     onSelectModel: (String) -> Unit,
     onSelectLanguage: (String) -> Unit,
     onToggleApprovals: (Boolean) -> Unit,
@@ -71,9 +79,25 @@ fun SettingsPane(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalRunColors.current
-    var baseUrl by remember(settings.baseUrl) { mutableStateOf(settings.baseUrl) }
+
+    val gateway = remember(settings.baseUrl) {
+        parseEndpoint(settings.baseUrl, GATEWAY_DEFAULT_PORT)
+    }
+    var host by remember(gateway) { mutableStateOf(gateway.host) }
+    var port by remember(gateway) { mutableStateOf(gateway.port.toString()) }
     var token by remember(settings.token) { mutableStateOf(settings.token) }
-    var dashUrl by remember(settings.dashboardUrl) { mutableStateOf(settings.dashboardUrl) }
+
+    // The dashboard host is prefilled from the gateway's when unset — same box,
+    // different port is the usual arrangement. Only a suggestion: nothing is
+    // saved until Save is pressed, and both fields stay editable because the
+    // addresses can legitimately differ (reverse proxy, tunnelled loopback).
+    val dash = remember(settings.dashboardUrl) {
+        parseEndpoint(settings.dashboardUrl, DASHBOARD_DEFAULT_PORT)
+    }
+    var dashHost by remember(dash, settings.baseUrl) {
+        mutableStateOf(dash.host.ifBlank { defaultDashboardHost(settings.baseUrl) })
+    }
+    var dashPort by remember(dash) { mutableStateOf(dash.port.toString()) }
     var dashUser by remember(settings.dashboardUsername) { mutableStateOf(settings.dashboardUsername) }
     var dashPassword by remember(settings.dashboardPassword) { mutableStateOf(settings.dashboardPassword) }
 
@@ -87,14 +111,24 @@ fun SettingsPane(
         ConnectionBanner(connection)
 
         Group(stringResource(R.string.settings_group_server)) {
-            OutlinedTextField(
-                value = baseUrl,
-                onValueChange = { baseUrl = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.settings_base_url)) },
-                placeholder = { Text(stringResource(R.string.settings_base_url_hint)) },
-                singleLine = true,
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = host,
+                    onValueChange = { host = it },
+                    modifier = Modifier.weight(1f),
+                    label = { Text(stringResource(R.string.settings_base_url)) },
+                    placeholder = { Text(stringResource(R.string.settings_base_url_hint)) },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = port,
+                    onValueChange = { port = it.filter(Char::isDigit).take(5) },
+                    modifier = Modifier.width(110.dp),
+                    label = { Text(stringResource(R.string.settings_port)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+            }
             OutlinedTextField(
                 value = token,
                 onValueChange = { token = it },
@@ -107,7 +141,7 @@ fun SettingsPane(
             // States the fact without steering the choice: which transport is
             // appropriate depends on the network this gateway sits on, and only
             // the operator knows that.
-            if (baseUrl.trim().startsWith("http://", ignoreCase = true)) {
+            if (!host.trim().startsWith("https://", ignoreCase = true) && host.isNotBlank()) {
                 Text(
                     text = stringResource(R.string.settings_cleartext_notice),
                     style = MaterialTheme.typography.bodySmall,
@@ -116,8 +150,21 @@ fun SettingsPane(
                 )
             }
 
+            // The address the client will actually call. Shown because a saved
+            // value that differs from what was typed is otherwise invisible,
+            // and that difference is exactly what makes "it just won't connect"
+            // hard to diagnose.
+            settings.baseUrl.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    text = stringResource(R.string.settings_effective_url, it),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.muted,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+
             Button(
-                onClick = { onSaveServer(baseUrl, token) },
+                onClick = { onSaveServer(host, coercePort(port, GATEWAY_DEFAULT_PORT), token) },
                 modifier = Modifier.padding(top = 10.dp),
             ) {
                 Text(stringResource(R.string.settings_save))
@@ -131,14 +178,24 @@ fun SettingsPane(
                 color = colors.muted,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
-            OutlinedTextField(
-                value = dashUrl,
-                onValueChange = { dashUrl = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.settings_dashboard_url)) },
-                placeholder = { Text(stringResource(R.string.settings_dashboard_url_hint)) },
-                singleLine = true,
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = dashHost,
+                    onValueChange = { dashHost = it },
+                    modifier = Modifier.weight(1f),
+                    label = { Text(stringResource(R.string.settings_dashboard_url)) },
+                    placeholder = { Text(stringResource(R.string.settings_base_url_hint)) },
+                    singleLine = true,
+                )
+                OutlinedTextField(
+                    value = dashPort,
+                    onValueChange = { dashPort = it.filter(Char::isDigit).take(5) },
+                    modifier = Modifier.width(110.dp),
+                    label = { Text(stringResource(R.string.settings_port)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+            }
             OutlinedTextField(
                 value = dashUser,
                 onValueChange = { dashUser = it },
@@ -155,7 +212,14 @@ fun SettingsPane(
                 visualTransformation = PasswordVisualTransformation(),
             )
             Button(
-                onClick = { onSaveDashboard(dashUrl, dashUser, dashPassword) },
+                onClick = {
+                    onSaveDashboard(
+                        dashHost,
+                        coercePort(dashPort, DASHBOARD_DEFAULT_PORT),
+                        dashUser,
+                        dashPassword,
+                    )
+                },
                 modifier = Modifier.padding(top = 10.dp),
             ) {
                 Text(stringResource(R.string.settings_save))
@@ -302,8 +366,13 @@ private fun ConnectionBanner(connection: Connection) {
         is Connection.Unreachable -> Triple(
             colors.failed,
             stringResource(R.string.connection_unreachable),
-            // The tunnel is the usual culprit, so name it before the raw cause.
-            stringResource(R.string.connection_unreachable_help),
+            // Keep the platform's own reason. Swallowing it was hiding the
+            // difference between a wrong address, a blocked port and a refused
+            // connection — all of which read as "unreachable" otherwise.
+            listOfNotNull(
+                stringResource(R.string.connection_unreachable_help),
+                connection.detail?.takeIf { it.isNotBlank() },
+            ).joinToString("\n"),
         )
     }
 

@@ -68,7 +68,9 @@
     <string name="settings_ui_scale">UI 배율</string>
     <string name="settings_ui_scale_why">글자와 여백을 함께 키웁니다.</string>
     <string name="settings_base_url">주소</string>
-    <string name="settings_base_url_hint">http://hermes.tailnet:8642</string>
+    <string name="settings_port">포트</string>
+    <string name="settings_effective_url">호출 주소: %1$s</string>
+    <string name="settings_base_url_hint">호스트 또는 http://호스트:8642</string>
     <string name="settings_api_key">API 키</string>
     <string name="settings_api_key_hint">API_SERVER_KEY</string>
     <string name="settings_save">저장</string>
@@ -92,7 +94,7 @@
     <string name="connection_connected">연결됨</string>
     <string name="connection_checking">확인 중…</string>
     <string name="connection_unreachable">서버에 닿지 않음</string>
-    <string name="connection_unreachable_help">게이트웨이가 응답하지 않았습니다. Tailscale 연결 상태와 주소를 확인하세요.</string>
+    <string name="connection_unreachable_help">게이트웨이가 응답하지 않았습니다. 주소와 포트, 그리고 기기가 그 네트워크에 닿는지 확인하세요.</string>
     <string name="connection_unauthorized">인증 실패</string>
     <string name="connection_unauthorized_help">서버가 API 키를 거부했습니다.</string>
     <string name="connection_not_configured">설정 필요</string>

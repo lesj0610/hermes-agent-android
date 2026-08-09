@@ -160,16 +160,21 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun current(): HermesSettings = settings.first()
 
-    suspend fun setServer(baseUrl: String, token: String) {
+    /**
+     * [host] is what the user typed in the address field — a bare host, or one
+     * carrying a scheme and path. The port arrives separately because it has
+     * its own field; composing them here keeps one canonical URL in storage.
+     */
+    suspend fun setServer(host: String, port: Int, token: String) {
         context.dataStore.edit { prefs ->
-            prefs[Keys.BASE_URL] = baseUrl.trim().trimEnd('/')
+            prefs[Keys.BASE_URL] = buildEndpointUrl(host, port)
             prefs[Keys.TOKEN_SEALED] = SecretStore.seal(token.trim())
         }
     }
 
-    suspend fun setDashboard(url: String, username: String, password: String) {
+    suspend fun setDashboard(host: String, port: Int, username: String, password: String) {
         context.dataStore.edit { prefs ->
-            prefs[Keys.DASHBOARD_URL] = url.trim().trimEnd('/')
+            prefs[Keys.DASHBOARD_URL] = buildEndpointUrl(host, port)
             prefs[Keys.DASHBOARD_USER] = username.trim()
             prefs[Keys.DASHBOARD_PASS_SEALED] = SecretStore.seal(password)
         }

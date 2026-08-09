@@ -209,9 +209,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun dismissError() = graph.runEngine.clearError()
 
-    fun saveServer(baseUrl: String, token: String) {
+    fun saveServer(host: String, port: Int, token: String) {
         viewModelScope.launch {
-            graph.settings.setServer(baseUrl, token)
+            graph.settings.setServer(host, port, token)
             refresh()
         }
     }
@@ -286,9 +286,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun saveDashboard(url: String, username: String, password: String) {
+    fun saveDashboard(host: String, port: Int, username: String, password: String) {
         viewModelScope.launch {
-            graph.settings.setDashboard(url, username, password)
+            graph.settings.setDashboard(host, port, username, password)
             refreshDashboard()
         }
     }

@@ -76,7 +76,9 @@
     <string name="settings_ui_scale">UI scale</string>
     <string name="settings_ui_scale_why">Scales text and spacing together.</string>
     <string name="settings_base_url">Address</string>
-    <string name="settings_base_url_hint">http://hermes.tailnet:8642</string>
+    <string name="settings_port">Port</string>
+    <string name="settings_effective_url">Calling: %1$s</string>
+    <string name="settings_base_url_hint">host or http://host:8642</string>
     <string name="settings_api_key">API key</string>
     <string name="settings_api_key_hint">API_SERVER_KEY</string>
     <string name="settings_save">Save</string>
@@ -102,7 +104,7 @@
     <string name="connection_connected">Connected</string>
     <string name="connection_checking">Checking…</string>
     <string name="connection_unreachable">Server unreachable</string>
-    <string name="connection_unreachable_help">The gateway did not answer. Check that Tailscale is connected and the address is right.</string>
+    <string name="connection_unreachable_help">The gateway did not answer. Check the address, the port, and that the device can reach that network.</string>
     <string name="connection_unauthorized">Unauthorized</string>
     <string name="connection_unauthorized_help">The server rejected the API key.</string>
     <string name="connection_not_configured">Not set up</string>

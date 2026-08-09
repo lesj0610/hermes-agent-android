@@ -31,6 +31,18 @@
     <string name="approval_choice_always">항상</string>
     <string name="approval_choice_deny">거부</string>
 
+    <string name="layout_title">레이아웃</string>
+    <string name="layout_edit">배치</string>
+    <string name="layout_done">완료</string>
+    <string name="layout_reset">기본값</string>
+    <string name="layout_swap_panel">변경</string>
+    <string name="layout_hide">숨김</string>
+    <string name="layout_show_left">왼쪽 레일 표시</string>
+    <string name="layout_show_right">오른쪽 레일 표시</string>
+    <string name="layout_status_bar_hide">상태바 숨김</string>
+    <string name="layout_status_bar_show">상태바 표시</string>
+    <string name="rail_none">숨김</string>
+
     <string name="rail_activity">활동</string>
     <string name="rail_activity_empty">도구 실행이 여기 표시됩니다.</string>
 

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -24,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -32,10 +34,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import io.github.lesj0610.hermes.core.HermesSettings
 import io.github.lesj0610.hermes.core.LayoutMode
 import io.github.lesj0610.hermes.core.RAIL_WIDTH_MAX
 import io.github.lesj0610.hermes.core.RAIL_WIDTH_MIN
+import io.github.lesj0610.hermes.core.RailPanel
+import io.github.lesj0610.hermes.core.RailSide
 import io.github.lesj0610.hermes.ui.components.PaneDivider
+import io.github.lesj0610.hermes.ui.components.RailHost
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.data.TranscriptItem
@@ -75,6 +81,41 @@ fun HermesShell(
     // does not answer /v1/capabilities still serves these routes.
     val showCron = capabilities?.jobsAdmin != false
     val showGateway = capabilities?.healthDetailed != false
+
+    val railOptions = railPanelOptions(showCron, showGateway)
+    val leftPanel = effectiveRailPanel(settings.leftRail, showCron, showGateway)
+    val rightPanel = effectiveRailPanel(settings.rightRail, showCron, showGateway)
+
+    // Edit mode is transient on purpose: it is a mode you enter, change
+    // something in, and leave. Persisting it would greet the next launch with
+    // controls the user is done with.
+    var editingLayout by remember { mutableStateOf(false) }
+
+    // Both rails draw from the same renderer, which is what lets either side
+    // host any panel — and is why the editor needs no separate "swap sides".
+    val railContent: @Composable (RailPanel) -> Unit = { panel ->
+        when (panel) {
+            RailPanel.None -> Unit
+            RailPanel.Sessions -> SessionsPane(
+                sessions = sessions,
+                selectedId = chat.sessionId,
+                onSelect = viewModel::openSession,
+            )
+            RailPanel.Activity -> ActivityRail(chat.items)
+            RailPanel.Cron -> CronPane(
+                jobs = jobs,
+                onPause = viewModel::pauseJob,
+                onResume = viewModel::resumeJob,
+                onRun = viewModel::runJob,
+                onDelete = viewModel::deleteJob,
+            )
+            RailPanel.Gateway -> GatewayPane(
+                health = health,
+                toolsets = toolsets,
+                skills = skills,
+            )
+        }
+    }
 
     // UI scale is applied outside the measurement below on purpose. Scaling the
     // density changes how many dp the window is worth, so enlarging the UI
@@ -150,14 +191,29 @@ fun HermesShell(
                                 Text(stringResource(R.string.action_new_session))
                             }
                         }
-                        if (showCron) {
+                        // On a multi-pane window these live in the rails, so the
+                        // top bar only offers them where they have nowhere else
+                        // to be.
+                        if (!expanded && showCron) {
                             TextButton(onClick = { viewModel.show(Pane.Cron) }) {
                                 Text(stringResource(R.string.cron_title))
                             }
                         }
-                        if (showGateway) {
+                        if (!expanded && showGateway) {
                             TextButton(onClick = { viewModel.show(Pane.Gateway) }) {
                                 Text(stringResource(R.string.gateway_title))
+                            }
+                        }
+                        // Rails only exist in a multi-pane window; there is
+                        // nothing to arrange otherwise.
+                        if (expanded) {
+                            TextButton(onClick = { editingLayout = !editingLayout }) {
+                                Text(
+                                    stringResource(
+                                        if (editingLayout) R.string.layout_done
+                                        else R.string.layout_edit,
+                                    ),
+                                )
                             }
                         }
                         TextButton(onClick = { viewModel.show(Pane.Settings) }) {
@@ -177,19 +233,29 @@ fun HermesShell(
                 // bottom edge, matching the desktop shell.
                 Column(content) {
                     Row(Modifier.weight(1f)) {
-                        SessionsPane(
-                            sessions = sessions,
-                            selectedId = chat.sessionId,
-                            onSelect = viewModel::openSession,
-                            modifier = Modifier.width(sessionRail.dp),
-                        )
-                        PaneDivider(
-                            onDelta = { delta ->
-                                sessionRail = (sessionRail + delta)
-                                    .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
-                            },
-                            onCommit = commitRails,
-                        )
+                        if (leftPanel != RailPanel.None) {
+                            RailHost(
+                                panel = leftPanel,
+                                editing = editingLayout,
+                                onCycle = {
+                                    viewModel.setRailPanel(
+                                        RailSide.Left,
+                                        nextRailPanel(leftPanel, railOptions),
+                                    )
+                                },
+                                onHide = { viewModel.setRailPanel(RailSide.Left, RailPanel.None) },
+                                modifier = Modifier.width(sessionRail.dp),
+                            ) {
+                                railContent(leftPanel)
+                            }
+                            PaneDivider(
+                                onDelta = { delta ->
+                                    sessionRail = (sessionRail + delta)
+                                        .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
+                                },
+                                onCommit = commitRails,
+                            )
+                        }
 
                         Column(Modifier.weight(1f)) {
                             if (pane == Pane.Cron) {
@@ -228,10 +294,9 @@ fun HermesShell(
                             }
                         }
 
-                        // The activity rail is the first thing to go when the
-                        // window is only medium-wide: it is the least essential
-                        // of the three, and the transcript needs the room more.
-                        if (layout == ShellLayout.Triple) {
+                        // The right rail is the first thing to go when the window
+                        // is only medium-wide: the transcript needs the room more.
+                        if (layout == ShellLayout.Triple && rightPanel != RailPanel.None) {
                             PaneDivider(
                                 onDelta = { delta ->
                                     activityRail = (activityRail - delta)
@@ -239,11 +304,39 @@ fun HermesShell(
                                 },
                                 onCommit = commitRails,
                             )
-                            ActivityRail(chat.items, Modifier.width(activityRail.dp))
+                            RailHost(
+                                panel = rightPanel,
+                                editing = editingLayout,
+                                onCycle = {
+                                    viewModel.setRailPanel(
+                                        RailSide.Right,
+                                        nextRailPanel(rightPanel, railOptions),
+                                    )
+                                },
+                                onHide = { viewModel.setRailPanel(RailSide.Right, RailPanel.None) },
+                                modifier = Modifier.width(activityRail.dp),
+                            ) {
+                                railContent(rightPanel)
+                            }
                         }
                     }
 
-                    StatusBar(chat = chat, connection = connection, model = settings.model)
+                    if (editingLayout) {
+                        LayoutEditBar(
+                            settings = settings,
+                            hiddenLeft = leftPanel == RailPanel.None,
+                            hiddenRight = rightPanel == RailPanel.None,
+                            onShowLeft = { viewModel.setRailPanel(RailSide.Left, RailPanel.Sessions) },
+                            onShowRight = { viewModel.setRailPanel(RailSide.Right, RailPanel.Activity) },
+                            onToggleStatusBar = viewModel::setShowStatusBar,
+                            onReset = viewModel::resetLayout,
+                            onDone = { editingLayout = false },
+                        )
+                    }
+
+                    if (settings.showStatusBar) {
+                        StatusBar(chat = chat, connection = connection, model = settings.model)
+                    }
                 }
             } else {
                 when (pane) {
@@ -300,6 +393,60 @@ fun HermesShell(
             ApprovalSheet(approval = approval, onChoice = viewModel::respondToApproval)
         }
     }
+    }
+}
+
+/**
+ * Controls that belong to the layout rather than to any one rail: bringing a
+ * hidden rail back, the status bar, and the way out of the mode.
+ *
+ * A hidden rail has no header to press, so restoring one has to live here —
+ * otherwise hiding a rail would be a one-way door.
+ */
+@Composable
+private fun LayoutEditBar(
+    settings: HermesSettings,
+    hiddenLeft: Boolean,
+    hiddenRight: Boolean,
+    onShowLeft: () -> Unit,
+    onShowRight: () -> Unit,
+    onToggleStatusBar: (Boolean) -> Unit,
+    onReset: () -> Unit,
+    onDone: () -> Unit,
+) {
+    val colors = LocalRunColors.current
+    HorizontalDivider(color = colors.line)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(colors.panelRaised)
+            .padding(horizontal = 10.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.layout_title),
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.muted,
+            modifier = Modifier.padding(end = 6.dp),
+        )
+        if (hiddenLeft) {
+            TextButton(onClick = onShowLeft) { Text(stringResource(R.string.layout_show_left)) }
+        }
+        if (hiddenRight) {
+            TextButton(onClick = onShowRight) { Text(stringResource(R.string.layout_show_right)) }
+        }
+        TextButton(onClick = { onToggleStatusBar(!settings.showStatusBar) }) {
+            Text(
+                stringResource(
+                    if (settings.showStatusBar) R.string.layout_status_bar_hide
+                    else R.string.layout_status_bar_show,
+                ),
+            )
+        }
+        Spacer(Modifier.weight(1f))
+        TextButton(onClick = onReset) { Text(stringResource(R.string.layout_reset)) }
+        TextButton(onClick = onDone) { Text(stringResource(R.string.layout_done)) }
     }
 }
 

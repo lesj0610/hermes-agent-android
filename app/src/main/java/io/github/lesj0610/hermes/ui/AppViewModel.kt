@@ -12,6 +12,8 @@ import kotlinx.coroutines.launch
 import io.github.lesj0610.hermes.core.Graph
 import io.github.lesj0610.hermes.core.HermesSettings
 import io.github.lesj0610.hermes.core.LayoutMode
+import io.github.lesj0610.hermes.core.RailPanel
+import io.github.lesj0610.hermes.core.RailSide
 import io.github.lesj0610.hermes.data.ChatState
 import io.github.lesj0610.hermes.data.UiError
 import io.github.lesj0610.hermes.net.Capabilities
@@ -215,6 +217,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setRailWidths(sessionDp: Float, activityDp: Float) {
         viewModelScope.launch { graph.settings.setRailWidths(sessionDp, activityDp) }
+    }
+
+    fun setRailPanel(side: RailSide, panel: RailPanel) {
+        viewModelScope.launch { graph.settings.setRailPanel(side, panel) }
+    }
+
+    fun setShowStatusBar(show: Boolean) {
+        viewModelScope.launch { graph.settings.setShowStatusBar(show) }
+    }
+
+    fun resetLayout() {
+        viewModelScope.launch { graph.settings.resetLayout() }
     }
 
     /** Exposed for the settings screen so it can show why a save did not take. */

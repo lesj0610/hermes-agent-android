@@ -35,6 +35,19 @@
     <string name="approval_choice_always">Always</string>
     <string name="approval_choice_deny">Deny</string>
 
+    <!-- Layout editor -->
+    <string name="layout_title">Layout</string>
+    <string name="layout_edit">Arrange</string>
+    <string name="layout_done">Done</string>
+    <string name="layout_reset">Reset</string>
+    <string name="layout_swap_panel">Change</string>
+    <string name="layout_hide">Hide</string>
+    <string name="layout_show_left">Show left rail</string>
+    <string name="layout_show_right">Show right rail</string>
+    <string name="layout_status_bar_hide">Hide status bar</string>
+    <string name="layout_status_bar_show">Show status bar</string>
+    <string name="rail_none">Hidden</string>
+
     <!-- Tablet right rail -->
     <string name="rail_activity">Activity</string>
     <string name="rail_activity_empty">Tool calls show up here.</string>

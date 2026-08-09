@@ -30,6 +30,18 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 enum class LayoutMode { Auto, Phone, Tablet }
 
 /**
+ * What a side rail is showing.
+ *
+ * Both rails draw from the same set, which is why there is no separate "swap
+ * sides" control: putting the session list on the right is just choosing it for
+ * the right rail. [None] hides that rail entirely.
+ */
+enum class RailPanel { None, Sessions, Activity, Cron, Gateway }
+
+/** Which side of the transcript a rail sits on. */
+enum class RailSide { Left, Right }
+
+/**
  * Bounds for [HermesSettings.uiScale]. Kept narrow deliberately: below 0.85 the
  * approval sheet's command text stops being readable, and above 1.4 the tablet
  * shell no longer fits three panes on real hardware.
@@ -67,6 +79,9 @@ data class HermesSettings(
     /** Multi-pane rail widths in dp, adjustable by dragging the dividers. */
     val sessionRailWidth: Float = RAIL_WIDTH_DEFAULT,
     val activityRailWidth: Float = RAIL_WIDTH_DEFAULT,
+    val leftRail: RailPanel = RailPanel.Sessions,
+    val rightRail: RailPanel = RailPanel.Activity,
+    val showStatusBar: Boolean = true,
 ) {
     val isConfigured: Boolean get() = baseUrl.isNotBlank() && token.isNotBlank()
 }
@@ -84,7 +99,13 @@ class SettingsRepository(private val context: Context) {
         val UI_SCALE = floatPreferencesKey("ui_scale")
         val RAIL_SESSIONS = floatPreferencesKey("rail_sessions_width")
         val RAIL_ACTIVITY = floatPreferencesKey("rail_activity_width")
+        val LEFT_RAIL = stringPreferencesKey("left_rail")
+        val RIGHT_RAIL = stringPreferencesKey("right_rail")
+        val SHOW_STATUS_BAR = booleanPreferencesKey("show_status_bar")
     }
+
+    private fun rail(stored: String?, fallback: RailPanel): RailPanel =
+        stored?.let { s -> RailPanel.entries.firstOrNull { it.name == s } } ?: fallback
 
     val settings: Flow<HermesSettings> = context.dataStore.data
         .catch { cause ->
@@ -110,6 +131,9 @@ class SettingsRepository(private val context: Context) {
                     .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX),
                 activityRailWidth = (prefs[Keys.RAIL_ACTIVITY] ?: RAIL_WIDTH_DEFAULT)
                     .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX),
+                leftRail = rail(prefs[Keys.LEFT_RAIL], RailPanel.Sessions),
+                rightRail = rail(prefs[Keys.RIGHT_RAIL], RailPanel.Activity),
+                showStatusBar = prefs[Keys.SHOW_STATUS_BAR] ?: true,
             )
         }
 
@@ -153,6 +177,29 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit {
             it[Keys.RAIL_SESSIONS] = sessionDp.coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
             it[Keys.RAIL_ACTIVITY] = activityDp.coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
+        }
+    }
+
+    suspend fun setRailPanel(side: RailSide, panel: RailPanel) {
+        context.dataStore.edit {
+            it[if (side == RailSide.Left) Keys.LEFT_RAIL else Keys.RIGHT_RAIL] = panel.name
+        }
+    }
+
+    suspend fun setShowStatusBar(show: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_STATUS_BAR] = show }
+    }
+
+    /** Restores every layout choice. Server settings and the API key are untouched. */
+    suspend fun resetLayout() {
+        context.dataStore.edit {
+            it.remove(Keys.LEFT_RAIL)
+            it.remove(Keys.RIGHT_RAIL)
+            it.remove(Keys.SHOW_STATUS_BAR)
+            it.remove(Keys.RAIL_SESSIONS)
+            it.remove(Keys.RAIL_ACTIVITY)
+            it.remove(Keys.LAYOUT_MODE)
+            it.remove(Keys.UI_SCALE)
         }
     }
 }

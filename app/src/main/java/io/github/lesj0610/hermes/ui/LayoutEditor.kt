@@ -11,13 +11,21 @@ import io.github.lesj0610.hermes.core.RailPanel
  *
  * [RailPanel.None] is always offered — hiding a rail needs no server support.
  */
-fun railPanelOptions(showCron: Boolean, showGateway: Boolean): List<RailPanel> =
+fun railPanelOptions(
+    showCron: Boolean,
+    showGateway: Boolean,
+    showDashboard: Boolean = false,
+): List<RailPanel> =
     buildList {
         add(RailPanel.None)
         add(RailPanel.Sessions)
         add(RailPanel.Activity)
         if (showCron) add(RailPanel.Cron)
         if (showGateway) add(RailPanel.Gateway)
+        // Gated on a configured dashboard rather than on a gateway capability:
+        // it is a different server entirely, and offering it unconfigured would
+        // hand the user an empty rail.
+        if (showDashboard) add(RailPanel.Dashboard)
     }
 
 /**
@@ -42,9 +50,15 @@ fun nextRailPanel(current: RailPanel, options: List<RailPanel>): RailPanel {
  * back — but it is not drawn either, so the rail collapses instead of showing an
  * empty panel.
  */
-fun effectiveRailPanel(stored: RailPanel, showCron: Boolean, showGateway: Boolean): RailPanel =
+fun effectiveRailPanel(
+    stored: RailPanel,
+    showCron: Boolean,
+    showGateway: Boolean,
+    showDashboard: Boolean = false,
+): RailPanel =
     when (stored) {
         RailPanel.Cron -> if (showCron) stored else RailPanel.None
         RailPanel.Gateway -> if (showGateway) stored else RailPanel.None
+        RailPanel.Dashboard -> if (showDashboard) stored else RailPanel.None
         else -> stored
     }

@@ -48,6 +48,7 @@ import io.github.lesj0610.hermes.data.TranscriptItem
 import io.github.lesj0610.hermes.ui.chat.ApprovalSheet
 import io.github.lesj0610.hermes.ui.chat.ChatPane
 import io.github.lesj0610.hermes.ui.cron.CronPane
+import io.github.lesj0610.hermes.ui.dashboard.DashboardPane
 import io.github.lesj0610.hermes.ui.gateway.GatewayPane
 import io.github.lesj0610.hermes.ui.components.StatusBar
 import io.github.lesj0610.hermes.ui.components.ToolCard
@@ -75,6 +76,10 @@ fun HermesShell(
     val toolsets by viewModel.toolsets.collectAsStateWithLifecycle()
     val skills by viewModel.skills.collectAsStateWithLifecycle()
     val capabilities by viewModel.capabilities.collectAsStateWithLifecycle()
+    val dashboardState by viewModel.dashboard.collectAsStateWithLifecycle()
+    val profiles by viewModel.profiles.collectAsStateWithLifecycle()
+    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
+    val dashboardSkills by viewModel.dashboardSkills.collectAsStateWithLifecycle()
     val colors = LocalRunColors.current
 
     // Absence of a capability report is not a denial: an older gateway that
@@ -82,9 +87,10 @@ fun HermesShell(
     val showCron = capabilities?.jobsAdmin != false
     val showGateway = capabilities?.healthDetailed != false
 
-    val railOptions = railPanelOptions(showCron, showGateway)
-    val leftPanel = effectiveRailPanel(settings.leftRail, showCron, showGateway)
-    val rightPanel = effectiveRailPanel(settings.rightRail, showCron, showGateway)
+    val showDashboard = settings.dashboardConfigured
+    val railOptions = railPanelOptions(showCron, showGateway, showDashboard)
+    val leftPanel = effectiveRailPanel(settings.leftRail, showCron, showGateway, showDashboard)
+    val rightPanel = effectiveRailPanel(settings.rightRail, showCron, showGateway, showDashboard)
 
     // Edit mode is transient on purpose: it is a mode you enter, change
     // something in, and leave. Persisting it would greet the next launch with
@@ -113,6 +119,15 @@ fun HermesShell(
                 health = health,
                 toolsets = toolsets,
                 skills = skills,
+            )
+            RailPanel.Dashboard -> DashboardPane(
+                state = dashboardState,
+                profiles = profiles,
+                active = activeProfile,
+                skills = dashboardSkills,
+                onSelectProfile = { viewModel.setActiveProfile(it.name) },
+                onToggleSkill = viewModel::toggleSkill,
+                onRetry = viewModel::refreshDashboard,
             )
         }
     }
@@ -161,6 +176,7 @@ fun HermesShell(
                                     pane == Pane.Settings -> stringResource(R.string.settings_title)
                                     pane == Pane.Cron -> stringResource(R.string.cron_title)
                                     pane == Pane.Gateway -> stringResource(R.string.gateway_title)
+                                    pane == Pane.Dashboard -> stringResource(R.string.dashboard_title)
                                     else -> stringResource(R.string.nav_chat)
                                 },
                                 style = MaterialTheme.typography.titleMedium,
@@ -202,6 +218,11 @@ fun HermesShell(
                         if (!expanded && showGateway) {
                             TextButton(onClick = { viewModel.show(Pane.Gateway) }) {
                                 Text(stringResource(R.string.gateway_title))
+                            }
+                        }
+                        if (!expanded && showDashboard) {
+                            TextButton(onClick = { viewModel.show(Pane.Dashboard) }) {
+                                Text(stringResource(R.string.dashboard_title))
                             }
                         }
                         // Rails only exist in a multi-pane window; there is
@@ -274,6 +295,7 @@ fun HermesShell(
                                     connection = connection,
                                     models = models,
                                     onSaveServer = viewModel::saveServer,
+                                    onSaveDashboard = viewModel::saveDashboard,
                                     onSelectModel = viewModel::setModel,
                                     onSelectLanguage = viewModel::setLanguage,
                                     onToggleApprovals = viewModel::setNotifyApprovals,
@@ -367,11 +389,22 @@ fun HermesShell(
                         skills = skills,
                         modifier = content,
                     )
+                    Pane.Dashboard -> DashboardPane(
+                        state = dashboardState,
+                        profiles = profiles,
+                        active = activeProfile,
+                        skills = dashboardSkills,
+                        onSelectProfile = { viewModel.setActiveProfile(it.name) },
+                        onToggleSkill = viewModel::toggleSkill,
+                        onRetry = viewModel::refreshDashboard,
+                        modifier = content,
+                    )
                     Pane.Settings -> SettingsPane(
                         settings = settings,
                         connection = connection,
                         models = models,
                         onSaveServer = viewModel::saveServer,
+                        onSaveDashboard = viewModel::saveDashboard,
                         onSelectModel = viewModel::setModel,
                         onSelectLanguage = viewModel::setLanguage,
                         onToggleApprovals = viewModel::setNotifyApprovals,

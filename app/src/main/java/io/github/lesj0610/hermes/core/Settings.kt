@@ -36,7 +36,7 @@ enum class LayoutMode { Auto, Phone, Tablet }
  * sides" control: putting the session list on the right is just choosing it for
  * the right rail. [None] hides that rail entirely.
  */
-enum class RailPanel { None, Sessions, Activity, Cron, Gateway }
+enum class RailPanel { None, Sessions, Activity, Cron, Gateway, Dashboard }
 
 /** Which side of the transcript a rail sits on. */
 enum class RailSide { Left, Right }
@@ -82,8 +82,21 @@ data class HermesSettings(
     val leftRail: RailPanel = RailPanel.Sessions,
     val rightRail: RailPanel = RailPanel.Activity,
     val showStatusBar: Boolean = true,
+    /**
+     * Dashboard server (`hermes dashboard`, default port 9119). Optional: the
+     * conversation works without it. Left blank, the dashboard panel stays
+     * hidden rather than failing against a server that is not running.
+     */
+    val dashboardUrl: String = "",
+    val dashboardUsername: String = "",
+    val dashboardPassword: String = "",
 ) {
     val isConfigured: Boolean get() = baseUrl.isNotBlank() && token.isNotBlank()
+
+    val dashboardConfigured: Boolean
+        get() = dashboardUrl.isNotBlank() &&
+            dashboardUsername.isNotBlank() &&
+            dashboardPassword.isNotBlank()
 }
 
 class SettingsRepository(private val context: Context) {
@@ -102,6 +115,11 @@ class SettingsRepository(private val context: Context) {
         val LEFT_RAIL = stringPreferencesKey("left_rail")
         val RIGHT_RAIL = stringPreferencesKey("right_rail")
         val SHOW_STATUS_BAR = booleanPreferencesKey("show_status_bar")
+        val DASHBOARD_URL = stringPreferencesKey("dashboard_url")
+        val DASHBOARD_USER = stringPreferencesKey("dashboard_username")
+        // Sealed with the same Keystore path as the gateway token: this grants
+        // access to a management surface with dozens of write routes.
+        val DASHBOARD_PASS_SEALED = stringPreferencesKey("dashboard_password_sealed")
     }
 
     private fun rail(stored: String?, fallback: RailPanel): RailPanel =
@@ -134,6 +152,9 @@ class SettingsRepository(private val context: Context) {
                 leftRail = rail(prefs[Keys.LEFT_RAIL], RailPanel.Sessions),
                 rightRail = rail(prefs[Keys.RIGHT_RAIL], RailPanel.Activity),
                 showStatusBar = prefs[Keys.SHOW_STATUS_BAR] ?: true,
+                dashboardUrl = prefs[Keys.DASHBOARD_URL].orEmpty(),
+                dashboardUsername = prefs[Keys.DASHBOARD_USER].orEmpty(),
+                dashboardPassword = SecretStore.unseal(prefs[Keys.DASHBOARD_PASS_SEALED].orEmpty()),
             )
         }
 
@@ -143,6 +164,14 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[Keys.BASE_URL] = baseUrl.trim().trimEnd('/')
             prefs[Keys.TOKEN_SEALED] = SecretStore.seal(token.trim())
+        }
+    }
+
+    suspend fun setDashboard(url: String, username: String, password: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.DASHBOARD_URL] = url.trim().trimEnd('/')
+            prefs[Keys.DASHBOARD_USER] = username.trim()
+            prefs[Keys.DASHBOARD_PASS_SEALED] = SecretStore.seal(password)
         }
     }
 

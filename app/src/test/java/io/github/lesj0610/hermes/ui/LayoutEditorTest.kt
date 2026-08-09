@@ -47,6 +47,34 @@ class LayoutEditorTest {
     }
 
     @Test
+    fun `the dashboard panel is offered only once a dashboard is configured`() {
+        // Gated on configuration rather than a gateway capability: the dashboard
+        // is a separate server, so the gateway cannot answer for it.
+        assertEquals(
+            false,
+            railPanelOptions(showCron = true, showGateway = true, showDashboard = false)
+                .contains(RailPanel.Dashboard),
+        )
+        assertEquals(
+            true,
+            railPanelOptions(showCron = true, showGateway = true, showDashboard = true)
+                .contains(RailPanel.Dashboard),
+        )
+    }
+
+    @Test
+    fun `a dashboard rail collapses when the dashboard is removed`() {
+        assertEquals(
+            RailPanel.None,
+            effectiveRailPanel(RailPanel.Dashboard, showCron = true, showGateway = true, showDashboard = false),
+        )
+        assertEquals(
+            RailPanel.Dashboard,
+            effectiveRailPanel(RailPanel.Dashboard, showCron = true, showGateway = true, showDashboard = true),
+        )
+    }
+
+    @Test
     fun `panels needing no capability are unaffected`() {
         assertEquals(
             RailPanel.Sessions,

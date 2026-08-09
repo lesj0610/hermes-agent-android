@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import io.github.lesj0610.hermes.data.RunEngine
+import io.github.lesj0610.hermes.net.DashboardApi
 import io.github.lesj0610.hermes.net.HermesApi
 
 /**
@@ -25,6 +26,19 @@ class Graph(context: Context) {
     val api = HermesApi(
         baseUrlProvider = { settings.current().baseUrl },
         tokenProvider = { settings.current().token },
+    )
+
+    /**
+     * Second server, second auth model. Kept apart from [api] rather than
+     * folded into it: the dashboard is optional, uses a cookie session instead
+     * of a bearer token, and may be down while the gateway is up.
+     */
+    val dashboard = DashboardApi(
+        baseUrlProvider = { settings.current().dashboardUrl },
+        credentialsProvider = {
+            val current = settings.current()
+            current.dashboardUsername to current.dashboardPassword
+        },
     )
 
     val runEngine = RunEngine(api, scope)

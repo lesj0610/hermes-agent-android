@@ -16,8 +16,11 @@ import io.github.lesj0610.hermes.core.RailPanel
 import io.github.lesj0610.hermes.core.RailSide
 import io.github.lesj0610.hermes.data.ChatState
 import io.github.lesj0610.hermes.data.UiError
+import io.github.lesj0610.hermes.net.ActiveProfile
 import io.github.lesj0610.hermes.net.Capabilities
+import io.github.lesj0610.hermes.net.DashboardSkill
 import io.github.lesj0610.hermes.net.DetailedHealth
+import io.github.lesj0610.hermes.net.Profile
 import io.github.lesj0610.hermes.net.HermesUnauthorizedException
 import io.github.lesj0610.hermes.net.Job
 import io.github.lesj0610.hermes.net.ModelEntry
@@ -35,7 +38,16 @@ sealed interface Connection {
 }
 
 /** Which pane the user is looking at. On a tablet several are visible at once. */
-enum class Pane { Sessions, Chat, Cron, Gateway, Settings }
+enum class Pane { Sessions, Chat, Cron, Gateway, Dashboard, Settings }
+
+/** State of the optional dashboard connection, which is independent of the gateway's. */
+sealed interface DashboardState {
+    /** No dashboard configured — the panel stays hidden rather than erroring. */
+    data object Off : DashboardState
+    data object Connecting : DashboardState
+    data object Ready : DashboardState
+    data class Failed(val message: String) : DashboardState
+}
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -75,11 +87,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _capabilities = MutableStateFlow<Capabilities?>(null)
     val capabilities: StateFlow<Capabilities?> = _capabilities.asStateFlow()
 
+    private val _dashboard = MutableStateFlow<DashboardState>(DashboardState.Off)
+    val dashboard: StateFlow<DashboardState> = _dashboard.asStateFlow()
+
+    private val _profiles = MutableStateFlow<List<Profile>>(emptyList())
+    val profiles: StateFlow<List<Profile>> = _profiles.asStateFlow()
+
+    private val _activeProfile = MutableStateFlow<ActiveProfile?>(null)
+    val activeProfile: StateFlow<ActiveProfile?> = _activeProfile.asStateFlow()
+
+    private val _dashboardSkills = MutableStateFlow<List<DashboardSkill>>(emptyList())
+    val dashboardSkills: StateFlow<List<DashboardSkill>> = _dashboardSkills.asStateFlow()
+
     private val _pane = MutableStateFlow(Pane.Sessions)
     val pane: StateFlow<Pane> = _pane.asStateFlow()
 
     init {
         refresh()
+        refreshDashboard()
     }
 
     fun show(pane: Pane) {
@@ -205,6 +230,67 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setNotifyCompletion(enabled: Boolean) {
         viewModelScope.launch { graph.settings.setNotifyCompletion(enabled) }
+    }
+
+    /**
+     * Connects to the dashboard, if one is configured.
+     *
+     * Runs separately from [refresh] on purpose: the dashboard is a different
+     * server that may be down while the gateway is fine, and a failure here
+     * must not make the conversation look broken.
+     */
+    fun refreshDashboard() {
+        viewModelScope.launch {
+            val current = graph.settings.current()
+            if (!current.dashboardConfigured) {
+                _dashboard.value = DashboardState.Off
+                return@launch
+            }
+            _dashboard.value = DashboardState.Connecting
+            runCatching {
+                graph.dashboard.login()
+                _profiles.value = graph.dashboard.profiles()
+                _activeProfile.value = graph.dashboard.activeProfile()
+                _dashboardSkills.value = graph.dashboard.skills()
+            }.onSuccess {
+                _dashboard.value = DashboardState.Ready
+            }.onFailure { cause ->
+                _dashboard.value = DashboardState.Failed(
+                    cause.message ?: cause::class.simpleName.orEmpty(),
+                )
+            }
+        }
+    }
+
+    fun setActiveProfile(name: String) {
+        viewModelScope.launch {
+            runCatching {
+                graph.dashboard.setActiveProfile(name)
+                _activeProfile.value = graph.dashboard.activeProfile()
+            }.onFailure { cause ->
+                _dashboard.value = DashboardState.Failed(cause.message.orEmpty())
+            }
+        }
+    }
+
+    fun toggleSkill(skill: DashboardSkill) {
+        viewModelScope.launch {
+            runCatching {
+                graph.dashboard.toggleSkill(skill.name, !skill.enabled)
+                // Re-read rather than flipping locally: the server owns which
+                // skills are disabled, and a profile scope can change the answer.
+                _dashboardSkills.value = graph.dashboard.skills()
+            }.onFailure { cause ->
+                _dashboard.value = DashboardState.Failed(cause.message.orEmpty())
+            }
+        }
+    }
+
+    fun saveDashboard(url: String, username: String, password: String) {
+        viewModelScope.launch {
+            graph.settings.setDashboard(url, username, password)
+            refreshDashboard()
+        }
     }
 
     fun setLayoutMode(mode: LayoutMode) {

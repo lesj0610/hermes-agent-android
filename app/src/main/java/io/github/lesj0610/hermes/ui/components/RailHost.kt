@@ -27,6 +27,7 @@ fun railPanelLabel(panel: RailPanel): String = when (panel) {
     RailPanel.Activity -> stringResource(R.string.rail_activity)
     RailPanel.Cron -> stringResource(R.string.cron_title)
     RailPanel.Gateway -> stringResource(R.string.gateway_title)
+    RailPanel.Dashboard -> stringResource(R.string.dashboard_title)
 }
 
 /**

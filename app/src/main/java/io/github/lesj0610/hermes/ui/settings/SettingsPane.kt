@@ -59,6 +59,7 @@ fun SettingsPane(
     models: List<ModelEntry>,
     permissions: PermissionState,
     onSaveServer: (String, String) -> Unit,
+    onSaveDashboard: (String, String, String) -> Unit,
     onSelectModel: (String) -> Unit,
     onSelectLanguage: (String) -> Unit,
     onToggleApprovals: (Boolean) -> Unit,
@@ -72,6 +73,9 @@ fun SettingsPane(
     val colors = LocalRunColors.current
     var baseUrl by remember(settings.baseUrl) { mutableStateOf(settings.baseUrl) }
     var token by remember(settings.token) { mutableStateOf(settings.token) }
+    var dashUrl by remember(settings.dashboardUrl) { mutableStateOf(settings.dashboardUrl) }
+    var dashUser by remember(settings.dashboardUsername) { mutableStateOf(settings.dashboardUsername) }
+    var dashPassword by remember(settings.dashboardPassword) { mutableStateOf(settings.dashboardPassword) }
 
     Column(
         modifier
@@ -114,6 +118,44 @@ fun SettingsPane(
 
             Button(
                 onClick = { onSaveServer(baseUrl, token) },
+                modifier = Modifier.padding(top = 10.dp),
+            ) {
+                Text(stringResource(R.string.settings_save))
+            }
+        }
+
+        Group(stringResource(R.string.settings_group_dashboard)) {
+            Text(
+                text = stringResource(R.string.settings_dashboard_why),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.muted,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            OutlinedTextField(
+                value = dashUrl,
+                onValueChange = { dashUrl = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.settings_dashboard_url)) },
+                placeholder = { Text(stringResource(R.string.settings_dashboard_url_hint)) },
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = dashUser,
+                onValueChange = { dashUser = it },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                label = { Text(stringResource(R.string.settings_dashboard_user)) },
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = dashPassword,
+                onValueChange = { dashPassword = it },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                label = { Text(stringResource(R.string.settings_dashboard_password)) },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+            )
+            Button(
+                onClick = { onSaveDashboard(dashUrl, dashUser, dashPassword) },
                 modifier = Modifier.padding(top = 10.dp),
             ) {
                 Text(stringResource(R.string.settings_save))

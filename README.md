@@ -56,6 +56,15 @@ That is why the two scripts exist separately instead of one shared env file.
 | [PLAY.md](PLAY.md) | Google Play release requirements and open risks |
 | [design/mockup.html](design/mockup.html) | Screen mockups |
 
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Chosen over MIT for two clauses that matter to a project like this one: §6 says
+plainly that the licence grants no trademark rights, and §3 carries a patent
+grant that terminates on patent litigation. Nothing here is derived from the
+Hermes Agent source; the client was written against its HTTP surface.
+
 ## Status
 
 Compiles, unit tests pass, lint clean, release AAB builds. **Not yet verified on

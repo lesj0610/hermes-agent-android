@@ -1,0 +1,63 @@
+name: build
+
+# Standard GitHub-hosted runners are free for public repositories, so this runs
+# on every push and pull request without a budget to worry about.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          # The platform ships as a minor-versioned package: there is no plain
+          # "android-37", only android-37.0 and android-37.1. compileSdkMinor=1
+          # in app/build.gradle.kts is what picks 37.1.
+          packages: 'platform-tools platforms;android-37.1 build-tools;37.0.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # No keystore.properties on CI, so the release build is deliberately
+      # unsigned — the signing config resolves to null and the build still
+      # completes. That keeps signing material out of the repository and out
+      # of CI entirely; release artifacts are signed locally.
+      - name: Test, lint and build
+        run: ./gradlew --no-daemon testDebugUnitTest lintRelease assembleDebug bundleRelease
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-release.*
+          if-no-files-found: warn

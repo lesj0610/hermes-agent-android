@@ -201,4 +201,15 @@
     <string name="chat_attach_failed">파일을 읽지 못했습니다.</string>
     <string name="chat_attach_no_camera">사용할 수 있는 카메라 앱이 없습니다.</string>
     <string name="chat_attach_truncated">%1$s · 잘림</string>
+    <string name="artifacts_title">아티팩트</string>
+    <string name="artifacts_all">전체</string>
+    <string name="artifacts_images">이미지</string>
+    <string name="artifacts_files">파일</string>
+    <string name="artifacts_links">링크</string>
+    <string name="artifacts_empty">아직 생성된 것이 없습니다.</string>
+    <string name="artifacts_rescan">다시 읽기</string>
+    <string name="artifacts_scanning">세션 읽는 중 %1$d/%2$d…</string>
+    <string name="artifacts_scanned">세션 %2$d개 중 최근 %1$d개에서 수집</string>
+    <string name="artifacts_scanned_failed">세션 %2$d개 중 최근 %1$d개에서 수집 · %3$d개는 읽지 못함</string>
+    <string name="artifacts_on_gateway">게이트웨이에 있음</string>
 </resources>

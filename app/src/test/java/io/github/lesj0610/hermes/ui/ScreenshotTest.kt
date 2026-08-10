@@ -33,6 +33,9 @@ import io.github.lesj0610.hermes.net.Skill
 import io.github.lesj0610.hermes.net.Toolset
 import io.github.lesj0610.hermes.ui.settings.PermissionState
 import io.github.lesj0610.hermes.ui.settings.SettingsPane
+import io.github.lesj0610.hermes.ui.artifacts.Artifact
+import io.github.lesj0610.hermes.ui.artifacts.ArtifactKind
+import io.github.lesj0610.hermes.ui.artifacts.ArtifactsPane
 import io.github.lesj0610.hermes.ui.chat.ChatPane
 import io.github.lesj0610.hermes.ui.components.ChatIcon
 import io.github.lesj0610.hermes.ui.components.ClockIcon
@@ -301,6 +304,39 @@ class ScreenshotTest {
                     DashboardSkill(name = "research", enabled = true),
                     DashboardSkill(name = "excel", enabled = false),
                 ),
+            )
+        }
+    }
+
+    /**
+     * Artifacts, including the case the screen exists to be honest about: a
+     * gateway-local file the phone cannot open.
+     */
+    @Test
+    fun artifacts() {
+        capture("artifacts", 411, 891) {
+            ArtifactsPane(
+                artifacts = listOf(
+                    Artifact(
+                        id = "1", kind = ArtifactKind.Image, value = "/tmp/bench/decode_fp4.png",
+                        label = "decode_fp4.png", sessionId = "1", sessionTitle = "FP4 dequant 벤치",
+                        timestamp = null,
+                    ),
+                    Artifact(
+                        id = "2", kind = ArtifactKind.File, value = "/home/u/hermes/report.pdf",
+                        label = "report.pdf", sessionId = "1", sessionTitle = "FP4 dequant 벤치",
+                        timestamp = null,
+                    ),
+                    Artifact(
+                        id = "3", kind = ArtifactKind.Link, value = "https://github.com/vllm-project/vllm/pull/39074",
+                        label = "39074", sessionId = "2", sessionTitle = "게이트웨이 로그 점검",
+                        timestamp = null,
+                    ),
+                ),
+                scan = ArtifactScan(running = false, scanned = 20, total = 20, available = 63),
+                onOpenSession = {},
+                onRescan = {},
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }

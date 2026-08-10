@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.dp
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
 import kotlin.math.cos
@@ -454,35 +455,119 @@ fun PhotoIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     }
 }
 
-/** A paperclip: attach a document. */
+/** A page with a folded corner: what the runs produced. */
+@Composable
+fun DocumentIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val left = bounds.left + bounds.width * 0.16f
+        val right = bounds.right - bounds.width * 0.16f
+        val fold = bounds.width * 0.26f
+        val page = Path().apply {
+            moveTo(right - fold, bounds.top)
+            lineTo(left, bounds.top)
+            lineTo(left, bounds.bottom)
+            lineTo(right, bounds.bottom)
+            lineTo(right, bounds.top + fold)
+            close()
+        }
+        drawPath(page, color, style = iconStroke())
+        // The fold itself, drawn as the corner it implies rather than as a
+        // diagonal across the page.
+        val corner = Path().apply {
+            moveTo(right - fold, bounds.top)
+            lineTo(right - fold, bounds.top + fold)
+            lineTo(right, bounds.top + fold)
+        }
+        drawPath(corner, color, style = iconStroke())
+    }
+}
+
+/**
+ * A paperclip: attach a document.
+ *
+ * A stadium outline with an inner return, tilted. The previous attempt drew one
+ * continuous hooked path and came out as a rounded rectangle at list sizes —
+ * the tilt is what separates a clip from a box, and the inner stroke stopping
+ * short is what says the wire doubles back.
+ */
 @Composable
 fun PaperclipIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     val color = tint ?: LocalRunColors.current.muted
     Canvas(modifier.size(ICON_DP.dp)) {
         val bounds = iconBounds()
-        val left = bounds.left + bounds.width * 0.26f
-        val right = bounds.right - bounds.width * 0.16f
-        val top = bounds.top + bounds.height * 0.10f
-        val outerBottom = bounds.bottom - bounds.height * 0.06f
-        val innerBottom = bounds.bottom - bounds.height * 0.24f
-        val mid = (left + right) / 2f
-
-        // Two nested hooks rather than one: a single U reads as a magnet at this
-        // size, and the inner return is the part that says "clip".
-        val clip = Path().apply {
-            moveTo(right, top + bounds.height * 0.30f)
-            lineTo(right, outerBottom - bounds.height * 0.16f)
-            quadraticTo(right, outerBottom, mid, outerBottom)
-            quadraticTo(left, outerBottom, left, outerBottom - bounds.height * 0.16f)
-            lineTo(left, top + bounds.height * 0.14f)
-            quadraticTo(left, top, mid, top)
-            quadraticTo(
-                left + bounds.width * 0.55f, top,
-                left + bounds.width * 0.55f, top + bounds.height * 0.14f,
+        rotate(degrees = 22f, pivot = bounds.center) {
+            val halfWidth = bounds.width * 0.19f
+            val top = bounds.top + bounds.height * 0.06f
+            val bottom = bounds.bottom - bounds.height * 0.06f
+            val body = Rect(
+                bounds.center.x - halfWidth, top,
+                bounds.center.x + halfWidth, bottom,
             )
-            lineTo(left + bounds.width * 0.55f, innerBottom)
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(body.left, body.top),
+                size = Size(body.width, body.height),
+                cornerRadius = CornerRadius(halfWidth),
+                style = iconStroke(),
+            )
+            // The inner wire: down from under the top bend, stopping above the
+            // bottom one, which is where a real clip's short leg ends.
+            val innerTop = top + bounds.height * 0.18f
+            val innerBottom = bottom - bounds.height * 0.30f
+            drawLine(
+                color,
+                Offset(bounds.center.x + halfWidth * 0.45f, innerTop),
+                Offset(bounds.center.x + halfWidth * 0.45f, innerBottom),
+                STROKE_DP.dp.toPx(),
+                StrokeCap.Round,
+            )
         }
-        drawPath(clip, color, style = iconStroke())
+    }
+}
+
+/**
+ * A box with an arrow leaving it: this opens somewhere outside the app.
+ *
+ * Not a chain — two interlocking links need detail that disappears below 20dp,
+ * and the arrow is what actually tells you the tap leaves.
+ */
+@Composable
+fun LinkIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val gap = bounds.width * 0.42f
+        // An open corner rather than a closed box: the arrow crosses where the
+        // outline stops, so the two shapes never collide at small sizes.
+        val frame = Path().apply {
+            moveTo(bounds.right - gap, bounds.top)
+            lineTo(bounds.left, bounds.top)
+            lineTo(bounds.left, bounds.bottom)
+            lineTo(bounds.right, bounds.bottom)
+            lineTo(bounds.right, bounds.top + gap)
+        }
+        drawPath(frame, color, style = iconStroke())
+
+        val tip = Offset(bounds.right, bounds.top)
+        drawLine(
+            color,
+            Offset(bounds.center.x, bounds.center.y),
+            tip,
+            STROKE_DP.dp.toPx(),
+            StrokeCap.Round,
+        )
+        val barb = bounds.width * 0.26f
+        drawPath(
+            Path().apply {
+                moveTo(tip.x - barb, tip.y)
+                lineTo(tip.x, tip.y)
+                lineTo(tip.x, tip.y + barb)
+            },
+            color,
+            style = iconStroke(),
+        )
     }
 }
 

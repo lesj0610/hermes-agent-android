@@ -47,6 +47,9 @@ fun railPanelOptions(
  */
 fun drawerDestinations(showCron: Boolean): List<Pane> = buildList {
     add(Pane.Chat)
+    // Unconditional: artifacts are read out of the session histories every
+    // gateway serves, not from a route one might lack.
+    add(Pane.Artifacts)
     if (showCron) add(Pane.Cron)
 }
 

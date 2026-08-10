@@ -213,4 +213,15 @@
     <string name="chat_attach_failed">The file could not be read.</string>
     <string name="chat_attach_no_camera">No camera app available.</string>
     <string name="chat_attach_truncated">%1$s · truncated</string>
+    <string name="artifacts_title">Artifacts</string>
+    <string name="artifacts_all">All</string>
+    <string name="artifacts_images">Images</string>
+    <string name="artifacts_files">Files</string>
+    <string name="artifacts_links">Links</string>
+    <string name="artifacts_empty">Nothing produced yet.</string>
+    <string name="artifacts_rescan">Rescan</string>
+    <string name="artifacts_scanning">Reading sessions %1$d/%2$d…</string>
+    <string name="artifacts_scanned">From the %1$d most recent of %2$d sessions</string>
+    <string name="artifacts_scanned_failed">From the %1$d most recent of %2$d sessions · %3$d could not be read</string>
+    <string name="artifacts_on_gateway">on the gateway</string>
 </resources>

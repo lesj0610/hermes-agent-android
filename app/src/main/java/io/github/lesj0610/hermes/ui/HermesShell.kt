@@ -56,6 +56,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import io.github.lesj0610.hermes.ui.components.ChatIcon
 import io.github.lesj0610.hermes.ui.components.ClockIcon
+import io.github.lesj0610.hermes.ui.components.DocumentIcon
 import io.github.lesj0610.hermes.ui.components.DrawerContent
 import io.github.lesj0610.hermes.ui.components.DrawerEntry
 import io.github.lesj0610.hermes.ui.components.GridIcon
@@ -68,6 +69,7 @@ import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.data.TranscriptItem
 import io.github.lesj0610.hermes.net.ModelChoice
 import io.github.lesj0610.hermes.ui.chat.ApprovalSheet
+import io.github.lesj0610.hermes.ui.artifacts.ArtifactsPane
 import io.github.lesj0610.hermes.ui.chat.ChatPane
 import io.github.lesj0610.hermes.ui.cron.CronPane
 import io.github.lesj0610.hermes.ui.dashboard.DashboardPane
@@ -95,6 +97,8 @@ fun HermesShell(
     val models by viewModel.models.collectAsStateWithLifecycle()
     val modelChoices by viewModel.modelChoices.collectAsStateWithLifecycle()
     val serverModel by viewModel.serverModel.collectAsStateWithLifecycle()
+    val artifacts by viewModel.artifacts.collectAsStateWithLifecycle()
+    val artifactScan by viewModel.artifactScan.collectAsStateWithLifecycle()
     val voiceState by viewModel.voiceState.collectAsStateWithLifecycle()
     val conversing by viewModel.voiceConversing.collectAsStateWithLifecycle()
     val dictation by viewModel.dictation.collectAsStateWithLifecycle()
@@ -381,6 +385,13 @@ fun HermesShell(
                                     onRun = viewModel::runJob,
                                     onDelete = viewModel::deleteJob,
                                 )
+                            } else if (pane == Pane.Artifacts) {
+                                ArtifactsPane(
+                                    artifacts = artifacts,
+                                    scan = artifactScan,
+                                    onOpenSession = viewModel::openSession,
+                                    onRescan = viewModel::loadArtifacts,
+                                )
                             } else if (pane == Pane.Gateway) {
                                 GatewayPane(health = health, toolsets = toolsets, skills = skills)
                             } else if (pane == Pane.Settings) {
@@ -490,6 +501,13 @@ fun HermesShell(
                         onDictate = dictate,
                         onDictationConsumed = viewModel::consumeDictation,
                         onToggleConversation = viewModel::toggleConversation,
+                    )
+                    Pane.Artifacts -> ArtifactsPane(
+                        artifacts = artifacts,
+                        scan = artifactScan,
+                        onOpenSession = viewModel::openSession,
+                        onRescan = viewModel::loadArtifacts,
+                        modifier = content,
                     )
                     Pane.Cron -> CronPane(
                         jobs = jobs,
@@ -686,6 +704,7 @@ private fun ConnectionLine(connection: Connection) {
 @Composable
 private fun PaneIcon(pane: Pane, tint: Color) = when (pane) {
     Pane.Chat -> ChatIcon(tint = tint)
+    Pane.Artifacts -> DocumentIcon(tint = tint)
     Pane.Cron -> ClockIcon(tint = tint)
     Pane.Gateway -> ServerIcon(tint = tint)
     Pane.Dashboard -> GridIcon(tint = tint)
@@ -700,6 +719,7 @@ private fun paneLabel(pane: Pane): String = when (pane) {
     Pane.Gateway -> stringResource(R.string.gateway_title)
     Pane.Dashboard -> stringResource(R.string.dashboard_title)
     Pane.Chat -> stringResource(R.string.nav_chat)
+    Pane.Artifacts -> stringResource(R.string.artifacts_title)
 }
 
 /** Colour and wording for a connection state, shared by the bar and the drawer. */

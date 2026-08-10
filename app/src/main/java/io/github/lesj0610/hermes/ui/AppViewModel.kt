@@ -28,6 +28,8 @@ import io.github.lesj0610.hermes.net.ModelEntry
 import io.github.lesj0610.hermes.net.SessionSummary
 import io.github.lesj0610.hermes.net.Skill
 import io.github.lesj0610.hermes.net.Toolset
+import io.github.lesj0610.hermes.ui.artifacts.Artifact
+import io.github.lesj0610.hermes.ui.artifacts.collectArtifacts
 import io.github.lesj0610.hermes.voice.VoiceController
 import io.github.lesj0610.hermes.voice.VoiceState
 import java.util.Locale
@@ -42,7 +44,32 @@ sealed interface Connection {
 }
 
 /** Which pane the user is looking at. On a tablet several are visible at once. */
-enum class Pane { Chat, Cron, Gateway, Dashboard, Settings }
+enum class Pane { Chat, Artifacts, Cron, Gateway, Dashboard, Settings }
+
+/**
+ * How many sessions the artifact scan reads.
+ *
+ * Each one is a separate request for its whole message history, so the whole
+ * list would be as many round trips as there are sessions and would grow without
+ * bound. The most recent are where the things you are looking for were made; the
+ * screen says how many it read rather than implying it read everything.
+ */
+const val ARTIFACT_SESSION_LIMIT = 20
+
+/**
+ * How far the artifact scan got.
+ *
+ * [available] is every session the app knows about, so the screen can say it
+ * read the most recent [total] of them rather than presenting a partial sweep as
+ * the whole picture.
+ */
+data class ArtifactScan(
+    val running: Boolean = false,
+    val scanned: Int = 0,
+    val total: Int = 0,
+    val available: Int = 0,
+    val failed: Int = 0,
+)
 
 /** State of the optional dashboard connection, which is independent of the gateway's. */
 sealed interface DashboardState {
@@ -67,6 +94,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _sessions = MutableStateFlow<List<SessionSummary>>(emptyList())
     val sessions: StateFlow<List<SessionSummary>> = _sessions.asStateFlow()
+
+    private val _artifacts = MutableStateFlow<List<Artifact>>(emptyList())
+    val artifacts: StateFlow<List<Artifact>> = _artifacts.asStateFlow()
+
+    /** Scan state, so the screen can say what it read instead of looking empty. */
+    private val _artifactScan = MutableStateFlow(ArtifactScan())
+    val artifactScan: StateFlow<ArtifactScan> = _artifactScan.asStateFlow()
 
     private val _models = MutableStateFlow<List<ModelEntry>>(emptyList())
     val models: StateFlow<List<ModelEntry>> = _models.asStateFlow()
@@ -306,6 +340,42 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun openSession(sessionId: String?) {
         _pane.value = Pane.Chat
         viewModelScope.launch { graph.runEngine.openSession(sessionId) }
+    }
+
+    /**
+     * Reads the recent sessions' messages and pulls the artifacts out of them.
+     *
+     * Sequential rather than parallel: this is someone else's machine serving a
+     * conversation at the same time, and twenty simultaneous history reads is a
+     * burst it has no reason to absorb for a screen the user is browsing.
+     *
+     * A session that fails to load is counted rather than aborting the scan —
+     * one unreadable history should not empty the whole screen.
+     */
+    fun loadArtifacts() {
+        if (_artifactScan.value.running) return
+        viewModelScope.launch {
+            val targets = _sessions.value.take(ARTIFACT_SESSION_LIMIT)
+            _artifactScan.value = ArtifactScan(
+                running = true,
+                scanned = 0,
+                total = targets.size,
+                available = _sessions.value.size,
+            )
+            val collected = mutableListOf<Artifact>()
+            var failed = 0
+            targets.forEach { session ->
+                runCatching { graph.api.messages(session.id) }
+                    .onSuccess { collected += collectArtifacts(session, it) }
+                    .onFailure { failed++ }
+                _artifacts.value = collected.toList()
+                _artifactScan.value = _artifactScan.value.copy(
+                    scanned = _artifactScan.value.scanned + 1,
+                    failed = failed,
+                )
+            }
+            _artifactScan.value = _artifactScan.value.copy(running = false)
+        }
     }
 
     fun send(prompt: String, images: List<String> = emptyList()) {

@@ -110,7 +110,10 @@ fun StatusBar(
 
             Spacer(Modifier.weight(1f))
 
-            StatusItem(model.ifBlank { stringResource(R.string.settings_model_default) })
+            // Omitted while unknown rather than labelled a default: the bar is a
+            // readout of what is in effect, and a name it cannot supply is
+            // better left off than replaced by one that names no model.
+            if (model.isNotBlank()) StatusItem(model)
         }
     }
 }

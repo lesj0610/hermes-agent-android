@@ -360,6 +360,108 @@ fun SearchIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     }
 }
 
+/** A camera body with a lens: take a picture now. */
+@Composable
+fun CameraIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val bodyTop = bounds.top + bounds.height * 0.24f
+        // The viewfinder hump, drawn before the body so the body's stroke sits
+        // over its base and the two read as one outline.
+        val humpLeft = bounds.left + bounds.width * 0.30f
+        val humpRight = bounds.left + bounds.width * 0.55f
+        val hump = Path().apply {
+            moveTo(humpLeft, bodyTop)
+            lineTo(humpLeft + bounds.width * 0.06f, bounds.top + bounds.height * 0.12f)
+            lineTo(humpRight - bounds.width * 0.06f, bounds.top + bounds.height * 0.12f)
+            lineTo(humpRight, bodyTop)
+        }
+        drawPath(hump, color, style = iconStroke())
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(bounds.left, bodyTop),
+            size = Size(bounds.width, bounds.bottom - bodyTop),
+            cornerRadius = CornerRadius(4.dp.toPx()),
+            style = iconStroke(),
+        )
+        drawCircle(
+            color,
+            radius = bounds.width * 0.19f,
+            center = Offset(bounds.center.x, (bodyTop + bounds.bottom) / 2f),
+            style = iconStroke(),
+        )
+    }
+}
+
+/** A framed picture with a hill and a sun: pick from the gallery. */
+@Composable
+fun PhotoIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val radius = CornerRadius(5.dp.toPx())
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(bounds.left, bounds.top),
+            size = Size(bounds.width, bounds.height),
+            cornerRadius = radius,
+            style = iconStroke(),
+        )
+        drawCircle(
+            color,
+            radius = bounds.width * 0.09f,
+            center = Offset(
+                bounds.left + bounds.width * 0.32f,
+                bounds.top + bounds.height * 0.32f,
+            ),
+        )
+        // Clipped to the frame: the hill runs past the right edge, which is what
+        // makes it read as a photograph rather than as a triangle in a box.
+        val frame = Path().apply { addRoundRect(RoundRect(bounds, radius)) }
+        clipPath(frame) {
+            val hill = Path().apply {
+                moveTo(bounds.left + bounds.width * 0.10f, bounds.bottom)
+                lineTo(bounds.left + bounds.width * 0.44f, bounds.top + bounds.height * 0.52f)
+                lineTo(bounds.right, bounds.bottom)
+            }
+            drawPath(hill, color, style = iconStroke())
+        }
+    }
+}
+
+/** A paperclip: attach a document. */
+@Composable
+fun PaperclipIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val left = bounds.left + bounds.width * 0.26f
+        val right = bounds.right - bounds.width * 0.16f
+        val top = bounds.top + bounds.height * 0.10f
+        val outerBottom = bounds.bottom - bounds.height * 0.06f
+        val innerBottom = bounds.bottom - bounds.height * 0.24f
+        val mid = (left + right) / 2f
+
+        // Two nested hooks rather than one: a single U reads as a magnet at this
+        // size, and the inner return is the part that says "clip".
+        val clip = Path().apply {
+            moveTo(right, top + bounds.height * 0.30f)
+            lineTo(right, outerBottom - bounds.height * 0.16f)
+            quadraticTo(right, outerBottom, mid, outerBottom)
+            quadraticTo(left, outerBottom, left, outerBottom - bounds.height * 0.16f)
+            lineTo(left, top + bounds.height * 0.14f)
+            quadraticTo(left, top, mid, top)
+            quadraticTo(
+                left + bounds.width * 0.55f, top,
+                left + bounds.width * 0.55f, top + bounds.height * 0.14f,
+            )
+            lineTo(left + bounds.width * 0.55f, innerBottom)
+        }
+        drawPath(clip, color, style = iconStroke())
+    }
+}
+
 /** Sliders: adjust how the columns are arranged. */
 @Composable
 fun SlidersIcon(modifier: Modifier = Modifier, tint: Color? = null) {

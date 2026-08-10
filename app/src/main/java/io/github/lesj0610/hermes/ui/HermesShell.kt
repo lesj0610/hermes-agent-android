@@ -93,6 +93,7 @@ fun HermesShell(
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val models by viewModel.models.collectAsStateWithLifecycle()
     val modelChoices by viewModel.modelChoices.collectAsStateWithLifecycle()
+    val serverModel by viewModel.serverModel.collectAsStateWithLifecycle()
     val voiceState by viewModel.voiceState.collectAsStateWithLifecycle()
     val conversing by viewModel.voiceConversing.collectAsStateWithLifecycle()
     val dictation by viewModel.dictation.collectAsStateWithLifecycle()
@@ -227,12 +228,16 @@ fun HermesShell(
         val destinations = drawerDestinations(showCron, showGateway, showDashboard)
         val (connColor, connLabel) = connectionStatus(connection)
 
+        // What the next turn will actually run on: the override if one is set,
+        // otherwise the model the gateway reports it is on. Blank only while
+        // the inventory has not been read — and then nothing is shown, rather
+        // than a "default" label that names no model.
+        val activeModel = settings.model.ifBlank { serverModel }
+
         // Docked or floating, the same contents. Only the frame differs.
         val drawer: @Composable () -> Unit = {
             DrawerContent(
-                modelLabel = settings.model.ifBlank {
-                    stringResource(R.string.settings_model_default)
-                },
+                modelLabel = activeModel,
                 connectionLabel = connLabel,
                 connectionColor = connColor,
                 destinations = destinations.map { target ->
@@ -380,7 +385,7 @@ fun HermesShell(
                                     onSend = viewModel::send,
                                     onStop = viewModel::stop,
                                     onDismissError = viewModel::dismissError,
-                                    modelLabel = settings.model,
+                                    modelLabel = activeModel,
                                     modelChoices = modelChoices,
                                     onSelectModel = viewModel::setModelChoice,
                                     effort = settings.reasoningEffort,
@@ -430,7 +435,7 @@ fun HermesShell(
                     }
 
                     if (settings.showStatusBar) {
-                        StatusBar(chat = chat, connection = connection, model = settings.model)
+                        StatusBar(chat = chat, connection = connection, model = activeModel)
                     }
                 }
             } else {
@@ -441,7 +446,7 @@ fun HermesShell(
                         onStop = viewModel::stop,
                         onDismissError = viewModel::dismissError,
                         modifier = content,
-                        modelLabel = settings.model,
+                        modelLabel = activeModel,
                         modelChoices = modelChoices,
                         onSelectModel = viewModel::setModelChoice,
                         effort = settings.reasoningEffort,

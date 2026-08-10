@@ -156,15 +156,36 @@
     <string name="notif_running_body">게이트웨이에서 스트리밍 중입니다.</string>
     <string name="notif_finished_title">실행 완료</string>
     <string name="notif_failed_title">실행 실패</string>
-    <string name="effort_off">끔</string>
-    <string name="effort_minimal">최소</string>
-    <string name="effort_low">낮음</string>
-    <string name="effort_medium">보통</string>
-    <string name="effort_high">높음</string>
-    <string name="effort_xhigh">최대</string>
+    <!--
+      The value in parentheses is what actually goes on the wire in
+      model_options.reasoning.effort. Keeping it visible means a level named
+      here can be matched against the gateway's own logs.
+    -->
+    <string name="effort_off">끔 (none)</string>
+    <string name="effort_minimal">최소 (minimal)</string>
+    <string name="effort_low">낮음 (low)</string>
+    <string name="effort_medium">보통 (medium)</string>
+    <string name="effort_high">높음 (high)</string>
+    <string name="effort_xhigh">최대 (xhigh)</string>
+    <!-- The chip is narrow and sits beside the model name, so it carries the
+         bare level; the parenthesised wire value lives in the menu. -->
+    <string name="effort_short_off">끔</string>
+    <string name="effort_short_minimal">최소</string>
+    <string name="effort_short_low">낮음</string>
+    <string name="effort_short_medium">보통</string>
+    <string name="effort_short_high">높음</string>
+    <string name="effort_short_xhigh">최대</string>
+    <string name="model_title">모델</string>
     <string name="voice_dictate">음성으로 입력</string>
     <string name="voice_conversation">음성 대화</string>
     <string name="effort_title">추론</string>
-    <string name="chat_attach">이미지 첨부</string>
+    <string name="chat_attach">첨부</string>
     <string name="chat_attachment_remove">첨부 제거</string>
+    <string name="chat_attach_camera">카메라</string>
+    <string name="chat_attach_photo">사진</string>
+    <string name="chat_attach_file">파일</string>
+    <string name="chat_attach_binary">이미지와 텍스트 파일만 첨부할 수 있습니다.</string>
+    <string name="chat_attach_failed">파일을 읽지 못했습니다.</string>
+    <string name="chat_attach_no_camera">사용할 수 있는 카메라 앱이 없습니다.</string>
+    <string name="chat_attach_truncated">%1$s · 잘림</string>
 </resources>

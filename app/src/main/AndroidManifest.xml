@@ -61,6 +61,23 @@
         <receiver
             android:name=".service.ApprovalActionReceiver"
             android:exported="false" />
+
+        <!--
+          Hands the camera app a writable target for a capture. A file:// Uri
+          has been illegal to pass between apps since API 24, and CAMERA is
+          deliberately not declared: an app that declares it must then hold the
+          runtime grant before ACTION_IMAGE_CAPTURE will run, which is a
+          permission prompt for something the camera app already does itself.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

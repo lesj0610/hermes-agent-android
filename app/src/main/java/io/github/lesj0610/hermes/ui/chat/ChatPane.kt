@@ -60,7 +60,9 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.ui.graphics.Color
 import io.github.lesj0610.hermes.ui.components.SendIcon
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -73,7 +75,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import io.github.lesj0610.hermes.core.Attachments
+import io.github.lesj0610.hermes.ui.components.CameraIcon
+import io.github.lesj0610.hermes.ui.components.PaperclipIcon
+import io.github.lesj0610.hermes.ui.components.PhotoIcon
 import io.github.lesj0610.hermes.ui.components.PlusIcon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -182,9 +188,11 @@ fun ChatPane(
 }
 
 /**
- * The value alone. The word "reasoning" belongs on the menu that opens, not
- * repeated on a chip that is already showing the setting it names — the chip
- * has to fit beside the model on a phone.
+ * The level with its wire value in parentheses — `보통 (medium)`.
+ *
+ * The parenthesised half is not decoration: it is the string sent as
+ * `model_options.reasoning.effort`, so a level picked here can be matched
+ * against the gateway's own logs without a translation table.
  */
 @Composable
 private fun effortLabel(effort: ReasoningEffort): String = when (effort) {
@@ -194,6 +202,22 @@ private fun effortLabel(effort: ReasoningEffort): String = when (effort) {
     ReasoningEffort.Medium -> stringResource(R.string.effort_medium)
     ReasoningEffort.High -> stringResource(R.string.effort_high)
     ReasoningEffort.XHigh -> stringResource(R.string.effort_xhigh)
+}
+
+/**
+ * The bare level, for the chip.
+ *
+ * The chip carries the model name as well and has one line on a phone, so the
+ * wire value is dropped there and kept in the menu, where there is room.
+ */
+@Composable
+private fun effortShortLabel(effort: ReasoningEffort): String = when (effort) {
+    ReasoningEffort.Off -> stringResource(R.string.effort_short_off)
+    ReasoningEffort.Minimal -> stringResource(R.string.effort_short_minimal)
+    ReasoningEffort.Low -> stringResource(R.string.effort_short_low)
+    ReasoningEffort.Medium -> stringResource(R.string.effort_short_medium)
+    ReasoningEffort.High -> stringResource(R.string.effort_short_high)
+    ReasoningEffort.XHigh -> stringResource(R.string.effort_short_xhigh)
 }
 
 @Composable
@@ -333,17 +357,25 @@ private fun Composer(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var draft by remember { mutableStateOf("") }
-    var modelsOpen by remember { mutableStateOf(false) }
-    var effortOpen by remember { mutableStateOf(false) }
+    var runtimeOpen by remember { mutableStateOf(false) }
+    var attachOpen by remember { mutableStateOf(false) }
+    // Whether the runtime menu is showing its top level or the model list. One
+    // menu with two faces rather than two anchors, so the model and the level
+    // it applies to are never open at the same time saying different things.
+    var pickingModel by remember { mutableStateOf(false) }
 
-    // Held as data URLs rather than as Uris: the permission granted by the
-    // picker is not guaranteed to outlive the pick, and the request needs the
-    // bytes inline anyway.
-    var attachments by remember { mutableStateOf(listOf<String>()) }
+    // Held as decoded content rather than as Uris: the permission granted by
+    // the picker is not guaranteed to outlive the pick, and the request needs
+    // the bytes inline anyway.
+    var attachments by remember { mutableStateOf(listOf<Attachment>()) }
+    var notice by remember { mutableStateOf<String?>(null) }
     val attachLabel = stringResource(R.string.chat_attach)
     val removeLabel = stringResource(R.string.chat_attachment_remove)
+    val binaryNotice = stringResource(R.string.chat_attach_binary)
+    val failedNotice = stringResource(R.string.chat_attach_failed)
+    val noCameraNotice = stringResource(R.string.chat_attach_no_camera)
 
-    val picker = rememberLauncherForActivityResult(
+    val photos = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(),
     ) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
@@ -352,8 +384,43 @@ private fun Composer(
             val encoded = withContext(Dispatchers.IO) {
                 uris.mapNotNull { Attachments.toDataUrl(context, it) }
             }
-            attachments = attachments + encoded
+            attachments = attachments + encoded.map { Attachment.Image(it) }
         }
+    }
+
+    // Where the camera app is told to write. Held across the launch because the
+    // contract reports only success, not the location it wrote to.
+    var captureTarget by remember { mutableStateOf<Uri?>(null) }
+    val camera = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture(),
+    ) { saved ->
+        val target = captureTarget ?: return@rememberLauncherForActivityResult
+        captureTarget = null
+        if (!saved) return@rememberLauncherForActivityResult
+        scope.launch {
+            val encoded = withContext(Dispatchers.IO) { Attachments.toDataUrl(context, target) }
+            if (encoded == null) notice = failedNotice else attachments = attachments + Attachment.Image(encoded)
+        }
+    }
+
+    val documents = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val doc = withContext(Dispatchers.IO) { Attachments.readDocument(context, uri) }
+            if (doc == null) {
+                // Not "failed": the common case is a PDF or an archive, and the
+                // reason it cannot go is that the run route has no file part —
+                // saying so is more use than saying the read broke.
+                notice = binaryNotice
+            } else {
+                attachments = attachments + Attachment.Document(doc)
+            }
+        }
+    }
+    val hasCamera = remember {
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
     }
     // Resolved out here: a semantics block is not a composable scope.
     val dictateLabel = stringResource(R.string.voice_dictate)
@@ -382,14 +449,29 @@ private fun Composer(
             .background(colors.panel)
             .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 6.dp),
     ) {
+        notice?.let { message ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { notice = null }
+                    .padding(start = 12.dp, end = 12.dp, top = 8.dp),
+            ) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.failed,
+                )
+            }
+        }
+
         if (attachments.isNotEmpty()) {
             LazyRow(
                 Modifier.fillMaxWidth().padding(start = 6.dp, top = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                itemsIndexed(attachments) { index, dataUrl ->
-                    AttachmentThumbnail(
-                        dataUrl = dataUrl,
+                itemsIndexed(attachments) { index, attachment ->
+                    AttachmentChip(
+                        attachment = attachment,
                         removeLabel = removeLabel,
                         onRemove = {
                             attachments = attachments.filterIndexed { i, _ -> i != index }
@@ -427,82 +509,163 @@ private fun Composer(
             // control in the row that opens something outside the app, and an
             // outline is what makes it read as a button rather than as a mark
             // beside the chips.
-            Box(
-                Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .border(1.dp, colors.line, RoundedCornerShape(12.dp))
-                    .clickable(enabled = enabled) {
-                        picker.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                        )
-                    }
-                    .semantics { contentDescription = attachLabel },
-                contentAlignment = Alignment.Center,
-            ) {
-                PlusIcon(modifier = Modifier.size(18.dp))
-            }
-
             Box {
-                // Inert rather than absent when the gateway cannot serve the
-                // inventory: the model in use is still worth showing.
-                RuntimeChip(
-                    label = modelLabel.ifBlank { stringResource(R.string.settings_model_default) },
-                    enabled = modelChoices.isNotEmpty(),
-                    onClick = { modelsOpen = true },
-                )
-                DropdownMenu(expanded = modelsOpen, onDismissRequest = { modelsOpen = false }) {
-                    modelChoices.forEach { choice ->
-                        DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text(choice.model, style = MaterialTheme.typography.bodyMedium)
-                                    Text(
-                                        text = choice.providerLabel,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = colors.muted,
-                                    )
+                Box(
+                    Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, colors.line, RoundedCornerShape(12.dp))
+                        .clickable(enabled = enabled) {
+                            notice = null
+                            attachOpen = true
+                        }
+                        .semantics { contentDescription = attachLabel },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PlusIcon(modifier = Modifier.size(18.dp))
+                }
+                DropdownMenu(expanded = attachOpen, onDismissRequest = { attachOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_attach_camera)) },
+                        leadingIcon = { CameraIcon() },
+                        onClick = {
+                            attachOpen = false
+                            // Stamped rather than fixed, so a second shot in the
+                            // same message does not overwrite the first.
+                            val target = runCatching {
+                                Attachments.newCameraTarget(context, System.currentTimeMillis())
+                            }.getOrNull()
+                            if (target == null) {
+                                notice = failedNotice
+                            } else {
+                                captureTarget = target
+                                // A device can report a camera and still have no
+                                // app that answers the intent.
+                                if (runCatching { camera.launch(target) }.isFailure) {
+                                    captureTarget = null
+                                    notice = noCameraNotice
                                 }
-                            },
-                            onClick = {
-                                onSelectModel(choice)
-                                modelsOpen = false
-                            },
-                        )
-                    }
+                            }
+                        },
+                        enabled = hasCamera,
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_attach_photo)) },
+                        leadingIcon = { PhotoIcon() },
+                        onClick = {
+                            attachOpen = false
+                            photos.launch(
+                                PickVisualMediaRequest(
+                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                ),
+                            )
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.chat_attach_file)) },
+                        leadingIcon = { PaperclipIcon() },
+                        onClick = {
+                            attachOpen = false
+                            // Everything, not text/* — providers report plenty of
+                            // readable files as octet-stream, and a filter here
+                            // would hide them. What is readable is decided after
+                            // the pick, by looking at the bytes.
+                            documents.launch(arrayOf("*/*"))
+                        },
+                    )
                 }
             }
 
+            // Model and level on one chip, because they are one decision: the
+            // level means nothing without knowing which model it is being asked
+            // of. Split across two chips they also took the whole row on a
+            // phone, leaving no space for the mic.
             Box {
                 RuntimeChip(
-                    label = effortLabel(effort),
+                    label = listOf(modelLabel, effortShortLabel(effort))
+                        .filter { it.isNotBlank() }
+                        .joinToString(" "),
                     enabled = true,
-                    onClick = { effortOpen = true },
+                    onClick = {
+                        pickingModel = false
+                        runtimeOpen = true
+                    },
                 )
-                DropdownMenu(expanded = effortOpen, onDismissRequest = { effortOpen = false }) {
-                    Text(
-                        text = stringResource(R.string.effort_title),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.muted,
-                        modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 2.dp),
-                    )
-                    ReasoningEffort.entries.forEach { option ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = effortLabel(option),
-                                    color = if (option == effort) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    },
-                                )
-                            },
-                            onClick = {
-                                onSelectEffort(option)
-                                effortOpen = false
-                            },
+                DropdownMenu(
+                    expanded = runtimeOpen,
+                    onDismissRequest = { runtimeOpen = false },
+                ) {
+                    if (pickingModel) {
+                        modelChoices.forEach { choice ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(choice.model, style = MaterialTheme.typography.bodyMedium)
+                                        Text(
+                                            text = choice.providerLabel,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = colors.muted,
+                                        )
+                                    }
+                                },
+                                trailingIcon = {
+                                    if (choice.model == modelLabel) {
+                                        Text("✓", color = MaterialTheme.colorScheme.primary)
+                                    }
+                                },
+                                onClick = {
+                                    onSelectModel(choice)
+                                    pickingModel = false
+                                    runtimeOpen = false
+                                },
+                            )
+                        }
+                    } else {
+                        // Omitted rather than shown inert when the gateway does
+                        // not serve the inventory: a row that opens an empty
+                        // list is worse than no row.
+                        if (modelChoices.isNotEmpty()) {
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(
+                                            text = stringResource(R.string.model_title),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                        if (modelLabel.isNotBlank()) {
+                                            Text(
+                                                text = modelLabel,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = colors.muted,
+                                            )
+                                        }
+                                    }
+                                },
+                                trailingIcon = { Text("›", color = colors.muted) },
+                                onClick = { pickingModel = true },
+                            )
+                            HorizontalDivider(color = colors.line)
+                        }
+                        Text(
+                            text = stringResource(R.string.effort_title),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.muted,
+                            modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 2.dp),
                         )
+                        ReasoningEffort.entries.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(effortLabel(option)) },
+                                trailingIcon = {
+                                    if (option == effort) {
+                                        Text("✓", color = MaterialTheme.colorScheme.primary)
+                                    }
+                                },
+                                onClick = {
+                                    onSelectEffort(option)
+                                    runtimeOpen = false
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -530,9 +693,13 @@ private fun Composer(
             FilledIconButton(
                 onClick = {
                     if (hasDraft) {
-                        onSend(draft, attachments)
+                        onSend(
+                            composeMessage(draft, attachments),
+                            attachments.filterIsInstance<Attachment.Image>().map { it.dataUrl },
+                        )
                         draft = ""
                         attachments = emptyList()
+                        notice = null
                     } else {
                         onToggleConversation()
                     }
@@ -568,22 +735,59 @@ private fun Composer(
 }
 
 /**
- * One attached image, with the control that removes it.
+ * Something staged for the next message.
  *
- * Decoded from the data URL rather than from the original Uri: that is what
- * will actually be sent, so the thumbnail shows the downscaling that happened
- * rather than the picture as it sits on disk.
+ * The two arms travel differently and cannot be collapsed: an image goes as an
+ * `image_url` content part, while a document has no part to go as — the run
+ * route rejects `file`/`input_file` — so its text is folded into the message
+ * body instead.
  */
+private sealed interface Attachment {
+    data class Image(val dataUrl: String) : Attachment
+    data class Document(val doc: Attachments.Document) : Attachment
+}
+
+/**
+ * The text actually sent: each document, delimited and named, then whatever was
+ * typed.
+ *
+ * The typed line comes last because it is the instruction and the documents are
+ * the material — a question placed above a 2000-line log is a question the
+ * model has forgotten by the time it reaches the end.
+ */
+private fun composeMessage(draft: String, attachments: List<Attachment>): String {
+    val documents = attachments.filterIsInstance<Attachment.Document>()
+    if (documents.isEmpty()) return draft
+    return buildString {
+        documents.forEach { attached ->
+            val doc = attached.doc
+            append("--- attached file: ${doc.name} ---\n")
+            append(doc.text)
+            if (!doc.text.endsWith("\n")) append("\n")
+            if (doc.truncated) {
+                append("--- truncated at ${Attachments.MAX_DOC_BYTES} bytes ---\n")
+            }
+            append("--- end of ${doc.name} ---\n\n")
+        }
+        append(draft)
+    }
+}
+
+/** One staged attachment, with the control that removes it. */
 @Composable
-private fun AttachmentThumbnail(
-    dataUrl: String,
+private fun AttachmentChip(
+    attachment: Attachment,
     removeLabel: String,
     onRemove: () -> Unit,
 ) {
     val colors = LocalRunColors.current
-    val bitmap = remember(dataUrl) {
+    // Decoded from the data URL rather than from the original Uri: that is what
+    // will actually be sent, so the thumbnail shows the downscaling that
+    // happened rather than the picture as it sits on disk.
+    val bitmap = remember(attachment) {
+        val image = attachment as? Attachment.Image ?: return@remember null
         runCatching {
-            val encoded = dataUrl.substringAfter("base64,", "")
+            val encoded = image.dataUrl.substringAfter("base64,", "")
             val bytes = Base64.decode(encoded, Base64.NO_WRAP)
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
         }.getOrNull()
@@ -597,6 +801,29 @@ private fun AttachmentThumbnail(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
             )
+        } else if (attachment is Attachment.Document) {
+            // The name, not a generic file glyph: two logs attached together
+            // are otherwise indistinguishable, and removing the wrong one is
+            // only noticed after the turn has been spent.
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.panelRaised)
+                    .padding(4.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                PaperclipIcon(modifier = Modifier.size(14.dp))
+                Text(
+                    text = attachment.doc.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.muted,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+            }
         } else {
             Box(
                 Modifier

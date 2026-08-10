@@ -118,7 +118,9 @@ fun DrawerContent(
                 ) {
                     StatusDot(connectionColor, size = 6)
                     Text(
-                        text = listOf(modelLabel, connectionLabel).joinToString(" · "),
+                        text = listOf(modelLabel, connectionLabel)
+                            .filter { it.isNotBlank() }
+                            .joinToString(" · "),
                         style = MaterialTheme.typography.labelSmall,
                         color = colors.muted,
                     )

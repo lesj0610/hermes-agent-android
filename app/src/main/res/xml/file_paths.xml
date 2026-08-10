@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Only the capture directory is shared, and only inside the cache: a photo
+  taken for a message is scratch, and the OS may reclaim it once it has been
+  sent. Widening this to the whole cache or to files/ would expose the token
+  store's directory to any app handed a grant.
+-->
+<paths>
+    <cache-path name="captures" path="captures/" />
+</paths>

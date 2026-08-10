@@ -79,6 +79,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _modelChoices = MutableStateFlow<List<ModelChoice>>(emptyList())
     val modelChoices: StateFlow<List<ModelChoice>> = _modelChoices.asStateFlow()
 
+    /**
+     * The model the gateway is currently on, from the same inventory call.
+     *
+     * This is what the UI shows when nothing has been overridden here — naming
+     * the actual model rather than calling it a default, which said nothing
+     * about what the next turn would run on.
+     */
+    private val _serverModel = MutableStateFlow("")
+    val serverModel: StateFlow<String> = _serverModel.asStateFlow()
+
     private val _jobs = MutableStateFlow<List<Job>>(emptyList())
     val jobs: StateFlow<List<Job>> = _jobs.asStateFlow()
 
@@ -256,6 +266,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // The inventory is enrichment, not a requirement: a gateway that cannot
         // build it leaves the picker on whatever /v1/models reported.
         runCatching { graph.api.modelOptions() }.onSuccess { payload ->
+            _serverModel.value = payload.model.orEmpty()
             _modelChoices.value = payload.providers.flatMap { row ->
                 val slug = row.slug.orEmpty()
                 row.models.map { model ->

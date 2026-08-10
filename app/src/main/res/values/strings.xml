@@ -171,15 +171,33 @@
     <string name="notif_running_body">Streaming from the gateway.</string>
     <string name="notif_finished_title">Run finished</string>
     <string name="notif_failed_title">Run failed</string>
-    <string name="effort_off">Off</string>
+    <!-- Parenthesised value is the wire value sent as
+         model_options.reasoning.effort. -->
+    <string name="effort_off">Off (none)</string>
     <string name="effort_minimal">Minimal</string>
     <string name="effort_low">Low</string>
     <string name="effort_medium">Medium</string>
     <string name="effort_high">High</string>
-    <string name="effort_xhigh">Xhigh</string>
+    <string name="effort_xhigh">Max (xhigh)</string>
+    <string name="effort_short_off">Off</string>
+    <string name="effort_short_minimal">Minimal</string>
+    <string name="effort_short_low">Low</string>
+    <string name="effort_short_medium">Medium</string>
+    <string name="effort_short_high">High</string>
+    <string name="effort_short_xhigh">Max</string>
+    <string name="model_title">Model</string>
     <string name="voice_dictate">Dictate a message</string>
     <string name="voice_conversation">Spoken conversation</string>
     <string name="effort_title">Reasoning</string>
-    <string name="chat_attach">Attach an image</string>
+    <string name="chat_attach">Attach</string>
     <string name="chat_attachment_remove">Remove attachment</string>
+    <string name="chat_attach_camera">Camera</string>
+    <string name="chat_attach_photo">Photos</string>
+    <string name="chat_attach_file">File</string>
+    <!-- The run route takes images inline and text as text. There is no upload
+         route, so a PDF or an archive has nothing to travel as. -->
+    <string name="chat_attach_binary">Only images and text files can be attached.</string>
+    <string name="chat_attach_failed">The file could not be read.</string>
+    <string name="chat_attach_no_camera">No camera app available.</string>
+    <string name="chat_attach_truncated">%1$s · truncated</string>
 </resources>

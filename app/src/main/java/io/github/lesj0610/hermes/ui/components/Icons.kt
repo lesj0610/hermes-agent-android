@@ -917,3 +917,46 @@ fun CheckIcon(modifier: Modifier = Modifier, tint: Color? = null) {
         )
     }
 }
+
+/**
+ * A circular arrow: run the scan again.
+ *
+ * Kept for the artifacts sweep only. The lists that re-read themselves have no
+ * such control — this one is a deliberate pass over twenty session histories,
+ * and an expensive thing should be asked for.
+ */
+@Composable
+fun RefreshIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val radius = bounds.width * 0.36f
+        val centre = bounds.center
+        // Open at the top right, which is where the head goes: a closed ring
+        // with an arrow stuck on it reads as a ring with a defect.
+        drawArc(
+            color = color,
+            startAngle = -40f,
+            sweepAngle = 300f,
+            useCenter = false,
+            topLeft = Offset(centre.x - radius, centre.y - radius),
+            size = Size(radius * 2f, radius * 2f),
+            style = iconStroke(),
+        )
+        val angle = Math.toRadians(-40.0)
+        val tip = Offset(
+            centre.x + radius * cos(angle).toFloat(),
+            centre.y + radius * sin(angle).toFloat(),
+        )
+        val barb = bounds.width * 0.20f
+        drawPath(
+            Path().apply {
+                moveTo(tip.x - barb, tip.y - barb * 0.35f)
+                lineTo(tip.x, tip.y)
+                lineTo(tip.x + barb * 0.30f, tip.y + barb)
+            },
+            color,
+            style = iconStroke(),
+        )
+    }
+}

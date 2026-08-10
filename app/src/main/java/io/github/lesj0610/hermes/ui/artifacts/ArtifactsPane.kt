@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,6 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -42,6 +43,7 @@ import io.github.lesj0610.hermes.ui.ArtifactScan
 import io.github.lesj0610.hermes.ui.components.DocumentIcon
 import io.github.lesj0610.hermes.ui.components.LinkIcon
 import io.github.lesj0610.hermes.ui.components.PhotoIcon
+import io.github.lesj0610.hermes.ui.components.RefreshIcon
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
 
 /**
@@ -120,8 +122,25 @@ fun ArtifactsPane(
                 color = colors.muted,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onRescan, enabled = !scan.running) {
-                Text(stringResource(R.string.artifacts_rescan))
+            // An icon, not a worded button: the label sat next to a line of
+            // text that is already prose, and two runs of words competing on
+            // one row is what made the row read as a sentence with a link in
+            // it rather than as a readout with a control.
+            val rescanLabel = stringResource(R.string.artifacts_rescan)
+            Box(
+                Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(17.dp))
+                    .clickable(enabled = !scan.running, onClick = onRescan)
+                    .semantics { contentDescription = rescanLabel },
+                contentAlignment = Alignment.Center,
+            ) {
+                RefreshIcon(
+                    modifier = Modifier.size(18.dp),
+                    // Dimmed while the scan runs, so the control shows it is
+                    // busy rather than looking ignored.
+                    tint = if (scan.running) colors.muted.copy(alpha = 0.35f) else colors.muted,
+                )
             }
         }
 

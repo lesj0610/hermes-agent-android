@@ -56,6 +56,7 @@ import io.github.lesj0610.hermes.ui.components.PaperclipIcon
 import io.github.lesj0610.hermes.ui.components.PencilIcon
 import io.github.lesj0610.hermes.ui.components.PhotoIcon
 import io.github.lesj0610.hermes.ui.components.PinIcon
+import io.github.lesj0610.hermes.ui.components.RefreshIcon
 import io.github.lesj0610.hermes.ui.components.TrashIcon
 import io.github.lesj0610.hermes.ui.components.ClockIcon
 import io.github.lesj0610.hermes.ui.components.DrawerContent
@@ -409,7 +410,7 @@ class ScreenshotTest {
      */
     @Test
     fun icons() {
-        capture("icons", 411, 160) {
+        capture("icons", 411, 120) {
             Column(Modifier.fillMaxSize()) {
                 Row(Modifier.padding(12.dp)) {
                     listOf<@Composable () -> Unit>(
@@ -422,6 +423,7 @@ class ScreenshotTest {
                         { TrashIcon(modifier = Modifier.size(22.dp)) },
                         { CheckIcon(modifier = Modifier.size(22.dp)) },
                         { MoreIcon(modifier = Modifier.size(22.dp)) },
+                        { RefreshIcon(modifier = Modifier.size(22.dp)) },
                     ).forEach { icon ->
                         Box(Modifier.padding(end = 12.dp)) { icon() }
                     }

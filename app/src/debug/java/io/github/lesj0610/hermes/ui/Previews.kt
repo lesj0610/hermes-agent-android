@@ -79,14 +79,14 @@ private fun Frame(content: @Composable () -> Unit) {
 private fun PreviewChatRunning() = Frame {
     ChatPane(
         state = ChatState(sessionId = "s1", items = sampleTranscript, phase = RunPhase.Running("r1")),
-        onSend = {}, onStop = {}, onDismissError = {},
+        onSend = { _, _ -> }, onStop = {}, onDismissError = {},
     )
 }
 
 @Preview(name = "Chat · empty", device = Devices.PHONE, showBackground = true)
 @Composable
 private fun PreviewChatEmpty() = Frame {
-    ChatPane(state = ChatState(), onSend = {}, onStop = {}, onDismissError = {})
+    ChatPane(state = ChatState(), onSend = { _, _ -> }, onStop = {}, onDismissError = {})
 }
 
 @Preview(name = "Chat · tablet", device = Devices.TABLET, showBackground = true)
@@ -94,7 +94,7 @@ private fun PreviewChatEmpty() = Frame {
 private fun PreviewChatTablet() = Frame {
     ChatPane(
         state = ChatState(sessionId = "s1", items = sampleTranscript, phase = RunPhase.Running("r1")),
-        onSend = {}, onStop = {}, onDismissError = {},
+        onSend = { _, _ -> }, onStop = {}, onDismissError = {},
     )
 }
 

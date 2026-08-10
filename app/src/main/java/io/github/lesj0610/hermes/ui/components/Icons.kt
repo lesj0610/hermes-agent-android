@@ -233,6 +233,26 @@ fun GridIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     }
 }
 
+/** A plus: attach an image to the message. */
+@Composable
+fun PlusIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val arm = bounds.width * 0.34f
+        drawLine(
+            color, Offset(bounds.center.x - arm, bounds.center.y),
+            Offset(bounds.center.x + arm, bounds.center.y),
+            STROKE_DP.dp.toPx() * 1.1f, StrokeCap.Round,
+        )
+        drawLine(
+            color, Offset(bounds.center.x, bounds.center.y - arm),
+            Offset(bounds.center.x, bounds.center.y + arm),
+            STROKE_DP.dp.toPx() * 1.1f, StrokeCap.Round,
+        )
+    }
+}
+
 /** An upward arrow: send the message. */
 @Composable
 fun SendIcon(modifier: Modifier = Modifier, tint: Color? = null) {

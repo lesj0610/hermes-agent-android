@@ -39,20 +39,31 @@ enum class LayoutMode { Auto, Phone, Tablet }
 enum class RailPanel { None, Activity, Cron, Gateway, Dashboard }
 
 /**
- * Reasoning efforts the gateway accepts, plus [Default] for "say nothing".
+ * The reasoning efforts the gateway accepts.
  *
- * Sending nothing is not the same as sending `none`: `none` disables reasoning
- * for the turn, while omitting the option leaves whatever the server is
- * configured to do. The picker has to be able to express both.
+ * Every one of them is a real value sent on the request. There is no "leave it
+ * to the server" entry: the control has to show the effort actually in force,
+ * and a label reading "server default" says nothing about what the next turn
+ * will do. [Medium] stands in wherever the effort is unknown — a fresh install,
+ * a stored value from an older build, or a model whose capabilities the gateway
+ * could not report.
  */
-enum class ReasoningEffort(val wire: String?) {
-    Default(null),
+enum class ReasoningEffort(val wire: String) {
     Off("none"),
     Minimal("minimal"),
     Low("low"),
     Medium("medium"),
     High("high"),
     XHigh("xhigh"),
+    ;
+
+    companion object {
+        val DEFAULT = Medium
+
+        /** Unknown or absent resolves to [DEFAULT] rather than to nothing. */
+        fun of(stored: String?): ReasoningEffort =
+            entries.firstOrNull { it.name == stored } ?: DEFAULT
+    }
 }
 
 /** The wire value the API sends for [ReasoningEffort.Off]. */
@@ -84,7 +95,7 @@ data class HermesSettings(
     val model: String = "",
     /** Provider slug for [model], when it came from the inventory. */
     val provider: String = "",
-    val reasoningEffort: ReasoningEffort = ReasoningEffort.Default,
+    val reasoningEffort: ReasoningEffort = ReasoningEffort.DEFAULT,
     /** BCP-47 tag, or empty to follow the system locale. See [Language]. */
     val language: String = "",
     val notifyApprovals: Boolean = true,
@@ -168,9 +179,7 @@ class SettingsRepository(private val context: Context) {
                 token = SecretStore.unseal(prefs[Keys.TOKEN_SEALED].orEmpty()),
                 model = prefs[Keys.MODEL].orEmpty(),
                 provider = prefs[Keys.PROVIDER].orEmpty(),
-                reasoningEffort = prefs[Keys.REASONING]
-                    ?.let { stored -> ReasoningEffort.entries.firstOrNull { it.name == stored } }
-                    ?: ReasoningEffort.Default,
+                reasoningEffort = ReasoningEffort.of(prefs[Keys.REASONING]),
                 language = prefs[Keys.LANGUAGE].orEmpty(),
                 notifyApprovals = prefs[Keys.NOTIFY_APPROVALS] ?: true,
                 notifyCompletion = prefs[Keys.NOTIFY_COMPLETION] ?: true,

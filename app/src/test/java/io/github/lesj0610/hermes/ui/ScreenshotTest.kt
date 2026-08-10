@@ -104,7 +104,7 @@ class ScreenshotTest {
                     items = transcript,
                     phase = RunPhase.Running("r1"),
                 ),
-                onSend = {}, onStop = {}, onDismissError = {},
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -120,7 +120,7 @@ class ScreenshotTest {
         capture("chat-empty", 411, 891) {
             ChatPane(
                 state = ChatState(),
-                onSend = {}, onStop = {}, onDismissError = {},
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
                 modifier = Modifier.fillMaxSize(),
                 modelLabel = "opus-5",
                 modelChoices = listOf(
@@ -147,7 +147,7 @@ class ScreenshotTest {
         capture("chat-tablet", 900, 800) {
             ChatPane(
                 state = ChatState(sessionId = "s1", items = transcript, phase = RunPhase.Running("r1")),
-                onSend = {}, onStop = {}, onDismissError = {},
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -229,7 +229,7 @@ class ScreenshotTest {
                 PaneDivider(onDelta = {}, onCommit = {})
                 ChatPane(
                     state = ChatState(sessionId = "s1", items = transcript, phase = RunPhase.Running("r1")),
-                    onSend = {}, onStop = {}, onDismissError = {},
+                    onSend = { _, _ -> }, onStop = {}, onDismissError = {},
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -265,7 +265,7 @@ class ScreenshotTest {
                         ),
                     ),
                 ),
-                onSend = {}, onStop = {}, onDismissError = {},
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
                 modifier = Modifier.fillMaxSize(),
             )
         }

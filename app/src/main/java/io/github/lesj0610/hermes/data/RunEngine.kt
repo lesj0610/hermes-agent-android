@@ -73,8 +73,14 @@ class RunEngine(
 
     // ── sending ───────────────────────────────────────────────────────────
 
-    fun send(prompt: String, model: String?, provider: String?, effort: String?) {
-        if (prompt.isBlank() || _state.value.isBusy) return
+    fun send(
+        prompt: String,
+        model: String?,
+        provider: String?,
+        effort: String?,
+        images: List<String> = emptyList(),
+    ) {
+        if ((prompt.isBlank() && images.isEmpty()) || _state.value.isBusy) return
 
         _state.update {
             it.copy(
@@ -84,7 +90,7 @@ class RunEngine(
         }
 
         streamJob = scope.launch {
-            val started = runCatching { api.startRun(prompt, _state.value.sessionId, model, provider, effort) }
+            val started = runCatching { api.startRun(prompt, _state.value.sessionId, model, provider, effort, images) }
                 .getOrElse { cause ->
                     _state.update { it.copy(phase = RunPhase.Idle, error = cause.toUiError()) }
                     return@launch

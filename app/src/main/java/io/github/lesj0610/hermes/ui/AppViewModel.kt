@@ -292,7 +292,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { graph.runEngine.openSession(sessionId) }
     }
 
-    fun send(prompt: String) {
+    fun send(prompt: String, images: List<String> = emptyList()) {
         viewModelScope.launch {
             val current = graph.settings.current()
             graph.runEngine.send(
@@ -300,6 +300,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 model = current.model.takeIf { it.isNotBlank() },
                 provider = current.provider.takeIf { it.isNotBlank() },
                 effort = current.reasoningEffort.wire,
+                images = images,
             )
         }
     }

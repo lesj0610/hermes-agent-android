@@ -171,13 +171,15 @@
     <string name="notif_running_body">Streaming from the gateway.</string>
     <string name="notif_finished_title">Run finished</string>
     <string name="notif_failed_title">Run failed</string>
-    <string name="effort_default">Reasoning: server default</string>
-    <string name="effort_off">Reasoning: off</string>
-    <string name="effort_minimal">Reasoning: minimal</string>
-    <string name="effort_low">Reasoning: low</string>
-    <string name="effort_medium">Reasoning: medium</string>
-    <string name="effort_high">Reasoning: high</string>
-    <string name="effort_xhigh">Reasoning: xhigh</string>
+    <string name="effort_off">Off</string>
+    <string name="effort_minimal">Minimal</string>
+    <string name="effort_low">Low</string>
+    <string name="effort_medium">Medium</string>
+    <string name="effort_high">High</string>
+    <string name="effort_xhigh">Xhigh</string>
     <string name="voice_dictate">Dictate a message</string>
     <string name="voice_conversation">Spoken conversation</string>
+    <string name="effort_title">Reasoning</string>
+    <string name="chat_attach">Attach an image</string>
+    <string name="chat_attachment_remove">Remove attachment</string>
 </resources>

@@ -7,6 +7,10 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.put
 
 /**
  * Wire types for the Hermes gateway api_server platform.
@@ -63,8 +67,51 @@ data class ModelOptions(val reasoning: ReasoningOption? = null)
 @Serializable
 data class ReasoningOption(val enabled: Boolean, val effort: String? = null)
 
+/**
+ * `content` is a bare string for a text-only turn and an array of parts when
+ * something is attached, which is the shape the OpenAI-compatible surfaces use.
+ *
+ * The run route passes the trailing message's content straight through to the
+ * agent without normalising it, and the agent runtime understands both shapes —
+ * so the typing here is deliberately loose rather than a sealed hierarchy that
+ * would have to be flattened again on the way out.
+ */
 @Serializable
-data class InputMessage(val role: String, val content: String)
+data class InputMessage(val role: String, val content: JsonElement) {
+    companion object {
+        fun text(role: String, text: String) = InputMessage(role, JsonPrimitive(text))
+
+        /**
+         * The text part comes first: some providers key off the leading part for
+         * the turn's intent, and an image with no preceding instruction reads as
+         * "describe this" whatever the user actually asked.
+         */
+        fun withImages(role: String, text: String, imageUrls: List<String>) = InputMessage(
+            role = role,
+            content = buildJsonArray {
+                if (text.isNotBlank()) {
+                    add(
+                        buildJsonObject {
+                            put("type", JsonPrimitive("text"))
+                            put("text", JsonPrimitive(text))
+                        },
+                    )
+                }
+                imageUrls.forEach { url ->
+                    add(
+                        buildJsonObject {
+                            put("type", JsonPrimitive("image_url"))
+                            put(
+                                "image_url",
+                                buildJsonObject { put("url", JsonPrimitive(url)) },
+                            )
+                        },
+                    )
+                }
+            },
+        )
+    }
+}
 
 // ── model inventory ───────────────────────────────────────────────────────
 

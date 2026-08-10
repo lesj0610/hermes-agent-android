@@ -191,6 +191,8 @@ class HermesApi(
         model: String?,
         provider: String? = null,
         effort: String? = null,
+        /** `data:` URLs. Inline because the gateway has no upload route. */
+        images: List<String> = emptyList(),
     ): RunStarted {
         val auth = bearer()
         return client.post(url("/v1/runs")) {
@@ -198,7 +200,13 @@ class HermesApi(
             contentType(ContentType.Application.Json)
             setBody(
                 RunRequest(
-                    input = listOf(InputMessage(role = "user", content = prompt)),
+                    input = listOf(
+                        if (images.isEmpty()) {
+                            InputMessage.text("user", prompt)
+                        } else {
+                            InputMessage.withImages("user", prompt, images)
+                        },
+                    ),
                     sessionId = sessionId,
                     model = model,
                     provider = provider,

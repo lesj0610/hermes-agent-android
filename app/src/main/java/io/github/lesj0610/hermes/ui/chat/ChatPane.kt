@@ -60,11 +60,29 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.ui.graphics.Color
 import io.github.lesj0610.hermes.ui.components.SendIcon
+import android.graphics.BitmapFactory
+import android.util.Base64
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import io.github.lesj0610.hermes.core.Attachments
+import io.github.lesj0610.hermes.ui.components.PlusIcon
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ChatPane(
     state: ChatState,
-    onSend: (String) -> Unit,
+    onSend: (String, List<String>) -> Unit,
     onStop: () -> Unit,
     onDismissError: () -> Unit,
     modifier: Modifier = Modifier,
@@ -75,7 +93,7 @@ fun ChatPane(
     modelLabel: String = "",
     modelChoices: List<ModelChoice> = emptyList(),
     onSelectModel: (ModelChoice) -> Unit = {},
-    effort: ReasoningEffort = ReasoningEffort.Default,
+    effort: ReasoningEffort = ReasoningEffort.DEFAULT,
     onSelectEffort: (ReasoningEffort) -> Unit = {},
     /**
      * Voice. Absent by default so a preview renders the transcript without a
@@ -163,9 +181,13 @@ fun ChatPane(
     }
 }
 
+/**
+ * The value alone. The word "reasoning" belongs on the menu that opens, not
+ * repeated on a chip that is already showing the setting it names — the chip
+ * has to fit beside the model on a phone.
+ */
 @Composable
 private fun effortLabel(effort: ReasoningEffort): String = when (effort) {
-    ReasoningEffort.Default -> stringResource(R.string.effort_default)
     ReasoningEffort.Off -> stringResource(R.string.effort_off)
     ReasoningEffort.Minimal -> stringResource(R.string.effort_minimal)
     ReasoningEffort.Low -> stringResource(R.string.effort_low)
@@ -293,7 +315,7 @@ private fun StopBar(stopping: Boolean, onStop: () -> Unit, modifier: Modifier = 
 @Composable
 private fun Composer(
     enabled: Boolean,
-    onSend: (String) -> Unit,
+    onSend: (String, List<String>) -> Unit,
     modelLabel: String,
     modelChoices: List<ModelChoice>,
     onSelectModel: (ModelChoice) -> Unit,
@@ -308,9 +330,31 @@ private fun Composer(
     onToggleConversation: () -> Unit,
 ) {
     val colors = LocalRunColors.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var draft by remember { mutableStateOf("") }
     var modelsOpen by remember { mutableStateOf(false) }
     var effortOpen by remember { mutableStateOf(false) }
+
+    // Held as data URLs rather than as Uris: the permission granted by the
+    // picker is not guaranteed to outlive the pick, and the request needs the
+    // bytes inline anyway.
+    var attachments by remember { mutableStateOf(listOf<String>()) }
+    val attachLabel = stringResource(R.string.chat_attach)
+    val removeLabel = stringResource(R.string.chat_attachment_remove)
+
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        // Decoding and re-encoding a photo is far too slow for the main thread.
+        scope.launch {
+            val encoded = withContext(Dispatchers.IO) {
+                uris.mapNotNull { Attachments.toDataUrl(context, it) }
+            }
+            attachments = attachments + encoded
+        }
+    }
     // Resolved out here: a semantics block is not a composable scope.
     val dictateLabel = stringResource(R.string.voice_dictate)
     val conversationLabel = stringResource(R.string.voice_conversation)
@@ -338,6 +382,23 @@ private fun Composer(
             .background(colors.panel)
             .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 6.dp),
     ) {
+        if (attachments.isNotEmpty()) {
+            LazyRow(
+                Modifier.fillMaxWidth().padding(start = 6.dp, top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                itemsIndexed(attachments) { index, dataUrl ->
+                    AttachmentThumbnail(
+                        dataUrl = dataUrl,
+                        removeLabel = removeLabel,
+                        onRemove = {
+                            attachments = attachments.filterIndexed { i, _ -> i != index }
+                        },
+                    )
+                }
+            }
+        }
+
         // No border of its own: the container already is the field's outline,
         // and a second one inside it reads as a box in a box.
         TextField(
@@ -362,6 +423,26 @@ private fun Composer(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            // A bordered square rather than a bare glyph: it is the only
+            // control in the row that opens something outside the app, and an
+            // outline is what makes it read as a button rather than as a mark
+            // beside the chips.
+            Box(
+                Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(1.dp, colors.line, RoundedCornerShape(12.dp))
+                    .clickable(enabled = enabled) {
+                        picker.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                        )
+                    }
+                    .semantics { contentDescription = attachLabel },
+                contentAlignment = Alignment.Center,
+            ) {
+                PlusIcon(modifier = Modifier.size(18.dp))
+            }
+
             Box {
                 // Inert rather than absent when the gateway cannot serve the
                 // inventory: the model in use is still worth showing.
@@ -399,9 +480,24 @@ private fun Composer(
                     onClick = { effortOpen = true },
                 )
                 DropdownMenu(expanded = effortOpen, onDismissRequest = { effortOpen = false }) {
+                    Text(
+                        text = stringResource(R.string.effort_title),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.muted,
+                        modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 2.dp),
+                    )
                     ReasoningEffort.entries.forEach { option ->
                         DropdownMenuItem(
-                            text = { Text(effortLabel(option)) },
+                            text = {
+                                Text(
+                                    text = effortLabel(option),
+                                    color = if (option == effort) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                )
+                            },
                             onClick = {
                                 onSelectEffort(option)
                                 effortOpen = false
@@ -430,12 +526,13 @@ private fun Composer(
             // an empty box means the next thing you do is talk, a filled one
             // means send. Two permanent buttons made the emptier of them look
             // disabled half the time.
-            val hasDraft = draft.isNotBlank()
+            val hasDraft = draft.isNotBlank() || attachments.isNotEmpty()
             FilledIconButton(
                 onClick = {
                     if (hasDraft) {
-                        onSend(draft)
+                        onSend(draft, attachments)
                         draft = ""
+                        attachments = emptyList()
                     } else {
                         onToggleConversation()
                     }
@@ -466,6 +563,64 @@ private fun Composer(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * One attached image, with the control that removes it.
+ *
+ * Decoded from the data URL rather than from the original Uri: that is what
+ * will actually be sent, so the thumbnail shows the downscaling that happened
+ * rather than the picture as it sits on disk.
+ */
+@Composable
+private fun AttachmentThumbnail(
+    dataUrl: String,
+    removeLabel: String,
+    onRemove: () -> Unit,
+) {
+    val colors = LocalRunColors.current
+    val bitmap = remember(dataUrl) {
+        runCatching {
+            val encoded = dataUrl.substringAfter("base64,", "")
+            val bytes = Base64.decode(encoded, Base64.NO_WRAP)
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+        }.getOrNull()
+    }
+
+    Box(Modifier.size(56.dp)) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
+            )
+        } else {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(colors.panelRaised),
+            )
+        }
+        Box(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(2.dp)
+                .size(18.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(colors.panel)
+                .clickable(onClick = onRemove)
+                .semantics { contentDescription = removeLabel },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "\u00d7",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }

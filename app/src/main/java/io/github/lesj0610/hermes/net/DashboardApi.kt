@@ -218,18 +218,47 @@ class DashboardApi(
      * matched by request id rather than by arrival order.
      */
     private suspend fun <T> rpcSession(block: suspend (RpcSession) -> T): T {
-        // The socket carries the same cookie as the REST calls, so make sure
-        // there is one: a 4401 close is much harder to read than a 401 body.
-        runCatching { activeProfile() }
-        val target = url("/api/ws").replaceFirst("http", "ws")
-        return client.webSocketSession(target).let { session ->
-            try {
-                block(RpcSession(session, json))
-            } finally {
-                runCatching { session.close() }
+        // The session cookie does not carry the upgrade: the server checks a
+        // query credential on /api/ws and refuses the handshake with a plain
+        // 403 before any close code is visible. Browsers cannot set headers on
+        // a WebSocket upgrade either, which is why the dashboard mints a
+        // one-shot ticket for exactly this — 30 seconds, single use, so it is
+        // minted per socket rather than cached.
+        val ticket = wsTicket()
+        val target = buildString {
+            append(url("/api/ws").replaceFirst("http", "ws"))
+            ticket?.let { append("?ticket=").append(it) }
+        }
+        val session = try {
+            client.webSocketSession(target)
+        } catch (cause: Exception) {
+            // The handshake failure alone reads as a network fault. Say which
+            // credential was missing, since that is the fixable part.
+            if (ticket == null) {
+                throw DashboardAuthException(
+                    "The dashboard did not issue a WebSocket ticket, so projects cannot be " +
+                        "reached. Sign in to the dashboard, or check that it runs with auth enabled.",
+                )
             }
+            throw cause
+        }
+        return try {
+            block(RpcSession(session, json))
+        } finally {
+            runCatching { session.close() }
         }
     }
+
+    /**
+     * A single-use credential for one WebSocket upgrade.
+     *
+     * Null when the dashboard has no ticket route — an ungated loopback
+     * dashboard authenticates the socket with its own process token instead,
+     * which no external client is given.
+     */
+    private suspend fun wsTicket(): String? = runCatching {
+        authed({ client.post(url("/api/auth/ws-ticket")) }) { body<WsTicketResponse>().ticket }
+    }.getOrNull()?.takeIf { it.isNotBlank() }
 
     suspend fun projects(): ProjectsPayload =
         rpcSession { it.call("projects.list", buildJsonObject { }) }

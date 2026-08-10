@@ -147,3 +147,15 @@ data class FsListResponse(
 
 @Serializable
 data class FsWriteTextRequest(val path: String, val content: String)
+
+/**
+ * `POST /api/auth/ws-ticket` — a one-shot credential for a WebSocket upgrade.
+ *
+ * The socket cannot carry the session cookie or an Authorization header, so the
+ * dashboard mints this instead. Single use, 30 seconds.
+ */
+@Serializable
+data class WsTicketResponse(
+    val ticket: String = "",
+    @SerialName("ttl_seconds") val ttlSeconds: Int = 0,
+)

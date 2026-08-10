@@ -31,23 +31,23 @@ fun railPanelOptions(
  * Destinations listed at the top of the navigation drawer, in order.
  *
  * Chat leads and is always present — it is where the app opens and returns to.
- * The rest appear only where the server behind them exists.
+ * Schedule appears only where the server behind it exists.
  *
  * Sessions is absent on purpose: the drawer body holds the session list itself,
  * so a row leading to a separate screen showing the same list would be a detour
  * through something the drawer already displays. Activity is absent because it
  * has no pane of its own — it is a view of the open transcript, already in the
  * centre.
+ *
+ * Gateway and workspace are absent because they are settings, not destinations:
+ * server state, toolsets, profiles and skills are things you configure and then
+ * check on, and as top-level rows they put two read-only lists at the same level
+ * as the conversation. They live under Settings, which is reachable from the
+ * drawer's bottom row. The rail can still show either one beside the transcript.
  */
-fun drawerDestinations(
-    showCron: Boolean,
-    showGateway: Boolean,
-    showDashboard: Boolean = false,
-): List<Pane> = buildList {
+fun drawerDestinations(showCron: Boolean): List<Pane> = buildList {
     add(Pane.Chat)
     if (showCron) add(Pane.Cron)
-    if (showGateway) add(Pane.Gateway)
-    if (showDashboard) add(Pane.Dashboard)
 }
 
 /**

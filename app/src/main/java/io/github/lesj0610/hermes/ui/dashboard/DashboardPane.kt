@@ -52,36 +52,8 @@ fun DashboardPane(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = LocalRunColors.current
-
     if (state !is DashboardState.Ready) {
-        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(
-                Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = when (state) {
-                        DashboardState.Off -> stringResource(R.string.dashboard_not_configured)
-                        DashboardState.Connecting -> stringResource(R.string.connection_checking)
-                        is DashboardState.Failed -> stringResource(R.string.dashboard_failed)
-                        DashboardState.Ready -> ""
-                    },
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                if (state is DashboardState.Failed && state.message.isNotBlank()) {
-                    Text(
-                        text = state.message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.muted,
-                    )
-                }
-                if (state is DashboardState.Failed) {
-                    TextButton(onClick = onRetry) { Text(stringResource(R.string.dashboard_retry)) }
-                }
-            }
-        }
+        DashboardUnavailable(state, onRetry, modifier.fillMaxSize())
         return
     }
 
@@ -92,19 +64,74 @@ fun DashboardPane(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Group(stringResource(R.string.dashboard_profiles)) {
-            // The server distinguishes the sticky default from what the running
-            // process is scoped to, and so does this: switching one does not
-            // retarget the other, and hiding that would be a lie.
-            active?.let {
+        ProfilesCard(profiles, active, onSelectProfile)
+        DashboardSkillsCard(skills, onToggleSkill)
+    }
+}
+
+/**
+ * Why the dashboard has nothing to show, and what to do about it.
+ *
+ * Shared with settings so a dashboard that is off or unreachable says the same
+ * thing wherever its content would have been.
+ */
+@Composable
+fun DashboardUnavailable(
+    state: DashboardState,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalRunColors.current
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Column(
+            Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                text = when (state) {
+                    DashboardState.Off -> stringResource(R.string.dashboard_not_configured)
+                    DashboardState.Connecting -> stringResource(R.string.connection_checking)
+                    is DashboardState.Failed -> stringResource(R.string.dashboard_failed)
+                    DashboardState.Ready -> ""
+                },
+                style = MaterialTheme.typography.titleSmall,
+            )
+            if (state is DashboardState.Failed && state.message.isNotBlank()) {
                 Text(
-                    text = stringResource(R.string.dashboard_profile_running, it.current),
+                    text = state.message,
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.muted,
-                    modifier = Modifier.padding(bottom = 6.dp),
                 )
             }
-            profiles.forEachIndexed { index, profile ->
+            if (state is DashboardState.Failed) {
+                TextButton(onClick = onRetry) { Text(stringResource(R.string.dashboard_retry)) }
+            }
+        }
+    }
+}
+
+/** The profiles the dashboard offers, and which one new work will use. */
+@Composable
+fun ProfilesCard(
+    profiles: List<Profile>,
+    active: ActiveProfile?,
+    onSelectProfile: (Profile) -> Unit,
+) {
+    val colors = LocalRunColors.current
+    Group(stringResource(R.string.dashboard_profiles)) {
+        // The server distinguishes the sticky default from what the running
+        // process is scoped to, and so does this: switching one does not
+        // retarget the other, and hiding that would be a lie.
+        active?.let {
+            Text(
+                text = stringResource(R.string.dashboard_profile_running, it.current),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.muted,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
+        profiles.forEachIndexed { index, profile ->
                 if (index > 0) HorizontalDivider(color = colors.line)
                 val isActive = profile.name == active?.active
                 Row(
@@ -137,9 +164,17 @@ fun DashboardPane(
                     }
                 }
             }
-        }
+    }
+}
 
-        Group(stringResource(R.string.dashboard_skills, skills.count { it.enabled })) {
+/** Skills the dashboard can turn on and off. */
+@Composable
+fun DashboardSkillsCard(
+    skills: List<DashboardSkill>,
+    onToggleSkill: (DashboardSkill) -> Unit,
+) {
+    val colors = LocalRunColors.current
+    Group(stringResource(R.string.dashboard_skills, skills.count { it.enabled })) {
             skills.forEachIndexed { index, skill ->
                 if (index > 0) HorizontalDivider(color = colors.line)
                 Row(
@@ -167,7 +202,6 @@ fun DashboardPane(
                     )
                 }
             }
-        }
     }
 }
 

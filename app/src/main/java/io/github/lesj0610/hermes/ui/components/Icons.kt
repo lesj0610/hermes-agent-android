@@ -360,6 +360,30 @@ fun SearchIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     }
 }
 
+/**
+ * A single chevron. Points right by default — "there is a page behind this
+ * row" — and left for the way back out of one.
+ */
+@Composable
+fun ChevronIcon(modifier: Modifier = Modifier, tint: Color? = null, pointLeft: Boolean = false) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        // Narrower than the icon box: a chevron drawn to the full width reads
+        // as a shallow arrow rather than as a pointer.
+        val x = bounds.width * 0.28f
+        val tipX = if (pointLeft) bounds.center.x - x else bounds.center.x + x
+        val baseX = if (pointLeft) bounds.center.x + x else bounds.center.x - x
+        val y = bounds.height * 0.26f
+        val path = Path().apply {
+            moveTo(baseX, bounds.center.y - y)
+            lineTo(tipX, bounds.center.y)
+            lineTo(baseX, bounds.center.y + y)
+        }
+        drawPath(path, color, style = iconStroke())
+    }
+}
+
 /** A camera body with a lens: take a picture now. */
 @Composable
 fun CameraIcon(modifier: Modifier = Modifier, tint: Color? = null) {

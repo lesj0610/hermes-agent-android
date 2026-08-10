@@ -35,6 +35,10 @@ import io.github.lesj0610.hermes.ui.theme.LocalRunColors
  * Toolsets and skills live here rather than in panels of their own: they are
  * read-only lists with nothing to act on, which makes them context about the
  * server rather than a destination worth navigating to.
+ *
+ * The three cards are also exposed individually, because settings shows them as
+ * separate pages behind separate rows. Sharing the composables rather than
+ * copying them keeps one rendering of each, so a fix lands in both places.
  */
 @Composable
 fun GatewayPane(
@@ -43,8 +47,6 @@ fun GatewayPane(
     skills: List<Skill>,
     modifier: Modifier = Modifier,
 ) {
-    val colors = LocalRunColors.current
-
     Column(
         modifier
             .fillMaxSize()
@@ -52,28 +54,44 @@ fun GatewayPane(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Card(stringResource(R.string.gateway_state)) {
-            val running = health?.gatewayBusy == true
-            Row(
-                Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StatusDot(if (running) colors.running else colors.completed, size = 7)
-                Text(
-                    text = health?.gatewayState ?: health?.status.orEmpty(),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-            }
-            Field(stringResource(R.string.gateway_active_agents), health?.activeAgents?.toString())
-            Field(stringResource(R.string.settings_version), health?.version)
-            Field(stringResource(R.string.gateway_pid), health?.pid?.toString())
-            // Present only while the gateway is winding down; noise otherwise.
-            health?.exitReason?.takeIf { it.isNotBlank() }?.let {
-                Field(stringResource(R.string.gateway_exit_reason), it)
-            }
-        }
+        GatewayStateCard(health)
+        ToolsetsCard(toolsets)
+        AgentSkillsCard(skills)
+    }
+}
 
+/** What the gateway process is doing right now. */
+@Composable
+fun GatewayStateCard(health: DetailedHealth?) {
+    val colors = LocalRunColors.current
+    Card(stringResource(R.string.gateway_state)) {
+        val running = health?.gatewayBusy == true
+        Row(
+            Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StatusDot(if (running) colors.running else colors.completed, size = 7)
+            Text(
+                text = health?.gatewayState ?: health?.status.orEmpty(),
+                style = MaterialTheme.typography.titleSmall,
+            )
+        }
+        Field(stringResource(R.string.gateway_active_agents), health?.activeAgents?.toString())
+        Field(stringResource(R.string.settings_version), health?.version)
+        Field(stringResource(R.string.gateway_pid), health?.pid?.toString())
+        // Present only while the gateway is winding down; noise otherwise.
+        health?.exitReason?.takeIf { it.isNotBlank() }?.let {
+            Field(stringResource(R.string.gateway_exit_reason), it)
+        }
+    }
+}
+
+/** The tool groups the agent can reach, and whether each is live. */
+@Composable
+fun ToolsetsCard(toolsets: List<Toolset>) {
+    val colors = LocalRunColors.current
+    run {
         val enabledCount = toolsets.count { it.enabled }
         Card(pluralStringResource(R.plurals.gateway_toolsets, enabledCount, enabledCount)) {
             if (toolsets.isEmpty()) {
@@ -121,22 +139,27 @@ fun GatewayPane(
                 }
             }
         }
+    }
+}
 
-        Card(pluralStringResource(R.plurals.gateway_skills, skills.size, skills.size)) {
-            if (skills.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.gateway_none),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.muted,
-                )
-            }
+/** Skills the agent itself reports, as a plain list — nothing to act on here. */
+@Composable
+fun AgentSkillsCard(skills: List<Skill>) {
+    val colors = LocalRunColors.current
+    Card(pluralStringResource(R.plurals.gateway_skills, skills.size, skills.size)) {
+        if (skills.isEmpty()) {
             Text(
-                text = skills.joinToString("  ·  ") { it.name },
+                text = stringResource(R.string.gateway_none),
                 style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace,
                 color = colors.muted,
             )
         }
+        Text(
+            text = skills.joinToString("  ·  ") { it.name },
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            color = colors.muted,
+        )
     }
 }
 

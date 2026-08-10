@@ -66,6 +66,7 @@ import io.github.lesj0610.hermes.ui.components.RailHost
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.data.TranscriptItem
+import io.github.lesj0610.hermes.net.ModelChoice
 import io.github.lesj0610.hermes.ui.chat.ApprovalSheet
 import io.github.lesj0610.hermes.ui.chat.ChatPane
 import io.github.lesj0610.hermes.ui.cron.CronPane
@@ -225,7 +226,7 @@ fun HermesShell(
         // conversation is still there and one tap away.
         val sheetWidth = (maxWidth * 0.82f).coerceAtMost(340.dp)
 
-        val destinations = drawerDestinations(showCron, showGateway, showDashboard)
+        val destinations = drawerDestinations(showCron)
         val (connColor, connLabel) = connectionStatus(connection)
 
         // What the next turn will actually run on: the override if one is set,
@@ -239,6 +240,27 @@ fun HermesShell(
         val activeModel = settings.model
             .ifBlank { serverModel }
             .ifBlank { models.singleOrNull()?.id.orEmpty() }
+
+        // The composer's picker, with /v1/models standing in when the provider
+        // inventory is unavailable.
+        //
+        // The inventory route builds provider catalogues, fetches pricing and
+        // probes custom endpoints — it is slow and it is allowed to fail, and
+        // when it did the composer had no models to offer at all. /v1/models is
+        // the route that proved the connection a moment earlier, so if anything
+        // is listable, it is listed.
+        val chatModels = if (modelChoices.isNotEmpty()) {
+            modelChoices
+        } else {
+            models.map { entry ->
+                ModelChoice(
+                    provider = "",
+                    providerLabel = entry.ownedBy.orEmpty(),
+                    model = entry.id,
+                    reasoning = false,
+                )
+            }
+        }
 
         // Docked or floating, the same contents. Only the frame differs.
         val drawer: @Composable () -> Unit = {
@@ -333,16 +355,10 @@ fun HermesShell(
                             }
                         }
                     },
-                    actions = {
-                        activeModel.takeIf { it.isNotBlank() }?.let { model ->
-                            Text(
-                                text = model,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(end = 12.dp),
-                            )
-                        }
-                    },
+                    // No model here: the composer's chip already names it, next
+                    // to the reasoning level it applies to, which is where the
+                    // decision is actually made. A second copy in the corner
+                    // said the same thing further from the point of use.
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background,
                     ),
@@ -384,6 +400,16 @@ fun HermesShell(
                                     permissions = permissions,
                                     onRequestNotifications = onRequestNotifications,
                                     onRequestBackground = onRequestBackground,
+                                    activeModel = activeModel,
+                                    health = health,
+                                    toolsets = toolsets,
+                                    agentSkills = skills,
+                                    profiles = profiles,
+                                    activeProfile = activeProfile,
+                                    dashboardSkills = dashboardSkills,
+                                    onSelectProfile = { viewModel.setActiveProfile(it.name) },
+                                    onToggleSkill = viewModel::toggleSkill,
+                                    onRetryDashboard = viewModel::refreshDashboard,
                                 )
                             } else {
                                 ChatPane(
@@ -392,7 +418,7 @@ fun HermesShell(
                                     onStop = viewModel::stop,
                                     onDismissError = viewModel::dismissError,
                                     modelLabel = activeModel,
-                                    modelChoices = modelChoices,
+                                    modelChoices = chatModels,
                                     onSelectModel = viewModel::setModelChoice,
                                     effort = settings.reasoningEffort,
                                     onSelectEffort = viewModel::setReasoningEffort,
@@ -453,7 +479,7 @@ fun HermesShell(
                         onDismissError = viewModel::dismissError,
                         modifier = content,
                         modelLabel = activeModel,
-                        modelChoices = modelChoices,
+                        modelChoices = chatModels,
                         onSelectModel = viewModel::setModelChoice,
                         effort = settings.reasoningEffort,
                         onSelectEffort = viewModel::setReasoningEffort,
@@ -506,6 +532,16 @@ fun HermesShell(
                         onRequestNotifications = onRequestNotifications,
                         onRequestBackground = onRequestBackground,
                         modifier = content,
+                        activeModel = activeModel,
+                        health = health,
+                        toolsets = toolsets,
+                        agentSkills = skills,
+                        profiles = profiles,
+                        activeProfile = activeProfile,
+                        dashboardSkills = dashboardSkills,
+                        onSelectProfile = { viewModel.setActiveProfile(it.name) },
+                        onToggleSkill = viewModel::toggleSkill,
+                        onRetryDashboard = viewModel::refreshDashboard,
                     )
                 }
             }

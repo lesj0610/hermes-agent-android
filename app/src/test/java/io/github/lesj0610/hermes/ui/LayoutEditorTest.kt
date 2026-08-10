@@ -79,9 +79,13 @@ class LayoutEditorTest {
         // Reachability no longer depends on window size: the drawer carries the
         // same destinations everywhere, which is what fixed panels being
         // stranded in a two-pane window.
+        //
+        // Gateway and workspace are not here: they are settings — read-only
+        // server state and configuration you check on — and live under the
+        // settings row rather than beside the conversation.
         assertEquals(
-            listOf(Pane.Chat, Pane.Cron, Pane.Gateway, Pane.Dashboard),
-            drawerDestinations(showCron = true, showGateway = true, showDashboard = true),
+            listOf(Pane.Chat, Pane.Cron),
+            drawerDestinations(showCron = true),
         )
     }
 
@@ -113,16 +117,13 @@ class LayoutEditorTest {
 
     @Test
     fun `the drawer drops panels this gateway cannot serve`() {
-        assertEquals(
-            listOf(Pane.Chat, Pane.Gateway),
-            drawerDestinations(showCron = false, showGateway = true, showDashboard = false),
-        )
+        assertEquals(listOf(Pane.Chat), drawerDestinations(showCron = false))
     }
 
     @Test
     fun `chat survives a gateway that supports nothing else`() {
         // With every capability absent the drawer must still lead somewhere.
-        assertEquals(listOf(Pane.Chat), drawerDestinations(showCron = false, showGateway = false))
+        assertEquals(listOf(Pane.Chat), drawerDestinations(showCron = false))
     }
 
     @Test

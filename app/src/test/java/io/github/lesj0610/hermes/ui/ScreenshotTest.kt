@@ -19,9 +19,20 @@ import io.github.lesj0610.hermes.data.PendingApproval
 import io.github.lesj0610.hermes.data.RunPhase
 import io.github.lesj0610.hermes.data.ToolState
 import io.github.lesj0610.hermes.data.TranscriptItem
+import io.github.lesj0610.hermes.core.HermesSettings
+import io.github.lesj0610.hermes.core.LayoutMode
 import io.github.lesj0610.hermes.core.ReasoningEffort
+import io.github.lesj0610.hermes.net.ActiveProfile
+import io.github.lesj0610.hermes.net.DashboardSkill
+import io.github.lesj0610.hermes.net.DetailedHealth
 import io.github.lesj0610.hermes.net.ModelChoice
+import io.github.lesj0610.hermes.net.ModelEntry
+import io.github.lesj0610.hermes.net.Profile
 import io.github.lesj0610.hermes.net.SessionSummary
+import io.github.lesj0610.hermes.net.Skill
+import io.github.lesj0610.hermes.net.Toolset
+import io.github.lesj0610.hermes.ui.settings.PermissionState
+import io.github.lesj0610.hermes.ui.settings.SettingsPane
 import io.github.lesj0610.hermes.ui.chat.ChatPane
 import io.github.lesj0610.hermes.ui.components.ChatIcon
 import io.github.lesj0610.hermes.ui.components.ClockIcon
@@ -245,6 +256,51 @@ class ScreenshotTest {
                 selectedSessionId = null,
                 onSelect = {},
                 onClose = {},
+            )
+        }
+    }
+
+    /**
+     * The settings hub, which is the whole point of the restructure: every
+     * subject one row, each row showing what it is currently set to. If a row
+     * has to be opened to find out what it holds, this render will show it.
+     */
+    @Test
+    fun settingsHub() {
+        capture("settings", 411, 891) {
+            SettingsPane(
+                settings = HermesSettings(
+                    baseUrl = "http://192.168.0.20:8642",
+                    layoutMode = LayoutMode.Auto,
+                ),
+                connection = Connection.Connected("2.4.1", 38),
+                dashboardState = DashboardState.Ready,
+                models = listOf(ModelEntry(id = "opus-5")),
+                permissions = PermissionState(canNotify = true, batteryExempt = false),
+                onSaveServer = { _, _, _ -> },
+                onSaveDashboard = { _, _, _, _ -> },
+                onSelectModel = {},
+                onSelectLanguage = {},
+                onToggleApprovals = {},
+                onToggleCompletion = {},
+                onSelectLayoutMode = {},
+                onSetUiScale = {},
+                onRequestNotifications = {},
+                onRequestBackground = {},
+                activeModel = "opus-5",
+                health = DetailedHealth(status = "ok", version = "2.4.1", gatewayState = "running"),
+                toolsets = listOf(
+                    Toolset(name = "bash", enabled = true),
+                    Toolset(name = "browser", enabled = false),
+                    Toolset(name = "files", enabled = true),
+                ),
+                agentSkills = listOf(Skill("research"), Skill("review")),
+                profiles = listOf(Profile("default"), Profile("vllm")),
+                activeProfile = ActiveProfile(active = "vllm", current = "vllm"),
+                dashboardSkills = listOf(
+                    DashboardSkill(name = "research", enabled = true),
+                    DashboardSkill(name = "excel", enabled = false),
+                ),
             )
         }
     }

@@ -481,23 +481,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * Re-reads the session list.
      *
-     * Called from the moments that make it stale rather than from a button:
-     * the app coming back to the foreground, the drawer opening, and a run
-     * finishing — a run is what changes a title, a preview and the ordering,
-     * and it is the one moment the list is guaranteed to be wrong.
+     * [silent] leaves the pull indicator alone. A refresh nobody asked for
+     * should not put a spinner over the list they are reading — that is what
+     * made the drawer feel slow when opening it triggered one.
      *
-     * Cheap enough to call on all three: one request, and the server sorts and
-     * filters it. Overlapping calls are dropped rather than queued, so a pull
-     * during an automatic refresh does not fire a second one.
+     * Overlapping calls are dropped rather than queued, so a pull landing on
+     * top of a background read does not fire a second request.
      */
-    fun refreshSessions() {
-        if (_sessionsRefreshing.value) return
+    fun refreshSessions(silent: Boolean = false) {
+        if (_sessionsRefreshing.value || _sessionsLoading) return
         viewModelScope.launch {
-            _sessionsRefreshing.value = true
+            _sessionsLoading = true
+            if (!silent) _sessionsRefreshing.value = true
             loadSessions()
             _sessionsRefreshing.value = false
+            _sessionsLoading = false
         }
     }
+
+    /** Guards against overlap for silent reads too, which never set the flag. */
+    private var _sessionsLoading = false
 
     // ── session actions ───────────────────────────────────────────────────
 

@@ -150,21 +150,23 @@ fun HermesShell(
         if (SystemPermissions.canRecordAudio(context)) viewModel.dictate() else onRequestMicrophone()
     }
 
-    // The session list re-reads itself at the three moments it goes stale,
-    // which is why there is no refresh button anywhere.
+    // The list re-reads on launch and on the pull; there is no refresh button.
     //
-    // Coming back to the foreground: the desktop, a cron job or another phone
-    // may have been working the whole time this app was away.
+    // Opening the drawer used to refresh too, and that was wrong: it put a
+    // network round trip in front of a gesture whose whole point is being
+    // instant, so the list arrived after the drawer had already been read.
     LifecycleResumeEffect(Unit) {
         viewModel.refreshSessions()
         onPauseOrDispose { }
     }
 
-    // A run ending is what rewrites a title, a preview and the ordering, so the
-    // list is guaranteed wrong at exactly that moment. Keyed on the phase type
-    // rather than the value, so streaming updates inside one run do not refire.
+    // A run ending is kept, but silently — no indicator, no gesture waiting on
+    // it. This is not a refresh the user asked for; it is the list catching up
+    // with something they just did. Without it a conversation started here
+    // never appears in the drawer until the next launch, which is the first
+    // thing anyone would look for.
     val runIdle = chat.phase is RunPhase.Idle
-    LaunchedEffect(runIdle) { if (runIdle) viewModel.refreshSessions() }
+    LaunchedEffect(runIdle) { if (runIdle) viewModel.refreshSessions(silent = true) }
 
     // Search takes the whole surface rather than a slot in the drawer, so it is
     // a mode of the shell rather than of any pane.
@@ -257,11 +259,6 @@ fun HermesShell(
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         val drawerScope = rememberCoroutineScope()
         val closeDrawer = { drawerScope.launch { drawerState.close() }; Unit }
-
-        // Opening the drawer is someone asking to look at the list.
-        LaunchedEffect(drawerState.isOpen) {
-            if (drawerState.isOpen) viewModel.refreshSessions()
-        }
 
         // Undocked, the drawer covers part of the window and no more — the
         // transcript stays visible behind the scrim, which is what tells you the

@@ -38,6 +38,7 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -74,6 +75,7 @@ import io.github.lesj0610.hermes.ui.components.HamburgerIcon
 import io.github.lesj0610.hermes.ui.components.RailHost
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lesj0610.hermes.R
+import io.github.lesj0610.hermes.data.RunPhase
 import io.github.lesj0610.hermes.data.TranscriptItem
 import io.github.lesj0610.hermes.net.ModelChoice
 import io.github.lesj0610.hermes.net.SessionSummary
@@ -112,6 +114,7 @@ fun HermesShell(
     val projectsBusy by viewModel.projectsBusy.collectAsStateWithLifecycle()
     val projectsError by viewModel.projectsError.collectAsStateWithLifecycle()
     val sessionNotice by viewModel.sessionNotice.collectAsStateWithLifecycle()
+    val sessionsRefreshing by viewModel.sessionsRefreshing.collectAsStateWithLifecycle()
     val artifactScan by viewModel.artifactScan.collectAsStateWithLifecycle()
     val voiceState by viewModel.voiceState.collectAsStateWithLifecycle()
     val conversing by viewModel.voiceConversing.collectAsStateWithLifecycle()
@@ -146,6 +149,22 @@ fun HermesShell(
     val dictate = {
         if (SystemPermissions.canRecordAudio(context)) viewModel.dictate() else onRequestMicrophone()
     }
+
+    // The session list re-reads itself at the three moments it goes stale,
+    // which is why there is no refresh button anywhere.
+    //
+    // Coming back to the foreground: the desktop, a cron job or another phone
+    // may have been working the whole time this app was away.
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshSessions()
+        onPauseOrDispose { }
+    }
+
+    // A run ending is what rewrites a title, a preview and the ordering, so the
+    // list is guaranteed wrong at exactly that moment. Keyed on the phase type
+    // rather than the value, so streaming updates inside one run do not refire.
+    val runIdle = chat.phase is RunPhase.Idle
+    LaunchedEffect(runIdle) { if (runIdle) viewModel.refreshSessions() }
 
     // Search takes the whole surface rather than a slot in the drawer, so it is
     // a mode of the shell rather than of any pane.
@@ -238,6 +257,11 @@ fun HermesShell(
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         val drawerScope = rememberCoroutineScope()
         val closeDrawer = { drawerScope.launch { drawerState.close() }; Unit }
+
+        // Opening the drawer is someone asking to look at the list.
+        LaunchedEffect(drawerState.isOpen) {
+            if (drawerState.isOpen) viewModel.refreshSessions()
+        }
 
         // Undocked, the drawer covers part of the window and no more — the
         // transcript stays visible behind the scrim, which is what tells you the
@@ -341,6 +365,8 @@ fun HermesShell(
                 sessions = sessions,
                 selectedSessionId = chat.sessionId,
                 onSessionAction = onSessionAction,
+                refreshing = sessionsRefreshing,
+                onRefresh = viewModel::refreshSessions,
                 onSession = { session ->
                     viewModel.openSession(session.id)
                     viewModel.show(Pane.Chat)

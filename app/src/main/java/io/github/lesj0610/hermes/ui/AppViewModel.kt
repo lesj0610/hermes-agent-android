@@ -97,6 +97,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _sessions = MutableStateFlow<List<SessionSummary>>(emptyList())
     val sessions: StateFlow<List<SessionSummary>> = _sessions.asStateFlow()
 
+    /** True while the list is being re-read, for the pull-to-refresh indicator. */
+    private val _sessionsRefreshing = MutableStateFlow(false)
+    val sessionsRefreshing: StateFlow<Boolean> = _sessionsRefreshing.asStateFlow()
+
     /** One-shot message about a session action, shown as a snackbar. */
     private val _sessionNotice = MutableStateFlow<String?>(null)
     val sessionNotice: StateFlow<String?> = _sessionNotice.asStateFlow()
@@ -471,6 +475,27 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     cause.message ?: cause::class.simpleName.orEmpty(),
                 )
             }
+        }
+    }
+
+    /**
+     * Re-reads the session list.
+     *
+     * Called from the moments that make it stale rather than from a button:
+     * the app coming back to the foreground, the drawer opening, and a run
+     * finishing — a run is what changes a title, a preview and the ordering,
+     * and it is the one moment the list is guaranteed to be wrong.
+     *
+     * Cheap enough to call on all three: one request, and the server sorts and
+     * filters it. Overlapping calls are dropped rather than queued, so a pull
+     * during an automatic refresh does not fire a second one.
+     */
+    fun refreshSessions() {
+        if (_sessionsRefreshing.value) return
+        viewModelScope.launch {
+            _sessionsRefreshing.value = true
+            loadSessions()
+            _sessionsRefreshing.value = false
         }
     }
 

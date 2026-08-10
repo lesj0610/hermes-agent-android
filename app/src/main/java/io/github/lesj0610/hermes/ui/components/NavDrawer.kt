@@ -15,6 +15,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -80,6 +81,9 @@ fun DrawerContent(
     sessions: List<SessionSummary>,
     selectedSessionId: String?,
     onSession: (SessionSummary) -> Unit,
+    /** Drives the pull-to-refresh indicator over the session list. */
+    refreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
     /** Absent in previews and screenshots, where there is nothing to act on. */
     onSessionAction: ((SessionSummary, SessionAction) -> Unit)? = null,
     onSearch: () -> Unit,
@@ -163,7 +167,17 @@ fun DrawerContent(
                 )
             }
         } else {
-            LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+            // Pull rather than a button. The list re-reads itself when the app
+            // returns, when this drawer opens and when a run ends, so a
+            // permanent control would sit there unused; the pull is the escape
+            // hatch for the case those three miss — someone else's change on
+            // another client.
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            ) {
+            LazyColumn(Modifier.fillMaxSize()) {
                 items(sessions, key = { it.id }) { session ->
                     SessionRow(
                         session = session,
@@ -174,6 +188,7 @@ fun DrawerContent(
                         },
                     )
                 }
+            }
             }
         }
 

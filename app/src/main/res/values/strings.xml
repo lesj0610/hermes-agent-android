@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Product name; identical in every locale. Matches the Play listing title
-         minus the "for Android" suffix, which brand guidelines keep out of the
-         app name itself. -->
-    <string name="app_name" translatable="false">Hermes Agent</string>
+    <!-- app_name is defined in app/build.gradle.kts via resValue, so the debug
+         build can carry its own label and sit beside the release install. -->
 
     <!-- Navigation -->
     <string name="nav_chat">Chat</string>

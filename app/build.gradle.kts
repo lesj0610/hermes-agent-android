@@ -24,6 +24,9 @@ android {
         targetSdk = 37
         versionCode = 6
         versionName = "0.6"
+        // Product name, identical in every locale. Lives here rather than in
+        // strings.xml so the debug variant can override it.
+        resValue("string", "app_name", "Hermes Agent")
     }
 
     signingConfigs {
@@ -38,6 +41,16 @@ android {
     }
 
     buildTypes {
+        debug {
+            // A separate package id so the dev build installs *beside* the
+            // release one instead of replacing it. Without this every UI tweak
+            // meant uninstalling the working app, and the two are signed with
+            // different keys so they cannot overwrite each other anyway.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-dev"
+            resValue("string", "app_name", "Hermes Agent dev")
+        }
+
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -66,11 +79,29 @@ android {
       aidl = false
       buildConfig = false
       shaders = false
+      // Needed for the app_name resValue that lets the debug build carry its
+      // own label.
+      resValues = true
     }
 
     packaging {
       resources {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
+      }
+    }
+
+    testOptions {
+      unitTests {
+        // Robolectric needs the merged resources to inflate anything.
+        isIncludeAndroidResources = true
+        all {
+          it.systemProperty("robolectric.graphicsMode", "NATIVE")
+          // Roborazzi reads this from the test JVM. A Gradle -P flag never
+          // reaches it without the Roborazzi plugin, which this project does
+          // not apply — these screenshots are a look-at tool, not an assertion,
+          // so they are always written rather than compared.
+          it.systemProperty("roborazzi.test.record", "true")
+        }
       }
     }
 }
@@ -108,7 +139,9 @@ dependencies {
   implementation(libs.ktor.serialization.kotlinx.json)
   implementation(libs.kotlinx.serialization.json)
 
-  // Tooling
+  // Tooling. The preview annotations are compile-time only and live in the
+  // debug source set, so nothing here reaches a release build.
+  implementation(libs.androidx.compose.ui.tooling.preview)
   debugImplementation(libs.androidx.compose.ui.tooling)
   // Instrumented tests
   androidTestImplementation(libs.androidx.compose.ui.test.junit4)
@@ -117,6 +150,13 @@ dependencies {
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
+
+  // Screen rendering without a device or emulator.
+  testImplementation(libs.robolectric)
+  testImplementation(libs.roborazzi)
+  testImplementation(libs.roborazzi.compose)
+  testImplementation(libs.roborazzi.rule)
+  testImplementation(libs.androidx.compose.ui.test.junit4)
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)

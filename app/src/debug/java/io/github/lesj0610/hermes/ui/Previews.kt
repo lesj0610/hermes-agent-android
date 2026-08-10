@@ -133,6 +133,7 @@ private fun PreviewDrawer() = Frame {
         sessions = sampleSessions,
         selectedSessionId = "1",
         onSession = {},
+        onSearch = {},
         onNewChat = {},
         settingsSelected = false,
         onSettings = {},

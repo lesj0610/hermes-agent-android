@@ -1,6 +1,5 @@
 package io.github.lesj0610.hermes.ui.components
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,30 +10,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.core.RailPanel
@@ -92,6 +80,7 @@ fun DrawerContent(
     sessions: List<SessionSummary>,
     selectedSessionId: String?,
     onSession: (SessionSummary) -> Unit,
+    onSearch: () -> Unit,
     onNewChat: () -> Unit,
     settingsSelected: Boolean,
     onSettings: () -> Unit,
@@ -111,23 +100,6 @@ fun DrawerContent(
     val pinLabel = stringResource(
         if (pinned == true) R.string.drawer_unpin else R.string.drawer_pin,
     )
-
-    // The field is summoned rather than permanent: it is used occasionally, and
-    // a text box parked above the list costs a row of height on every open.
-    var searching by remember { mutableStateOf(false) }
-    var query by remember { mutableStateOf("") }
-    // Titles are often absent on fresh sessions, so the preview line has to be
-    // searchable too or half the list is unreachable by name.
-    val visible = remember(sessions, query) {
-        if (query.isBlank()) {
-            sessions
-        } else {
-            sessions.filter { session ->
-                listOfNotNull(session.title, session.preview, session.model)
-                    .any { it.contains(query, ignoreCase = true) }
-            }
-        }
-    }
 
     Column(Modifier.fillMaxWidth()) {
         Row(
@@ -152,18 +124,8 @@ fun DrawerContent(
                     )
                 }
             }
-            IconButton(
-                onClick = {
-                    searching = !searching
-                    // Leaving a filter applied behind a hidden field would make
-                    // the list look like it had lost sessions.
-                    if (!searching) query = ""
-                },
-            ) {
-                SearchIcon(
-                    tint = if (searching) MaterialTheme.colorScheme.primary else colors.muted,
-                    modifier = Modifier.semantics { contentDescription = searchLabel },
-                )
+            IconButton(onClick = onSearch) {
+                SearchIcon(modifier = Modifier.semantics { contentDescription = searchLabel })
             }
             if (pinned != null) {
                 IconButton(onClick = onTogglePin) {
@@ -185,28 +147,8 @@ fun DrawerContent(
         }
 
         HorizontalDivider(color = colors.line, modifier = Modifier.padding(top = 6.dp))
-        if (searching) {
-            val focus = remember { FocusRequester() }
-            LaunchedEffect(Unit) { focus.requestFocus() }
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .focusRequester(focus),
-                placeholder = {
-                    Text(
-                        stringResource(R.string.sessions_search),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(20.dp),
-            )
-        }
 
-        if (visible.isEmpty()) {
+        if (sessions.isEmpty()) {
             // weight(1f) here too, so an empty list still holds the bottom row
             // down at the edge instead of letting it float up mid-sheet.
             Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -218,7 +160,7 @@ fun DrawerContent(
             }
         } else {
             LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
-                items(visible, key = { it.id }) { session ->
+                items(sessions, key = { it.id }) { session ->
                     SessionRow(
                         session = session,
                         selected = session.id == selectedSessionId,
@@ -263,59 +205,6 @@ fun DrawerContent(
     }
 }
 
-/**
- * One session.
- *
- * The dot carries state, because docked beside the transcript this list is
- * permanently in view and a run needing attention has to read at a glance
- * without stealing focus from the conversation.
- */
-@Composable
-private fun SessionRow(session: SessionSummary, selected: Boolean, onClick: () -> Unit) {
-    val colors = LocalRunColors.current
-    val dotColor = when {
-        session.endReason.isNullOrBlank() && session.endedAt.isNullOrBlank() -> colors.running
-        session.endReason == "cancelled" -> colors.muted
-        else -> colors.completed
-    }
-
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(start = 18.dp, end = 14.dp, top = 9.dp, bottom = 9.dp),
-        horizontalArrangement = Arrangement.spacedBy(9.dp),
-    ) {
-        StatusDot(dotColor, Modifier.padding(top = 5.dp), size = 6)
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = session.title?.takeIf { it.isNotBlank() }
-                    ?: stringResource(R.string.sessions_untitled),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            val subtitle = session.preview?.takeIf { it.isNotBlank() }
-                ?: session.toolCallCount?.let {
-                    pluralStringResource(R.plurals.sessions_tool_count, it, it)
-                }
-            if (subtitle != null) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.muted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
 
 /** One destination row: icon, then label. */
 @Composable

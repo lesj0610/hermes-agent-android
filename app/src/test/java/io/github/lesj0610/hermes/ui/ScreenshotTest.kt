@@ -28,6 +28,7 @@ import io.github.lesj0610.hermes.ui.components.DrawerEntry
 import io.github.lesj0610.hermes.ui.components.GridIcon
 import io.github.lesj0610.hermes.ui.components.PaneDivider
 import io.github.lesj0610.hermes.ui.components.ServerIcon
+import io.github.lesj0610.hermes.ui.search.SearchPane
 import io.github.lesj0610.hermes.ui.theme.HermesTheme
 import org.junit.Rule
 import org.junit.Test
@@ -160,6 +161,7 @@ class ScreenshotTest {
                 sessions = sampleSessions,
                 selectedSessionId = "1",
                 onSession = {},
+                onSearch = {},
                 onNewChat = {},
                 settingsSelected = false,
                 onSettings = {},
@@ -199,6 +201,7 @@ class ScreenshotTest {
                         sessions = sampleSessions,
                         selectedSessionId = "1",
                         onSession = {},
+                        onSearch = {},
                         onNewChat = {},
                         settingsSelected = false,
                         onSettings = {},
@@ -217,6 +220,19 @@ class ScreenshotTest {
                     modifier = Modifier.fillMaxSize(),
                 )
             }
+        }
+    }
+
+    /** The empty state, which is what search looks like the moment it opens. */
+    @Test
+    fun search() {
+        capture("search", 411, 891) {
+            SearchPane(
+                sessions = sampleSessions,
+                selectedSessionId = null,
+                onSelect = {},
+                onClose = {},
+            )
         }
     }
 

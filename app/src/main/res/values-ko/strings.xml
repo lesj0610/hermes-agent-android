@@ -41,6 +41,8 @@
     <string name="drawer_pin">메뉴 고정</string>
     <string name="drawer_unpin">고정 해제</string>
     <string name="drawer_pin_unavailable">이 화면 폭에서는 메뉴를 고정할 수 없습니다</string>
+    <string name="search_hint">세션 제목과 내용 검색</string>
+    <string name="search_no_results">일치하는 세션이 없습니다</string>
     <string name="layout_status_bar_hide">상태바 숨김</string>
     <string name="layout_status_bar_show">상태바 표시</string>
     <string name="rail_none">숨김</string>

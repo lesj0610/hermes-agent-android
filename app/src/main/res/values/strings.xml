@@ -44,6 +44,8 @@
     <string name="drawer_pin">Dock the menu</string>
     <string name="drawer_unpin">Undock the menu</string>
     <string name="drawer_pin_unavailable">Not enough room to dock the menu at this width</string>
+    <string name="search_hint">Search sessions by title or content</string>
+    <string name="search_no_results">Nothing matched</string>
     <string name="layout_status_bar_hide">Hide status bar</string>
     <string name="layout_status_bar_show">Show status bar</string>
     <string name="rail_none">Hidden</string>

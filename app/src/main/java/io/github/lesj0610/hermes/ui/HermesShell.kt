@@ -1,5 +1,6 @@
 package io.github.lesj0610.hermes.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -68,6 +69,7 @@ import io.github.lesj0610.hermes.ui.chat.ChatPane
 import io.github.lesj0610.hermes.ui.cron.CronPane
 import io.github.lesj0610.hermes.ui.dashboard.DashboardPane
 import io.github.lesj0610.hermes.ui.gateway.GatewayPane
+import io.github.lesj0610.hermes.ui.search.SearchPane
 import io.github.lesj0610.hermes.ui.components.StatusBar
 import io.github.lesj0610.hermes.ui.components.ToolCard
 import io.github.lesj0610.hermes.ui.settings.PermissionState
@@ -112,6 +114,10 @@ fun HermesShell(
     // something in, and leave. Persisting it would greet the next launch with
     // controls the user is done with.
     var editingLayout by remember { mutableStateOf(false) }
+
+    // Search takes the whole surface rather than a slot in the drawer, so it is
+    // a mode of the shell rather than of any pane.
+    var searchOpen by remember { mutableStateOf(false) }
 
     val railContent: @Composable (RailPanel) -> Unit = { panel ->
         when (panel) {
@@ -233,6 +239,10 @@ fun HermesShell(
                 onSession = { session ->
                     viewModel.openSession(session.id)
                     viewModel.show(Pane.Chat)
+                    if (!docked) closeDrawer()
+                },
+                onSearch = {
+                    searchOpen = true
                     if (!docked) closeDrawer()
                 },
                 onNewChat = {
@@ -493,6 +503,23 @@ fun HermesShell(
             ) {
                 body()
             }
+        }
+
+        // Over everything, including a docked drawer: search covers the whole
+        // surface, and results that appeared beside the list they came from
+        // would be two answers to one question.
+        if (searchOpen) {
+            BackHandler { searchOpen = false }
+            SearchPane(
+                sessions = sessions,
+                selectedSessionId = chat.sessionId,
+                onSelect = { session ->
+                    viewModel.openSession(session.id)
+                    viewModel.show(Pane.Chat)
+                    searchOpen = false
+                },
+                onClose = { searchOpen = false },
+            )
         }
 
         // Outside the Scaffold on purpose: the notice that explains a refused

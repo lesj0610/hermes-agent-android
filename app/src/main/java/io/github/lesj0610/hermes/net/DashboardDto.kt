@@ -159,3 +159,60 @@ data class WsTicketResponse(
     val ticket: String = "",
     @SerialName("ttl_seconds") val ttlSeconds: Int = 0,
 )
+
+// ── slash commands ────────────────────────────────────────────────────────
+
+/**
+ * `commands.catalog` — the slash command set, straight from the registry the
+ * desktop reads.
+ *
+ * Answers without a session, which is what makes a palette possible here at
+ * all: everything else on that socket wants a live gateway session.
+ *
+ * `pairs` is `[["/new", "Start a new session …"], …]` — a list of two-element
+ * lists rather than objects, so it is decoded as such.
+ */
+@Serializable
+data class CommandCatalog(
+    val pairs: List<List<String>> = emptyList(),
+    val categories: List<CommandCategory> = emptyList(),
+    @SerialName("skill_count") val skillCount: Int = 0,
+    val warning: String? = null,
+)
+
+@Serializable
+data class CommandCategory(
+    val name: String = "",
+    val pairs: List<List<String>> = emptyList(),
+)
+
+/** What `session.resume` reports: the live id it created, and what it loaded. */
+@Serializable
+data class ResumedSession(
+    @SerialName("session_id") val liveId: String = "",
+    val resumed: String = "",
+    @SerialName("message_count") val messageCount: Int = 0,
+)
+
+/** `session.compress` — the headline is already formatted by the server. */
+@Serializable
+data class CompressResult(
+    val status: String = "",
+    val removed: Int = 0,
+    @SerialName("before_messages") val beforeMessages: Int = 0,
+    @SerialName("after_messages") val afterMessages: Int = 0,
+    @SerialName("before_tokens") val beforeTokens: Long = 0,
+    @SerialName("after_tokens") val afterTokens: Long = 0,
+    val summary: CompressSummary? = null,
+    val compressed: Boolean = true,
+    val message: String? = null,
+)
+
+@Serializable
+data class CompressSummary(
+    val noop: Boolean = false,
+    val aborted: Boolean = false,
+    val headline: String? = null,
+    @SerialName("token_line") val tokenLine: String? = null,
+    val note: String? = null,
+)

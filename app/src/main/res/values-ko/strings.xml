@@ -246,4 +246,12 @@
     <string name="action_save">저장</string>
     <string name="projects_activate">이 프로젝트 사용</string>
     <string name="projects_rename_title">프로젝트 이름 변경</string>
+    <string name="commands_none">일치하는 명령이 없습니다.</string>
+    <string name="commands_desktop_only">데스크탑 전용</string>
+    <string name="commands_result">결과</string>
+    <string name="commands_running">%1$s 실행 중…</string>
+    <string name="commands_compressing">대화를 압축하는 중입니다 — 에이전트를 띄우고 모델을 호출하므로 시간이 걸립니다.</string>
+    <string name="commands_needs_dashboard">슬래시 명령은 대시보드에서 옵니다. 설정에서 추가하세요.</string>
+    <string name="commands_no_session">먼저 대화를 여세요.</string>
+    <string name="commands_use_chip">모델과 추론 단계는 입력창 옆 칩에 있습니다.</string>
 </resources>

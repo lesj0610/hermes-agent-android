@@ -82,6 +82,9 @@ import io.github.lesj0610.hermes.core.Attachments
 import io.github.lesj0610.hermes.ui.components.CameraIcon
 import io.github.lesj0610.hermes.ui.components.PaperclipIcon
 import io.github.lesj0610.hermes.ui.components.PhotoIcon
+import io.github.lesj0610.hermes.ui.commands.SlashCommand
+import io.github.lesj0610.hermes.ui.commands.SlashPalette
+import io.github.lesj0610.hermes.ui.commands.filterCommands
 import io.github.lesj0610.hermes.ui.components.PlusIcon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -115,6 +118,15 @@ fun ChatPane(
     onDictate: () -> Unit = {},
     onDictationConsumed: () -> Unit = {},
     onToggleConversation: () -> Unit = {},
+    /**
+     * The slash palette. Empty by default so a preview renders a composer
+     * without standing up the catalogue.
+     */
+    commands: List<SlashCommand> = emptyList(),
+    commandsLoading: Boolean = false,
+    commandsError: String? = null,
+    onSlashOpened: () -> Unit = {},
+    onCommand: (SlashCommand) -> Unit = {},
 ) {
     val colors = LocalRunColors.current
     val listState = rememberLazyListState()
@@ -173,6 +185,11 @@ fun ChatPane(
         Composer(
             enabled = !state.isBusy,
             onSend = onSend,
+            commands = commands,
+            commandsLoading = commandsLoading,
+            commandsError = commandsError,
+            onSlashOpened = onSlashOpened,
+            onCommand = onCommand,
             modelLabel = modelLabel,
             modelChoices = modelChoices,
             onSelectModel = onSelectModel,
@@ -342,6 +359,11 @@ private fun StopBar(stopping: Boolean, onStop: () -> Unit, modifier: Modifier = 
 private fun Composer(
     enabled: Boolean,
     onSend: (String, List<String>) -> Unit,
+    commands: List<SlashCommand>,
+    commandsLoading: Boolean,
+    commandsError: String?,
+    onSlashOpened: () -> Unit,
+    onCommand: (SlashCommand) -> Unit,
     modelLabel: String,
     modelChoices: List<ModelChoice>,
     onSelectModel: (ModelChoice) -> Unit,
@@ -437,6 +459,30 @@ private fun Composer(
             draft = if (draft.isBlank()) heard else "$draft $heard"
             onDictationConsumed()
         }
+    }
+
+    // A leading slash is the palette's trigger, the way it is on the desktop.
+    // Only leading: a slash inside a sentence is a path or a date, not a
+    // command, and popping a list over those would fight normal typing.
+    val slashQuery = draft.takeIf { it.startsWith("/") && !it.contains(' ') }
+    LaunchedEffect(slashQuery != null) { if (slashQuery != null) onSlashOpened() }
+
+    if (slashQuery != null) {
+        SlashPalette(
+            commands = filterCommands(commands, slashQuery),
+            loading = commandsLoading,
+            error = commandsError?.let { key ->
+                when (key) {
+                    "dashboard-required" -> stringResource(R.string.commands_needs_dashboard)
+                    else -> key
+                }
+            },
+            onPick = { command ->
+                draft = ""
+                onCommand(command)
+            },
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
     }
 
     // One surface holding the input and everything that acts on it. Splitting

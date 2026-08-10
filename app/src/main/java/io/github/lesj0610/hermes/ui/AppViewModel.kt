@@ -32,6 +32,10 @@ import io.github.lesj0610.hermes.net.Skill
 import io.github.lesj0610.hermes.net.Toolset
 import io.github.lesj0610.hermes.ui.artifacts.Artifact
 import io.github.lesj0610.hermes.ui.artifacts.collectArtifacts
+import io.github.lesj0610.hermes.ui.commands.SlashCommand
+import io.github.lesj0610.hermes.ui.commands.buildCommands
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import io.github.lesj0610.hermes.voice.VoiceController
 import io.github.lesj0610.hermes.voice.VoiceState
 import java.util.Locale
@@ -73,6 +77,24 @@ data class ArtifactScan(
     val failed: Int = 0,
 )
 
+/** A command's output, for the sheet that shows it. */
+data class CommandOutput(
+    val name: String,
+    val text: String = "",
+    val running: Boolean = false,
+    val failed: Boolean = false,
+)
+
+private const val DASHBOARD_REQUIRED = "dashboard-required"
+private const val NO_SESSION = "no-session"
+
+/** Pretty-prints an RPC result so a raw payload is at least readable. */
+private val prettyPrinter = Json { prettyPrint = true }
+
+private fun prettyJson(element: JsonElement): String =
+    runCatching { prettyPrinter.encodeToString(JsonElement.serializer(), element) }
+        .getOrDefault(element.toString())
+
 /** State of the optional dashboard connection, which is independent of the gateway's. */
 sealed interface DashboardState {
     /** No dashboard configured — the panel stays hidden rather than erroring. */
@@ -100,6 +122,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** True while the list is being re-read, for the pull-to-refresh indicator. */
     private val _sessionsRefreshing = MutableStateFlow(false)
     val sessionsRefreshing: StateFlow<Boolean> = _sessionsRefreshing.asStateFlow()
+
+    private val _commands = MutableStateFlow<List<SlashCommand>>(emptyList())
+    val commands: StateFlow<List<SlashCommand>> = _commands.asStateFlow()
+
+    private val _commandsLoading = MutableStateFlow(false)
+    val commandsLoading: StateFlow<Boolean> = _commandsLoading.asStateFlow()
+
+    private val _commandsError = MutableStateFlow<String?>(null)
+    val commandsError: StateFlow<String?> = _commandsError.asStateFlow()
+
+    /** The output of the last command that produced any, for the result sheet. */
+    private val _commandOutput = MutableStateFlow<CommandOutput?>(null)
+    val commandOutput: StateFlow<CommandOutput?> = _commandOutput.asStateFlow()
 
     /** One-shot message about a session action, shown as a snackbar. */
     private val _sessionNotice = MutableStateFlow<String?>(null)
@@ -572,6 +607,91 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }.getOrNull()
 
     fun clearSessionNotice() { _sessionNotice.value = null }
+
+    // ── slash commands ────────────────────────────────────────────────────
+
+    /**
+     * Reads the command registry from the gateway, once.
+     *
+     * The catalogue is the desktop's own list, so it is fetched rather than
+     * hardcoded — a command added upstream shows up here without a release.
+     */
+    fun loadCommands() {
+        if (_commands.value.isNotEmpty() || _commandsLoading.value) return
+        viewModelScope.launch {
+            if (!graph.settings.current().dashboardConfigured) {
+                _commandsError.value = DASHBOARD_REQUIRED
+                return@launch
+            }
+            _commandsLoading.value = true
+            runCatching { graph.dashboard.commandsCatalog() }
+                .onSuccess {
+                    _commands.value = buildCommands(it)
+                    _commandsError.value = null
+                }
+                .onFailure { _commandsError.value = it.message ?: it::class.simpleName.orEmpty() }
+            _commandsLoading.value = false
+        }
+    }
+
+    /** Runs a read-only RPC and parks its output for the result sheet. */
+    fun runCommandQuery(command: SlashCommand) {
+        val method = command.method ?: return
+        viewModelScope.launch {
+            _commandOutput.value = CommandOutput(command.name, running = true)
+            runCatching { graph.dashboard.readOnlyRpc(method) }
+                .onSuccess { _commandOutput.value = CommandOutput(command.name, text = prettyJson(it)) }
+                .onFailure {
+                    _commandOutput.value = CommandOutput(
+                        command.name,
+                        text = it.message ?: it::class.simpleName.orEmpty(),
+                        failed = true,
+                    )
+                }
+        }
+    }
+
+    /**
+     * Compresses the open conversation.
+     *
+     * Long-running by nature — the gateway builds an agent and then calls a
+     * model — so it reports progress from the start rather than looking hung.
+     * Afterwards the transcript is re-read: the stored history is what changed.
+     */
+    fun compressCurrentSession(compressingLabel: String) {
+        val sessionId = chat.value.sessionId
+        if (sessionId.isNullOrBlank()) {
+            _commandOutput.value = CommandOutput("/compress", text = NO_SESSION, failed = true)
+            return
+        }
+        viewModelScope.launch {
+            _commandOutput.value = CommandOutput("/compress", running = true, text = compressingLabel)
+            runCatching { graph.dashboard.compressSession(sessionId) }
+                .onSuccess { result ->
+                    _commandOutput.value = CommandOutput(
+                        "/compress",
+                        text = listOfNotNull(
+                            result.summary?.headline,
+                            result.summary?.tokenLine,
+                            result.message,
+                        ).joinToString("\n").ifBlank { result.status },
+                    )
+                    // The compaction rewrote the stored history, which is what
+                    // the transcript on screen was built from.
+                    graph.runEngine.openSession(sessionId)
+                    loadSessions()
+                }
+                .onFailure {
+                    _commandOutput.value = CommandOutput(
+                        "/compress",
+                        text = it.message ?: it::class.simpleName.orEmpty(),
+                        failed = true,
+                    )
+                }
+        }
+    }
+
+    fun dismissCommandOutput() { _commandOutput.value = null }
 
     // ── projects ──────────────────────────────────────────────────────────
 

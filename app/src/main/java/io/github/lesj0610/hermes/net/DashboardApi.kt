@@ -280,6 +280,64 @@ class DashboardApi(
         ).project
     }
 
+    // ── slash commands ────────────────────────────────────────────────────
+
+    /** The command set, for the palette. No session needed. */
+    suspend fun commandsCatalog(): CommandCatalog =
+        rpcSession { it.call("commands.catalog", buildJsonObject { }) }
+
+    /**
+     * Compresses a stored session's history.
+     *
+     * Three calls, because compression acts on a live agent and the app's
+     * sessions are rows in a database:
+     *
+     *   session.resume(stored id) → a live session under a NEW id
+     *   session.compress(that id) → summarises, and writes through to the store
+     *   session.close(that id)    → or the live session is left behind
+     *
+     * Verified end to end against a gateway: 41 stored messages became 13, and
+     * the change was visible through the gateway's own messages route
+     * afterwards, which is what the next turn reads.
+     *
+     * Slow by nature — it builds an agent and then calls a model — so the
+     * caller is expected to show progress rather than block silently.
+     */
+    suspend fun compressSession(storedSessionId: String): CompressResult = rpcSession { session ->
+        val resumed: ResumedSession = session.call(
+            "session.resume",
+            buildJsonObject { put("session_id", storedSessionId) },
+        )
+        val live = resumed.liveId.takeIf { it.isNotBlank() }
+            ?: throw GatewayRpcException(-1, "The gateway did not return a live session")
+        try {
+            session.call<CompressResult>(
+                "session.compress",
+                buildJsonObject { put("session_id", live) },
+            )
+        } finally {
+            // Best effort: a live session left open is a leak on the agent's
+            // host, and there is nothing useful to tell the user if the
+            // close itself fails.
+            runCatching {
+                session.call<JsonObject>(
+                    "session.close",
+                    buildJsonObject { put("session_id", live) },
+                )
+            }
+        }
+    }
+
+    /**
+     * Runs a read-only informational RPC and returns its raw result.
+     *
+     * These take no session and mutate nothing — `tools.list`, `plugins.list`,
+     * `agents.list`, `config.show` and friends — so the palette can render
+     * their output without the resume dance.
+     */
+    suspend fun readOnlyRpc(method: String): JsonElement =
+        rpcSession { it.callRaw(method, buildJsonObject { }) }
+
     suspend fun renameProject(id: String, name: String): ProjectsPayload = rpcSession { session ->
         session.call<JsonObject>(
             "projects.update",

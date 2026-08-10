@@ -258,4 +258,12 @@
     <string name="action_save">Save</string>
     <string name="projects_activate">Use this project</string>
     <string name="projects_rename_title">Rename project</string>
+    <string name="commands_none">No command matches.</string>
+    <string name="commands_desktop_only">desktop only</string>
+    <string name="commands_result">Result</string>
+    <string name="commands_running">Running %1$s…</string>
+    <string name="commands_compressing">Compressing the conversation — this builds an agent and calls a model, so it takes a while.</string>
+    <string name="commands_needs_dashboard">Slash commands come from the dashboard. Add it in Settings.</string>
+    <string name="commands_no_session">Open a conversation first.</string>
+    <string name="commands_use_chip">Model and reasoning are on the chip beside the message box.</string>
 </resources>

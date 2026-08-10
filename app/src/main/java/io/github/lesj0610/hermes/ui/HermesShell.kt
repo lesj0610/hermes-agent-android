@@ -49,7 +49,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.github.lesj0610.hermes.core.HermesSettings
@@ -83,6 +86,9 @@ import io.github.lesj0610.hermes.ui.chat.ApprovalSheet
 import io.github.lesj0610.hermes.ui.artifacts.ArtifactsPane
 import io.github.lesj0610.hermes.ui.projects.ProjectsPane
 import io.github.lesj0610.hermes.ui.chat.ChatPane
+import io.github.lesj0610.hermes.ui.commands.CommandAbility
+import io.github.lesj0610.hermes.ui.commands.CommandAction
+import io.github.lesj0610.hermes.ui.commands.SlashCommand
 import io.github.lesj0610.hermes.ui.cron.CronPane
 import io.github.lesj0610.hermes.ui.dashboard.DashboardPane
 import io.github.lesj0610.hermes.ui.gateway.GatewayPane
@@ -115,6 +121,10 @@ fun HermesShell(
     val projectsError by viewModel.projectsError.collectAsStateWithLifecycle()
     val sessionNotice by viewModel.sessionNotice.collectAsStateWithLifecycle()
     val sessionsRefreshing by viewModel.sessionsRefreshing.collectAsStateWithLifecycle()
+    val commands by viewModel.commands.collectAsStateWithLifecycle()
+    val commandsLoading by viewModel.commandsLoading.collectAsStateWithLifecycle()
+    val commandsError by viewModel.commandsError.collectAsStateWithLifecycle()
+    val commandOutput by viewModel.commandOutput.collectAsStateWithLifecycle()
     val artifactScan by viewModel.artifactScan.collectAsStateWithLifecycle()
     val voiceState by viewModel.voiceState.collectAsStateWithLifecycle()
     val conversing by viewModel.voiceConversing.collectAsStateWithLifecycle()
@@ -265,6 +275,7 @@ fun HermesShell(
         val sheetWidth = (maxWidth * 0.82f).coerceAtMost(340.dp)
 
         val destinations = drawerDestinations(showDashboard)
+        val chipHint = stringResource(R.string.commands_use_chip)
         val (connColor, connLabel) = connectionStatus(connection)
 
         // What the next turn will actually run on: the override if one is set,
@@ -338,6 +349,39 @@ fun HermesShell(
                 }
                 SessionAction.Archive -> viewModel.archiveSession(session.id)
                 SessionAction.Delete -> deleting = session
+            }
+        }
+
+
+        // What a slash command does. Navigation cases stay here because they
+        // move the shell; the rest is the view model's.
+        val compressingLabel = stringResource(R.string.commands_compressing)
+        val onCommand: (SlashCommand) -> Unit = { command ->
+            when (command.ability) {
+                CommandAbility.Query -> viewModel.runCommandQuery(command)
+                CommandAbility.Mutate -> when (command.action) {
+                    CommandAction.Compress -> viewModel.compressCurrentSession(compressingLabel)
+                    else -> Unit
+                }
+                CommandAbility.Navigate -> when (command.action) {
+                    CommandAction.NewSession -> viewModel.openSession(null)
+                    CommandAction.OpenSessions -> if (!docked) {
+                        drawerScope.launch { drawerState.open() }
+                    }
+                    CommandAction.Search -> searchOpen = true
+                    CommandAction.OpenProjects -> viewModel.show(Pane.Projects)
+                    CommandAction.OpenArtifacts -> viewModel.show(Pane.Artifacts)
+                    CommandAction.OpenSchedule -> viewModel.show(Pane.Cron)
+                    CommandAction.OpenSettings -> viewModel.show(Pane.Settings)
+                    // The model and effort live on the composer's own chip, and
+                    // opening it from here would need to reach into that
+                    // composable's state. Pointing at it is the honest move.
+                    CommandAction.PickModel,
+                    CommandAction.PickReasoning,
+                    -> drawerScope.launch { notices.showSnackbar(chipHint) }
+                    else -> Unit
+                }
+                CommandAbility.Unavailable -> Unit
             }
         }
 
@@ -531,6 +575,11 @@ fun HermesShell(
                                     onDictate = dictate,
                                     onDictationConsumed = viewModel::consumeDictation,
                                     onToggleConversation = viewModel::toggleConversation,
+                                    commands = commands,
+                                    commandsLoading = commandsLoading,
+                                    commandsError = commandsError,
+                                    onSlashOpened = viewModel::loadCommands,
+                                    onCommand = onCommand,
                                 )
                             }
                         }
@@ -592,6 +641,11 @@ fun HermesShell(
                         onDictate = dictate,
                         onDictationConsumed = viewModel::consumeDictation,
                         onToggleConversation = viewModel::toggleConversation,
+                        commands = commands,
+                        commandsLoading = commandsLoading,
+                        commandsError = commandsError,
+                        onSlashOpened = viewModel::loadCommands,
+                        onCommand = onCommand,
                     )
                     Pane.Projects -> ProjectsPane(
                         payload = projectsPayload,
@@ -779,6 +833,32 @@ fun HermesShell(
                     TextButton(onClick = { deleting = null }) {
                         Text(stringResource(R.string.action_cancel))
                     }
+                },
+            )
+        }
+
+        commandOutput?.let { output ->
+            AlertDialog(
+                onDismissRequest = { if (!output.running) viewModel.dismissCommandOutput() },
+                title = { Text(output.name, fontFamily = FontFamily.Monospace) },
+                text = {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        Text(
+                            text = when (output.text) {
+                                "no-session" -> stringResource(R.string.commands_no_session)
+                                else -> output.text
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (output.failed) colors.failed else colors.muted,
+                            fontFamily = if (output.failed) null else FontFamily.Monospace,
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = viewModel::dismissCommandOutput,
+                        enabled = !output.running,
+                    ) { Text(stringResource(R.string.error_dismiss)) }
                 },
             )
         }

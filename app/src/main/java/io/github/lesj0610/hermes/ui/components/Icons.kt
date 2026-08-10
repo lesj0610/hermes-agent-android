@@ -472,21 +472,38 @@ fun MoreIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     }
 }
 
-/** A pushpin, for the sessions kept at the top of the list. */
+/**
+ * A pushpin, side on: keep this at the top of the list.
+ *
+ * Drawn as head, shoulders and needle rather than as a circle on a stick —
+ * a disc with a straight stem is the magnifier this icon set already has, and
+ * two rows apart in the same menu they were the same glyph.
+ */
 @Composable
 fun PinIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     val color = tint ?: LocalRunColors.current.muted
     Canvas(modifier.size(ICON_DP.dp)) {
         val bounds = iconBounds()
-        val head = bounds.width * 0.30f
-        val centre = Offset(bounds.center.x, bounds.top + bounds.height * 0.36f)
-        drawCircle(color, radius = head, center = centre, style = iconStroke())
-        // The needle, angled the way a pin sits when it is holding something
-        // rather than pointing straight down.
+        val headY = bounds.top + bounds.height * 0.10f
+        val flangeY = bounds.top + bounds.height * 0.56f
+        val headHalf = bounds.width * 0.20f
+        val flangeHalf = bounds.width * 0.32f
+        val waist = bounds.width * 0.12f
+
+        val body = Path().apply {
+            moveTo(bounds.center.x - headHalf, headY)
+            lineTo(bounds.center.x + headHalf, headY)
+            lineTo(bounds.center.x + waist, flangeY)
+            lineTo(bounds.center.x + flangeHalf, flangeY)
+            lineTo(bounds.center.x - flangeHalf, flangeY)
+            lineTo(bounds.center.x - waist, flangeY)
+            close()
+        }
+        drawPath(body, color, style = iconStroke())
         drawLine(
             color,
-            Offset(centre.x, centre.y + head),
-            Offset(bounds.center.x - bounds.width * 0.10f, bounds.bottom),
+            Offset(bounds.center.x, flangeY),
+            Offset(bounds.center.x, bounds.bottom),
             STROKE_DP.dp.toPx(),
             StrokeCap.Round,
         )
@@ -680,5 +697,223 @@ fun SettingsIcon(modifier: Modifier = Modifier, tint: Color? = null) {
         }
         drawCircle(color, radius = body, center = centre, style = iconStroke())
         drawCircle(color, radius = bounds.width * 0.11f, center = centre, style = iconStroke())
+    }
+}
+
+// ── row-menu glyphs ───────────────────────────────────────────────────────
+//
+// A menu of bare words reads as a wall of text; the glyph is what lets the eye
+// land on the right line without reading all of them. Drawn at the same weight
+// as the rest of the set so a menu does not look like it borrowed its icons.
+
+/** A pencil: change the name. */
+@Composable
+fun PencilIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        rotate(degrees = 45f, pivot = bounds.center) {
+            val half = bounds.width * 0.16f
+            val top = bounds.top + bounds.height * 0.10f
+            val neck = bounds.bottom - bounds.height * 0.26f
+            // Barrel, then the nib as a separate triangle: a single tapered
+            // outline loses its point once the stroke is rounded.
+            val barrel = Path().apply {
+                moveTo(bounds.center.x - half, neck)
+                lineTo(bounds.center.x - half, top)
+                lineTo(bounds.center.x + half, top)
+                lineTo(bounds.center.x + half, neck)
+            }
+            drawPath(barrel, color, style = iconStroke())
+            val nib = Path().apply {
+                moveTo(bounds.center.x - half, neck)
+                lineTo(bounds.center.x, bounds.bottom)
+                lineTo(bounds.center.x + half, neck)
+            }
+            drawPath(nib, color, style = iconStroke())
+            drawLine(
+                color,
+                Offset(bounds.center.x - half, top + bounds.height * 0.14f),
+                Offset(bounds.center.x + half, top + bounds.height * 0.14f),
+                STROKE_DP.dp.toPx(),
+            )
+        }
+    }
+}
+
+/** Two stacked sheets: copy this to the clipboard. */
+@Composable
+fun CopyIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val side = bounds.width * 0.66f
+        val radius = CornerRadius(3.5.dp.toPx())
+        // Back sheet first so the front one's stroke sits over it, which is
+        // what makes the two read as stacked rather than as one shape.
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(bounds.left, bounds.top),
+            size = Size(side, side),
+            cornerRadius = radius,
+            style = iconStroke(),
+        )
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(bounds.right - side, bounds.bottom - side),
+            size = Size(side, side),
+            cornerRadius = radius,
+            style = iconStroke(),
+        )
+    }
+}
+
+/** A line splitting off to a second node: fork this conversation. */
+@Composable
+fun BranchIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val node = bounds.width * 0.13f
+        val trunkX = bounds.left + bounds.width * 0.26f
+        val branchX = bounds.right - bounds.width * 0.20f
+        val top = bounds.top + node
+        val bottom = bounds.bottom - node
+
+        drawLine(
+            color, Offset(trunkX, top), Offset(trunkX, bottom),
+            STROKE_DP.dp.toPx(), StrokeCap.Round,
+        )
+        // The split leaves the trunk halfway and curves up to its own node,
+        // which is what separates this from a plain fork of two lines.
+        val split = Path().apply {
+            moveTo(trunkX, bounds.center.y + bounds.height * 0.12f)
+            quadraticTo(
+                trunkX + bounds.width * 0.36f, bounds.center.y + bounds.height * 0.12f,
+                branchX, top + node * 1.6f,
+            )
+        }
+        drawPath(split, color, style = iconStroke())
+        drawCircle(color, radius = node, center = Offset(trunkX, top), style = iconStroke())
+        drawCircle(color, radius = node, center = Offset(trunkX, bottom), style = iconStroke())
+        drawCircle(color, radius = node, center = Offset(branchX, top), style = iconStroke())
+    }
+}
+
+/** An arrow leaving a tray: hand this to something else. */
+@Composable
+fun ExportIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val trayTop = bounds.top + bounds.height * 0.46f
+        // Open at the top so the arrow passes through the gap rather than
+        // crossing a line.
+        val tray = Path().apply {
+            moveTo(bounds.left, trayTop)
+            lineTo(bounds.left, bounds.bottom)
+            lineTo(bounds.right, bounds.bottom)
+            lineTo(bounds.right, trayTop)
+        }
+        drawPath(tray, color, style = iconStroke())
+
+        val tip = Offset(bounds.center.x, bounds.top)
+        drawLine(
+            color, Offset(bounds.center.x, bounds.center.y + bounds.height * 0.14f), tip,
+            STROKE_DP.dp.toPx(), StrokeCap.Round,
+        )
+        val barb = bounds.width * 0.20f
+        drawPath(
+            Path().apply {
+                moveTo(tip.x - barb, tip.y + barb)
+                lineTo(tip.x, tip.y)
+                lineTo(tip.x + barb, tip.y + barb)
+            },
+            color,
+            style = iconStroke(),
+        )
+    }
+}
+
+/** A lidded box: keep it, out of the way. */
+@Composable
+fun ArchiveIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val lid = bounds.height * 0.26f
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(bounds.left, bounds.top),
+            size = Size(bounds.width, lid),
+            cornerRadius = CornerRadius(2.5.dp.toPx()),
+            style = iconStroke(),
+        )
+        val bodyTop = bounds.top + lid + bounds.height * 0.06f
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(bounds.left + bounds.width * 0.06f, bodyTop),
+            size = Size(bounds.width * 0.88f, bounds.bottom - bodyTop),
+            cornerRadius = CornerRadius(2.5.dp.toPx()),
+            style = iconStroke(),
+        )
+        // The pull, which is the detail that says "box" rather than "two rects".
+        drawLine(
+            color,
+            Offset(bounds.center.x - bounds.width * 0.16f, bodyTop + bounds.height * 0.18f),
+            Offset(bounds.center.x + bounds.width * 0.16f, bodyTop + bounds.height * 0.18f),
+            STROKE_DP.dp.toPx(),
+            StrokeCap.Round,
+        )
+    }
+}
+
+/** A bin: this one does not come back. */
+@Composable
+fun TrashIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val lidY = bounds.top + bounds.height * 0.22f
+        drawLine(
+            color, Offset(bounds.left, lidY), Offset(bounds.right, lidY),
+            STROKE_DP.dp.toPx(), StrokeCap.Round,
+        )
+        // The handle above the lid line.
+        drawPath(
+            Path().apply {
+                moveTo(bounds.center.x - bounds.width * 0.16f, lidY)
+                lineTo(bounds.center.x - bounds.width * 0.16f, bounds.top + bounds.height * 0.08f)
+                lineTo(bounds.center.x + bounds.width * 0.16f, bounds.top + bounds.height * 0.08f)
+                lineTo(bounds.center.x + bounds.width * 0.16f, lidY)
+            },
+            color,
+            style = iconStroke(),
+        )
+        val can = Path().apply {
+            moveTo(bounds.left + bounds.width * 0.14f, lidY)
+            lineTo(bounds.left + bounds.width * 0.20f, bounds.bottom)
+            lineTo(bounds.right - bounds.width * 0.20f, bounds.bottom)
+            lineTo(bounds.right - bounds.width * 0.14f, lidY)
+        }
+        drawPath(can, color, style = iconStroke())
+    }
+}
+
+/** A tick: this is the one in effect. */
+@Composable
+fun CheckIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        drawPath(
+            Path().apply {
+                moveTo(bounds.left + bounds.width * 0.14f, bounds.center.y + bounds.height * 0.02f)
+                lineTo(bounds.left + bounds.width * 0.38f, bounds.bottom - bounds.height * 0.20f)
+                lineTo(bounds.right - bounds.width * 0.10f, bounds.top + bounds.height * 0.22f)
+            },
+            color,
+            style = iconStroke(),
+        )
     }
 }

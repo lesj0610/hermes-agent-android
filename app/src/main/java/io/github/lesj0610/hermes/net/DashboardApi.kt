@@ -251,6 +251,17 @@ class DashboardApi(
         ).project
     }
 
+    suspend fun renameProject(id: String, name: String): ProjectsPayload = rpcSession { session ->
+        session.call<JsonObject>(
+            "projects.update",
+            buildJsonObject {
+                put("id", id)
+                put("name", name)
+            },
+        )
+        session.call("projects.list", buildJsonObject { })
+    }
+
     suspend fun setActiveProject(id: String): ProjectsPayload = rpcSession { session ->
         session.call<JsonObject>("projects.set_active", buildJsonObject { put("id", id) })
         session.call("projects.list", buildJsonObject { })

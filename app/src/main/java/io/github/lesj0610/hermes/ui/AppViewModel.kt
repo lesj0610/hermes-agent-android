@@ -610,6 +610,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setActiveProject(id: String) = projectAction { graph.dashboard.setActiveProject(id) }
 
+    fun renameProject(id: String, name: String) =
+        projectAction { graph.dashboard.renameProject(id, name) }
+
     fun archiveProject(id: String, archived: Boolean) =
         projectAction { graph.dashboard.archiveProject(id, archived) }
 

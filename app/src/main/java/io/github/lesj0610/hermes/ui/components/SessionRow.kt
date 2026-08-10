@@ -144,6 +144,7 @@ private fun SessionMenu(
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
             text = { Text(stringResource(R.string.session_rename)) },
+            leadingIcon = { PencilIcon(modifier = Modifier.size(17.dp)) },
             onClick = { onAction(SessionAction.Rename) },
         )
         DropdownMenuItem(
@@ -154,22 +155,27 @@ private fun SessionMenu(
                     ),
                 )
             },
+            leadingIcon = { PinIcon(modifier = Modifier.size(17.dp)) },
             onClick = { onAction(SessionAction.Pin) },
         )
         DropdownMenuItem(
             text = { Text(stringResource(R.string.session_copy_id)) },
+            leadingIcon = { CopyIcon(modifier = Modifier.size(17.dp)) },
             onClick = { onAction(SessionAction.CopyId) },
         )
         DropdownMenuItem(
             text = { Text(stringResource(R.string.session_branch)) },
+            leadingIcon = { BranchIcon(modifier = Modifier.size(17.dp)) },
             onClick = { onAction(SessionAction.Branch) },
         )
         DropdownMenuItem(
             text = { Text(stringResource(R.string.session_export)) },
+            leadingIcon = { ExportIcon(modifier = Modifier.size(17.dp)) },
             onClick = { onAction(SessionAction.Export) },
         )
         DropdownMenuItem(
             text = { Text(stringResource(R.string.session_archive)) },
+            leadingIcon = { ArchiveIcon(modifier = Modifier.size(17.dp)) },
             onClick = { onAction(SessionAction.Archive) },
         )
         // Last, and the only one coloured: on this route delete removes the
@@ -182,6 +188,9 @@ private fun SessionMenu(
                     color = colors.failed,
                 )
             },
+            // Tinted to match its label: the glyph is the part seen first, and
+            // a neutral bin beside red text reads as a different action.
+            leadingIcon = { TrashIcon(modifier = Modifier.size(17.dp), tint = colors.failed) },
             onClick = { onAction(SessionAction.Delete) },
         )
     }

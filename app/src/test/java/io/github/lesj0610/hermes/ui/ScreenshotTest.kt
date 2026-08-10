@@ -1,6 +1,8 @@
 package io.github.lesj0610.hermes.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -41,7 +43,20 @@ import io.github.lesj0610.hermes.ui.artifacts.ArtifactKind
 import io.github.lesj0610.hermes.ui.artifacts.ArtifactsPane
 import io.github.lesj0610.hermes.ui.chat.ChatPane
 import io.github.lesj0610.hermes.ui.projects.ProjectsPane
+import io.github.lesj0610.hermes.ui.components.ArchiveIcon
+import io.github.lesj0610.hermes.ui.components.BranchIcon
+import io.github.lesj0610.hermes.ui.components.CameraIcon
 import io.github.lesj0610.hermes.ui.components.ChatIcon
+import io.github.lesj0610.hermes.ui.components.CheckIcon
+import io.github.lesj0610.hermes.ui.components.CopyIcon
+import io.github.lesj0610.hermes.ui.components.ExportIcon
+import io.github.lesj0610.hermes.ui.components.LinkIcon
+import io.github.lesj0610.hermes.ui.components.MoreIcon
+import io.github.lesj0610.hermes.ui.components.PaperclipIcon
+import io.github.lesj0610.hermes.ui.components.PencilIcon
+import io.github.lesj0610.hermes.ui.components.PhotoIcon
+import io.github.lesj0610.hermes.ui.components.PinIcon
+import io.github.lesj0610.hermes.ui.components.TrashIcon
 import io.github.lesj0610.hermes.ui.components.ClockIcon
 import io.github.lesj0610.hermes.ui.components.DrawerContent
 import io.github.lesj0610.hermes.ui.components.DrawerEntry
@@ -377,10 +392,61 @@ class ScreenshotTest {
                 onLoad = {},
                 onCreate = { _, _, _ -> },
                 onSetActive = {},
+                onRename = { _, _ -> },
                 onArchive = { _, _ -> },
                 onBrowse = { emptyList() },
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+    }
+
+    /**
+     * The icon set, at the size the row menus use it.
+     *
+     * These are hand-drawn paths and the menus they sit in are popups, which
+     * a screenshot of the root does not capture — so they are rendered here
+     * instead, where a glyph that came out as a blob is visible.
+     */
+    @Test
+    fun icons() {
+        capture("icons", 411, 160) {
+            Column(Modifier.fillMaxSize()) {
+                Row(Modifier.padding(12.dp)) {
+                    listOf<@Composable () -> Unit>(
+                        { PencilIcon(modifier = Modifier.size(22.dp)) },
+                        { PinIcon(modifier = Modifier.size(22.dp)) },
+                        { CopyIcon(modifier = Modifier.size(22.dp)) },
+                        { BranchIcon(modifier = Modifier.size(22.dp)) },
+                        { ExportIcon(modifier = Modifier.size(22.dp)) },
+                        { ArchiveIcon(modifier = Modifier.size(22.dp)) },
+                        { TrashIcon(modifier = Modifier.size(22.dp)) },
+                        { CheckIcon(modifier = Modifier.size(22.dp)) },
+                        { MoreIcon(modifier = Modifier.size(22.dp)) },
+                    ).forEach { icon ->
+                        Box(Modifier.padding(end = 12.dp)) { icon() }
+                    }
+                }
+                Row(Modifier.padding(12.dp)) {
+                    listOf<@Composable () -> Unit>(
+                        { PencilIcon(modifier = Modifier.size(17.dp)) },
+                        { PinIcon(modifier = Modifier.size(17.dp)) },
+                        { CopyIcon(modifier = Modifier.size(17.dp)) },
+                        { BranchIcon(modifier = Modifier.size(17.dp)) },
+                        { ExportIcon(modifier = Modifier.size(17.dp)) },
+                        { ArchiveIcon(modifier = Modifier.size(17.dp)) },
+                        { TrashIcon(modifier = Modifier.size(17.dp)) },
+                        { CheckIcon(modifier = Modifier.size(17.dp)) },
+                        { FolderIcon(modifier = Modifier.size(17.dp)) },
+                        { DocumentIcon(modifier = Modifier.size(17.dp)) },
+                        { LinkIcon(modifier = Modifier.size(17.dp)) },
+                        { PaperclipIcon(modifier = Modifier.size(17.dp)) },
+                        { CameraIcon(modifier = Modifier.size(17.dp)) },
+                        { PhotoIcon(modifier = Modifier.size(17.dp)) },
+                    ).forEach { icon ->
+                        Box(Modifier.padding(end = 10.dp)) { icon() }
+                    }
+                }
+            }
         }
     }
 

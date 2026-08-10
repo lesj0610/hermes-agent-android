@@ -450,6 +450,7 @@ fun HermesShell(
                                     onLoad = viewModel::loadProjects,
                                     onCreate = viewModel::createProject,
                                     onSetActive = viewModel::setActiveProject,
+                                    onRename = viewModel::renameProject,
                                     onArchive = viewModel::archiveProject,
                                     onBrowse = viewModel::browseGateway,
                                 )
@@ -578,6 +579,7 @@ fun HermesShell(
                         onLoad = viewModel::loadProjects,
                         onCreate = viewModel::createProject,
                         onSetActive = viewModel::setActiveProject,
+                        onRename = viewModel::renameProject,
                         onArchive = viewModel::archiveProject,
                         onBrowse = viewModel::browseGateway,
                         modifier = content,

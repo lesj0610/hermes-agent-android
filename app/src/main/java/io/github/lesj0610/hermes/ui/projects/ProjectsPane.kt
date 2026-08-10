@@ -18,7 +18,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -43,7 +46,11 @@ import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.net.FsEntry
 import io.github.lesj0610.hermes.net.Project
 import io.github.lesj0610.hermes.net.ProjectsPayload
+import io.github.lesj0610.hermes.ui.components.ArchiveIcon
+import io.github.lesj0610.hermes.ui.components.CheckIcon
 import io.github.lesj0610.hermes.ui.components.ChevronIcon
+import io.github.lesj0610.hermes.ui.components.MoreIcon
+import io.github.lesj0610.hermes.ui.components.PencilIcon
 import io.github.lesj0610.hermes.ui.components.FolderIcon
 import io.github.lesj0610.hermes.ui.components.PlusIcon
 import io.github.lesj0610.hermes.ui.components.StatusDot
@@ -69,12 +76,14 @@ fun ProjectsPane(
     onLoad: () -> Unit,
     onCreate: (name: String, idea: String, folders: List<String>) -> Unit,
     onSetActive: (String) -> Unit,
+    onRename: (String, String) -> Unit,
     onArchive: (String, Boolean) -> Unit,
     onBrowse: suspend (String) -> List<FsEntry>,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalRunColors.current
     var creating by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf<Project?>(null) }
 
     LaunchedEffect(dashboardConfigured) { if (dashboardConfigured) onLoad() }
     BackHandler(enabled = creating) { creating = false }
@@ -140,7 +149,13 @@ fun ProjectsPane(
                         project = project,
                         active = project.id == payload.activeId,
                         onClick = { onSetActive(project.id) },
-                        onArchive = { onArchive(project.id, true) },
+                        onAction = { action ->
+                            when (action) {
+                                ProjectAction.Activate -> onSetActive(project.id)
+                                ProjectAction.Rename -> renaming = project
+                                ProjectAction.Archive -> onArchive(project.id, true)
+                            }
+                        },
                     )
                 }
             }
@@ -169,16 +184,50 @@ fun ProjectsPane(
             }
         }
     }
+
+    renaming?.let { project ->
+        var draft by remember(project.id) { mutableStateOf(project.name) }
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text(stringResource(R.string.projects_rename_title)) },
+            text = {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRename(project.id, draft.trim())
+                        renaming = null
+                    },
+                    enabled = draft.isNotBlank(),
+                ) { Text(stringResource(R.string.action_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { renaming = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
 }
+
+/** What a project row's own menu can do. */
+private enum class ProjectAction { Activate, Rename, Archive }
 
 @Composable
 private fun ProjectRow(
     project: Project,
     active: Boolean,
     onClick: () -> Unit,
-    onArchive: () -> Unit,
+    onAction: (ProjectAction) -> Unit,
 ) {
     val colors = LocalRunColors.current
+    var menuOpen by remember { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxWidth()
@@ -206,6 +255,44 @@ private fun ProjectRow(
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.completed,
                 )
+            }
+            Box {
+                Box(
+                    Modifier
+                        .size(26.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .clickable { menuOpen = true },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    MoreIcon(modifier = Modifier.size(15.dp))
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.projects_activate)) },
+                        leadingIcon = { CheckIcon(modifier = Modifier.size(17.dp)) },
+                        enabled = !active,
+                        onClick = {
+                            menuOpen = false
+                            onAction(ProjectAction.Activate)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.session_rename)) },
+                        leadingIcon = { PencilIcon(modifier = Modifier.size(17.dp)) },
+                        onClick = {
+                            menuOpen = false
+                            onAction(ProjectAction.Rename)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.projects_archive)) },
+                        leadingIcon = { ArchiveIcon(modifier = Modifier.size(17.dp)) },
+                        onClick = {
+                            menuOpen = false
+                            onAction(ProjectAction.Archive)
+                        },
+                    )
+                }
             }
         }
 
@@ -242,12 +329,6 @@ private fun ProjectRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-            }
-        }
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = onArchive) {
-                Text(stringResource(R.string.projects_archive))
             }
         }
     }

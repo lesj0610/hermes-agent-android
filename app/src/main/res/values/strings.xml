@@ -256,4 +256,6 @@
     <string name="session_action_failed">That did not work: %1$s</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_save">Save</string>
+    <string name="projects_activate">Use this project</string>
+    <string name="projects_rename_title">Rename project</string>
 </resources>

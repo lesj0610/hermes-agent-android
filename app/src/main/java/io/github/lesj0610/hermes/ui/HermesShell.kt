@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Density
@@ -49,6 +50,7 @@ import io.github.lesj0610.hermes.core.LayoutMode
 import io.github.lesj0610.hermes.core.RAIL_WIDTH_MAX
 import io.github.lesj0610.hermes.core.RAIL_WIDTH_MIN
 import io.github.lesj0610.hermes.core.RailPanel
+import io.github.lesj0610.hermes.core.SystemPermissions
 import io.github.lesj0610.hermes.ui.components.PaneDivider
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -81,6 +83,7 @@ import io.github.lesj0610.hermes.ui.theme.LocalRunColors
 fun HermesShell(
     viewModel: AppViewModel,
     permissions: PermissionState,
+    onRequestMicrophone: () -> Unit,
     onRequestNotifications: () -> Unit,
     onRequestBackground: () -> Unit,
 ) {
@@ -90,6 +93,9 @@ fun HermesShell(
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val models by viewModel.models.collectAsStateWithLifecycle()
     val modelChoices by viewModel.modelChoices.collectAsStateWithLifecycle()
+    val voiceState by viewModel.voiceState.collectAsStateWithLifecycle()
+    val conversing by viewModel.voiceConversing.collectAsStateWithLifecycle()
+    val dictation by viewModel.dictation.collectAsStateWithLifecycle()
     val pane by viewModel.pane.collectAsStateWithLifecycle()
     val jobs by viewModel.jobs.collectAsStateWithLifecycle()
     val health by viewModel.health.collectAsStateWithLifecycle()
@@ -115,6 +121,11 @@ fun HermesShell(
     // something in, and leave. Persisting it would greet the next launch with
     // controls the user is done with.
     var editingLayout by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val dictate = {
+        if (SystemPermissions.canRecordAudio(context)) viewModel.dictate() else onRequestMicrophone()
+    }
 
     // Search takes the whole surface rather than a slot in the drawer, so it is
     // a mode of the shell rather than of any pane.
@@ -374,6 +385,13 @@ fun HermesShell(
                                     onSelectModel = viewModel::setModelChoice,
                                     effort = settings.reasoningEffort,
                                     onSelectEffort = viewModel::setReasoningEffort,
+                                    voiceAvailable = viewModel.voiceAvailable,
+                                    voiceState = voiceState,
+                                    conversing = conversing,
+                                    dictation = dictation,
+                                    onDictate = dictate,
+                                    onDictationConsumed = viewModel::consumeDictation,
+                                    onToggleConversation = viewModel::toggleConversation,
                                 )
                             }
                         }
@@ -428,6 +446,13 @@ fun HermesShell(
                         onSelectModel = viewModel::setModelChoice,
                         effort = settings.reasoningEffort,
                         onSelectEffort = viewModel::setReasoningEffort,
+                        voiceAvailable = viewModel.voiceAvailable,
+                        voiceState = voiceState,
+                        conversing = conversing,
+                        dictation = dictation,
+                        onDictate = dictate,
+                        onDictationConsumed = viewModel::consumeDictation,
+                        onToggleConversation = viewModel::toggleConversation,
                     )
                     Pane.Cron -> CronPane(
                         jobs = jobs,

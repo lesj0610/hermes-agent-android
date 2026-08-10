@@ -28,6 +28,9 @@ import io.github.lesj0610.hermes.net.ModelEntry
 import io.github.lesj0610.hermes.net.SessionSummary
 import io.github.lesj0610.hermes.net.Skill
 import io.github.lesj0610.hermes.net.Toolset
+import io.github.lesj0610.hermes.voice.VoiceController
+import io.github.lesj0610.hermes.voice.VoiceState
+import java.util.Locale
 
 /** How the gateway is currently reachable. Drives the banner in settings and the rail header. */
 sealed interface Connection {
@@ -114,9 +117,74 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _pane = MutableStateFlow(Pane.Chat)
     val pane: StateFlow<Pane> = _pane.asStateFlow()
 
+    // ── voice ─────────────────────────────────────────────────────────────
+
+    /**
+     * Speech in and out, both on the device: the gateway has no audio route, so
+     * a spoken turn becomes text before it is sent and the reply becomes speech
+     * after it arrives.
+     */
+    private val voice = VoiceController(app)
+    val voiceState: StateFlow<VoiceState> = voice.state
+    val voiceConversing: StateFlow<Boolean> = voice.conversing
+    val voiceAvailable: Boolean get() = voice.available
+
+    /**
+     * A dictated utterance waiting to be dropped into the composer. Null once
+     * the composer has taken it, so the same text is not inserted twice.
+     */
+    private val _dictation = MutableStateFlow<String?>(null)
+    val dictation: StateFlow<String?> = _dictation.asStateFlow()
+
     init {
         refresh()
         refreshDashboard()
+
+        voice.onTranscript = { text ->
+            // In a spoken conversation the turn goes straight out; dictation
+            // fills the box instead, so what was heard can be corrected before
+            // it is sent.
+            if (voice.conversing.value) send(text) else _dictation.value = text
+        }
+
+        // Read each completed reply aloud while a conversation is running. Only
+        // on completion: speaking the stream would restart the utterance on
+        // every delta.
+        viewModelScope.launch {
+            var wasBusy = false
+            graph.runEngine.state.collect { state ->
+                if (wasBusy && !state.isBusy && voice.conversing.value) {
+                    val reply = state.items
+                        .filterIsInstance<io.github.lesj0610.hermes.data.TranscriptItem.AssistantText>()
+                        .lastOrNull()
+                        ?.text
+                    if (reply != null) voice.speak(reply, voiceLocale())
+                }
+                wasBusy = state.isBusy
+            }
+        }
+    }
+
+    /** Follows the app's language so Korean is transcribed and spoken as Korean. */
+    private fun voiceLocale(): Locale =
+        settings.value.language.takeIf { it.isNotBlank() }
+            ?.let { Locale.forLanguageTag(it) }
+            ?: Locale.getDefault()
+
+    fun dictate() = voice.listen(voiceLocale())
+
+    fun consumeDictation() { _dictation.value = null }
+
+    fun toggleConversation() {
+        if (voice.conversing.value) voice.stopConversation() else voice.startConversation(voiceLocale())
+    }
+
+    /** The microphone was just granted, so act on the tap that triggered the ask. */
+    fun onMicrophoneGranted() = dictate()
+
+    override fun onCleared() {
+        voice.release()
+        super.onCleared()
     }
 
     fun show(pane: Pane) {

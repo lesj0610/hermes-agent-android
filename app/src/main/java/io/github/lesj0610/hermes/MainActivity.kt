@@ -80,6 +80,13 @@ class MainActivity : ComponentActivity() {
                     ActivityResultContracts.RequestPermission(),
                 ) { refreshPermissions() }
 
+                // Asked for on first use rather than at launch: the microphone
+                // is optional, and a permission dialog for a feature the user
+                // has not reached is the kind of prompt people deny on reflex.
+                val micLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission(),
+                ) { granted -> if (granted) viewModel.onMicrophoneGranted() }
+
                 fun askForNotifications() {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -114,6 +121,7 @@ class MainActivity : ComponentActivity() {
                 HermesShell(
                     viewModel = viewModel,
                     permissions = permissions,
+                    onRequestMicrophone = { micLauncher.launch(Manifest.permission.RECORD_AUDIO) },
                     onRequestNotifications = ::askForNotifications,
                     onRequestBackground = { SystemPermissions.requestBatteryExemption(context) },
                 )

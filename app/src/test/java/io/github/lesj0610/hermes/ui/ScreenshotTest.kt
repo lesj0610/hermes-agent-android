@@ -19,6 +19,8 @@ import io.github.lesj0610.hermes.data.PendingApproval
 import io.github.lesj0610.hermes.data.RunPhase
 import io.github.lesj0610.hermes.data.ToolState
 import io.github.lesj0610.hermes.data.TranscriptItem
+import io.github.lesj0610.hermes.core.ReasoningEffort
+import io.github.lesj0610.hermes.net.ModelChoice
 import io.github.lesj0610.hermes.net.SessionSummary
 import io.github.lesj0610.hermes.ui.chat.ChatPane
 import io.github.lesj0610.hermes.ui.components.ChatIcon
@@ -108,6 +110,11 @@ class ScreenshotTest {
         }
     }
 
+    /**
+     * The composer with every control it can carry: model, reasoning effort,
+     * dictation and voice mode. This is the row most at risk of not fitting on
+     * a narrow phone, which is why it is captured at phone width.
+     */
     @Test
     fun chatEmpty() {
         capture("chat-empty", 411, 891) {
@@ -115,6 +122,12 @@ class ScreenshotTest {
                 state = ChatState(),
                 onSend = {}, onStop = {}, onDismissError = {},
                 modifier = Modifier.fillMaxSize(),
+                modelLabel = "opus-5",
+                modelChoices = listOf(
+                    ModelChoice("nous", "Nous", "opus-5", reasoning = true),
+                ),
+                effort = ReasoningEffort.High,
+                voiceAvailable = true,
             )
         }
     }

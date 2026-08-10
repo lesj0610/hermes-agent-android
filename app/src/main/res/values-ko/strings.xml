@@ -163,4 +163,6 @@
     <string name="effort_medium">추론: 보통</string>
     <string name="effort_high">추론: 높음</string>
     <string name="effort_xhigh">추론: 최대</string>
+    <string name="voice_dictate">음성으로 입력</string>
+    <string name="voice_conversation">음성 대화</string>
 </resources>

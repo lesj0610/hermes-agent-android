@@ -233,6 +233,68 @@ fun GridIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     }
 }
 
+/** A microphone: dictate one message. */
+@Composable
+fun MicIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val capsuleWidth = bounds.width * 0.36f
+        val capsuleHeight = bounds.height * 0.52f
+        val left = bounds.center.x - capsuleWidth / 2f
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(left, bounds.top),
+            size = Size(capsuleWidth, capsuleHeight),
+            cornerRadius = CornerRadius(capsuleWidth / 2f),
+            style = iconStroke(),
+        )
+        // The cradle, drawn as a path so it curves under the capsule. Straight
+        // strokes were tried first and read as a box around the capsule rather
+        // than as something holding it.
+        val cradleHalf = capsuleWidth * 0.78f
+        val cradleTop = bounds.top + capsuleHeight * 0.58f
+        val cradleBottom = bounds.top + bounds.height * 0.74f
+        val cradle = Path().apply {
+            moveTo(bounds.center.x - cradleHalf, cradleTop)
+            quadraticTo(
+                bounds.center.x, cradleBottom + capsuleWidth * 0.45f,
+                bounds.center.x + cradleHalf, cradleTop,
+            )
+        }
+        drawPath(cradle, color, style = iconStroke())
+        drawLine(
+            color, Offset(bounds.center.x, cradleBottom + capsuleWidth * 0.2f),
+            Offset(bounds.center.x, bounds.bottom),
+            STROKE_DP.dp.toPx(), StrokeCap.Round,
+        )
+    }
+}
+
+/** A waveform: the spoken conversation, where replies are read back. */
+@Composable
+fun WaveformIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        // Uneven bars, because five of equal height reads as a list rather than
+        // as sound.
+        val heights = listOf(0.34f, 0.72f, 1.0f, 0.58f, 0.28f)
+        val step = bounds.width / heights.size
+        heights.forEachIndexed { index, factor ->
+            val x = bounds.left + step * (index + 0.5f)
+            val half = bounds.height * factor / 2f
+            drawLine(
+                color,
+                Offset(x, bounds.center.y - half),
+                Offset(x, bounds.center.y + half),
+                STROKE_DP.dp.toPx(),
+                StrokeCap.Round,
+            )
+        }
+    }
+}
+
 /** A magnifier: filter the session list. */
 @Composable
 fun SearchIcon(modifier: Modifier = Modifier, tint: Color? = null) {

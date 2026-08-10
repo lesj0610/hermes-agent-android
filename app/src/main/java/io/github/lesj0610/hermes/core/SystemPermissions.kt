@@ -35,6 +35,19 @@ object SystemPermissions {
             ) == PackageManager.PERMISSION_GRANTED
         }
 
+    /**
+     * The microphone, for dictation and voice mode.
+     *
+     * Unlike the two above this one is genuinely optional — the app is fully
+     * usable typed — so it is requested when the mic is first pressed rather
+     * than at launch.
+     */
+    fun canRecordAudio(context: Context): Boolean =
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO,
+        ) == PackageManager.PERMISSION_GRANTED
+
     fun isExemptFromBatteryOptimization(context: Context): Boolean {
         val power = context.getSystemService(PowerManager::class.java) ?: return false
         return power.isIgnoringBatteryOptimizations(context.packageName)

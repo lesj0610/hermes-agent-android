@@ -47,6 +47,12 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.text.style.TextOverflow
 import io.github.lesj0610.hermes.core.ReasoningEffort
 import io.github.lesj0610.hermes.net.ModelChoice
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import io.github.lesj0610.hermes.ui.components.MicIcon
+import io.github.lesj0610.hermes.ui.components.WaveformIcon
+import io.github.lesj0610.hermes.voice.VoiceState
 
 @Composable
 fun ChatPane(
@@ -64,6 +70,18 @@ fun ChatPane(
     onSelectModel: (ModelChoice) -> Unit = {},
     effort: ReasoningEffort = ReasoningEffort.Default,
     onSelectEffort: (ReasoningEffort) -> Unit = {},
+    /**
+     * Voice. Absent by default so a preview renders the transcript without a
+     * recognizer; [voiceAvailable] is false on a device with no speech service,
+     * and the controls are then omitted rather than failing on tap.
+     */
+    voiceAvailable: Boolean = false,
+    voiceState: VoiceState = VoiceState.Idle,
+    conversing: Boolean = false,
+    dictation: String? = null,
+    onDictate: () -> Unit = {},
+    onDictationConsumed: () -> Unit = {},
+    onToggleConversation: () -> Unit = {},
 ) {
     val colors = LocalRunColors.current
     val listState = rememberLazyListState()
@@ -126,7 +144,17 @@ fun ChatPane(
             effort = effort,
             onSelectEffort = onSelectEffort,
         )
-        Composer(enabled = !state.isBusy, onSend = onSend)
+        Composer(
+            enabled = !state.isBusy,
+            onSend = onSend,
+            voiceAvailable = voiceAvailable,
+            voiceState = voiceState,
+            conversing = conversing,
+            dictation = dictation,
+            onDictate = onDictate,
+            onDictationConsumed = onDictationConsumed,
+            onToggleConversation = onToggleConversation,
+        )
     }
 }
 
@@ -334,14 +362,60 @@ private fun StopBar(stopping: Boolean, onStop: () -> Unit, modifier: Modifier = 
 }
 
 @Composable
-private fun Composer(enabled: Boolean, onSend: (String) -> Unit) {
+private fun Composer(
+    enabled: Boolean,
+    onSend: (String) -> Unit,
+    voiceAvailable: Boolean,
+    voiceState: VoiceState,
+    conversing: Boolean,
+    dictation: String?,
+    onDictate: () -> Unit,
+    onDictationConsumed: () -> Unit,
+    onToggleConversation: () -> Unit,
+) {
+    val colors = LocalRunColors.current
     var draft by remember { mutableStateOf("") }
+    // Resolved out here: a semantics block is not a composable scope.
+    val dictateLabel = stringResource(R.string.voice_dictate)
+    val conversationLabel = stringResource(R.string.voice_conversation)
+
+    // Dictation lands in the box rather than being sent, so a misheard word can
+    // be fixed before it costs a turn. Appended, so it adds to whatever was
+    // already typed instead of discarding it.
+    LaunchedEffect(dictation) {
+        dictation?.let { heard ->
+            draft = if (draft.isBlank()) heard else "$draft $heard"
+            onDictationConsumed()
+        }
+    }
 
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (voiceAvailable) {
+            IconButton(onClick = onDictate, enabled = enabled) {
+                MicIcon(
+                    tint = if (voiceState == VoiceState.Listening) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        colors.muted
+                    },
+                    modifier = Modifier.semantics {
+                        contentDescription = dictateLabel
+                    },
+                )
+            }
+            IconButton(onClick = onToggleConversation) {
+                WaveformIcon(
+                    tint = if (conversing) MaterialTheme.colorScheme.primary else colors.muted,
+                    modifier = Modifier.semantics {
+                        contentDescription = conversationLabel
+                    },
+                )
+            }
+        }
         OutlinedTextField(
             value = draft,
             onValueChange = { draft = it },

@@ -178,4 +178,6 @@
     <string name="effort_medium">Reasoning: medium</string>
     <string name="effort_high">Reasoning: high</string>
     <string name="effort_xhigh">Reasoning: xhigh</string>
+    <string name="voice_dictate">Dictate a message</string>
+    <string name="voice_conversation">Spoken conversation</string>
 </resources>

@@ -49,7 +49,14 @@ import io.github.lesj0610.hermes.core.RailSide
 import io.github.lesj0610.hermes.ui.components.PaneDivider
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import io.github.lesj0610.hermes.ui.components.ChatIcon
+import io.github.lesj0610.hermes.ui.components.ClockIcon
 import io.github.lesj0610.hermes.ui.components.DrawerContent
+import io.github.lesj0610.hermes.ui.components.DrawerEntry
+import io.github.lesj0610.hermes.ui.components.GridIcon
+import io.github.lesj0610.hermes.ui.components.ListIcon
+import io.github.lesj0610.hermes.ui.components.ServerIcon
+import io.github.lesj0610.hermes.ui.components.SettingsIcon
 import io.github.lesj0610.hermes.ui.components.HamburgerIcon
 import io.github.lesj0610.hermes.ui.components.RailHost
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -199,7 +206,13 @@ fun HermesShell(
                         },
                         connectionLabel = connLabel,
                         connectionColor = connColor,
-                        destinations = destinations.map { paneLabel(it) to (pane == it) },
+                        destinations = destinations.map { target ->
+                            DrawerEntry(
+                                label = paneLabel(target),
+                                selected = pane == target,
+                                icon = { tint -> PaneIcon(target, tint) },
+                            )
+                        },
                         onDestination = { index ->
                             viewModel.show(destinations[index])
                             closeDrawer()
@@ -220,6 +233,7 @@ fun HermesShell(
                             viewModel.show(Pane.Chat)
                             closeDrawer()
                         },
+                        settingsSelected = pane == Pane.Settings,
                         onSettings = {
                             viewModel.show(Pane.Settings)
                             closeDrawer()
@@ -233,6 +247,7 @@ fun HermesShell(
                         } else {
                             null
                         },
+                        arranging = editingLayout,
                         onArrange = {
                             editingLayout = !editingLayout
                             closeDrawer()
@@ -521,6 +536,22 @@ private fun LayoutEditBar(
 private fun ConnectionLine(connection: Connection) {
     val (color, label) = connectionStatus(connection)
     Text(text = label, style = MaterialTheme.typography.labelSmall, color = color)
+}
+
+/**
+ * A pane's glyph, for the drawer's destination rows.
+ *
+ * Each one names what the pane holds rather than what it is called, so the row
+ * still reads at a glance in a language the icon set was not drawn for.
+ */
+@Composable
+private fun PaneIcon(pane: Pane, tint: Color) = when (pane) {
+    Pane.Chat -> ChatIcon(tint = tint)
+    Pane.Cron -> ClockIcon(tint = tint)
+    Pane.Gateway -> ServerIcon(tint = tint)
+    Pane.Dashboard -> GridIcon(tint = tint)
+    Pane.Sessions -> ListIcon(tint = tint)
+    Pane.Settings -> SettingsIcon(tint = tint)
 }
 
 /** A pane's name, used by both the title bar and the drawer's destination rows. */

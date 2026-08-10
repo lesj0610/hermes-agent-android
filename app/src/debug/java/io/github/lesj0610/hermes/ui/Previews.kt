@@ -21,7 +21,12 @@ import io.github.lesj0610.hermes.net.Profile
 import io.github.lesj0610.hermes.net.SessionSummary
 import io.github.lesj0610.hermes.ui.chat.ApprovalSheet
 import io.github.lesj0610.hermes.ui.chat.ChatPane
+import io.github.lesj0610.hermes.ui.components.ChatIcon
+import io.github.lesj0610.hermes.ui.components.ClockIcon
 import io.github.lesj0610.hermes.ui.components.DrawerContent
+import io.github.lesj0610.hermes.ui.components.DrawerEntry
+import io.github.lesj0610.hermes.ui.components.GridIcon
+import io.github.lesj0610.hermes.ui.components.ServerIcon
 import io.github.lesj0610.hermes.ui.cron.CronPane
 import io.github.lesj0610.hermes.ui.dashboard.DashboardPane
 import io.github.lesj0610.hermes.ui.sessions.SessionsPane
@@ -120,10 +125,10 @@ private fun PreviewDrawer() = Frame {
         connectionLabel = "연결됨",
         connectionColor = Color(0xFF4ADE80),
         destinations = listOf(
-            "대화" to true,
-            "예약" to false,
-            "게이트웨이" to false,
-            "워크스페이스" to false,
+            DrawerEntry("대화", true) { ChatIcon(tint = it) },
+            DrawerEntry("예약", false) { ClockIcon(tint = it) },
+            DrawerEntry("게이트웨이", false) { ServerIcon(tint = it) },
+            DrawerEntry("워크스페이스", false) { GridIcon(tint = it) },
         ),
         onDestination = {},
         sessions = sampleSessions,
@@ -131,8 +136,10 @@ private fun PreviewDrawer() = Frame {
         onSession = {},
         onAllSessions = {},
         onNewChat = {},
+        settingsSelected = false,
         onSettings = {},
-        arrangeLabel = null,
+        arrangeLabel = "배치",
+        arranging = false,
         onArrange = {},
     )
 }

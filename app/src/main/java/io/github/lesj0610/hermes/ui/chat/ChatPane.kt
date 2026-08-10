@@ -45,6 +45,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material3.Switch
+import io.github.lesj0610.hermes.core.REASONING_SCALE
 import io.github.lesj0610.hermes.core.ReasoningEffort
 import io.github.lesj0610.hermes.net.ModelChoice
 import androidx.compose.material3.IconButton
@@ -582,9 +584,12 @@ private fun Composer(
             // phone, leaving no space for the mic.
             Box {
                 RuntimeChip(
+                    // "model · Med", the desktop's own status format. The
+                    // separator matters at a glance: two words with a space
+                    // between them read as one long model name.
                     label = listOf(modelLabel, effortShortLabel(effort))
                         .filter { it.isNotBlank() }
-                        .joinToString(" "),
+                        .joinToString(" · "),
                     enabled = true,
                     onClick = {
                         pickingModel = false
@@ -646,15 +651,41 @@ private fun Composer(
                             )
                             HorizontalDivider(color = colors.line)
                         }
+                        // Thinking is a switch, not the bottom rung of the
+                        // scale. Off means reasoning is disabled — a different
+                        // statement from "reason as little as possible" — and
+                        // mixing the two put a state that turns the feature off
+                        // in a list of how hard to work.
+                        val thinking = effort != ReasoningEffort.Off
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.effort_thinking)) },
+                            trailingIcon = {
+                                Switch(
+                                    checked = thinking,
+                                    onCheckedChange = { on ->
+                                        onSelectEffort(
+                                            if (on) ReasoningEffort.DEFAULT else ReasoningEffort.Off,
+                                        )
+                                    },
+                                )
+                            },
+                            onClick = {
+                                onSelectEffort(
+                                    if (thinking) ReasoningEffort.Off else ReasoningEffort.DEFAULT,
+                                )
+                            },
+                        )
+                        HorizontalDivider(color = colors.line)
                         Text(
                             text = stringResource(R.string.effort_title),
                             style = MaterialTheme.typography.labelSmall,
                             color = colors.muted,
                             modifier = Modifier.padding(start = 12.dp, top = 8.dp, bottom = 2.dp),
                         )
-                        ReasoningEffort.entries.forEach { option ->
+                        REASONING_SCALE.forEach { option ->
                             DropdownMenuItem(
                                 text = { Text(effortLabel(option)) },
+                                enabled = thinking,
                                 trailingIcon = {
                                     if (option == effort) {
                                         Text("✓", color = MaterialTheme.colorScheme.primary)

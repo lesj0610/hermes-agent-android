@@ -200,7 +200,8 @@
     <string name="settings_back">Back</string>
     <string name="voice_dictate">Dictate a message</string>
     <string name="voice_conversation">Spoken conversation</string>
-    <string name="effort_title">Reasoning</string>
+    <string name="effort_title">Effort</string>
+    <string name="effort_thinking">Thinking</string>
     <string name="chat_attach">Attach</string>
     <string name="chat_attachment_remove">Remove attachment</string>
     <string name="chat_attach_camera">Camera</string>

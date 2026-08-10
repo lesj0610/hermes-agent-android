@@ -190,7 +190,8 @@
     <string name="settings_back">뒤로</string>
     <string name="voice_dictate">음성으로 입력</string>
     <string name="voice_conversation">음성 대화</string>
-    <string name="effort_title">추론</string>
+    <string name="effort_title">추론 단계</string>
+    <string name="effort_thinking">추론 사용</string>
     <string name="chat_attach">첨부</string>
     <string name="chat_attachment_remove">첨부 제거</string>
     <string name="chat_attach_camera">카메라</string>

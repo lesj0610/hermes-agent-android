@@ -41,6 +41,12 @@ import io.github.lesj0610.hermes.data.TranscriptItem
 import io.github.lesj0610.hermes.ui.components.ToolCard
 import io.github.lesj0610.hermes.ui.components.uiErrorText
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.text.style.TextOverflow
+import io.github.lesj0610.hermes.core.ReasoningEffort
+import io.github.lesj0610.hermes.net.ModelChoice
 
 @Composable
 fun ChatPane(
@@ -49,6 +55,15 @@ fun ChatPane(
     onStop: () -> Unit,
     onDismissError: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * The per-turn runtime controls. Defaulted so the previews and screenshot
+     * harness can render a transcript without standing up a picker.
+     */
+    modelLabel: String = "",
+    modelChoices: List<ModelChoice> = emptyList(),
+    onSelectModel: (ModelChoice) -> Unit = {},
+    effort: ReasoningEffort = ReasoningEffort.Default,
+    onSelectEffort: (ReasoningEffort) -> Unit = {},
 ) {
     val colors = LocalRunColors.current
     val listState = rememberLazyListState()
@@ -104,7 +119,122 @@ fun ChatPane(
         }
 
         HorizontalDivider(color = colors.line)
+        RuntimeBar(
+            modelLabel = modelLabel,
+            modelChoices = modelChoices,
+            onSelectModel = onSelectModel,
+            effort = effort,
+            onSelectEffort = onSelectEffort,
+        )
         Composer(enabled = !state.isBusy, onSend = onSend)
+    }
+}
+
+/**
+ * The model and reasoning-effort choices, directly above the input.
+ *
+ * They sit here rather than in settings because both are per-turn decisions —
+ * a cheap model for a quick question, xhigh for something hard — and the
+ * gateway accepts both on the run request. Burying them a screen away would
+ * make the choice cost more than the turn it applies to.
+ */
+@Composable
+private fun RuntimeBar(
+    modelLabel: String,
+    modelChoices: List<ModelChoice>,
+    onSelectModel: (ModelChoice) -> Unit,
+    effort: ReasoningEffort,
+    onSelectEffort: (ReasoningEffort) -> Unit,
+) {
+    val colors = LocalRunColors.current
+    var modelsOpen by remember { mutableStateOf(false) }
+    var effortOpen by remember { mutableStateOf(false) }
+
+    Row(
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box {
+            // The chip is inert rather than absent when the gateway cannot serve
+            // the inventory: the model in use is still worth showing.
+            RuntimeChip(
+                label = modelLabel.ifBlank { stringResource(R.string.settings_model_default) },
+                enabled = modelChoices.isNotEmpty(),
+                onClick = { modelsOpen = true },
+            )
+            DropdownMenu(expanded = modelsOpen, onDismissRequest = { modelsOpen = false }) {
+                modelChoices.forEach { choice ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(choice.model, style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    text = choice.providerLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colors.muted,
+                                )
+                            }
+                        },
+                        onClick = {
+                            onSelectModel(choice)
+                            modelsOpen = false
+                        },
+                    )
+                }
+            }
+        }
+
+        Box {
+            RuntimeChip(
+                label = effortLabel(effort),
+                enabled = true,
+                onClick = { effortOpen = true },
+            )
+            DropdownMenu(expanded = effortOpen, onDismissRequest = { effortOpen = false }) {
+                ReasoningEffort.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(effortLabel(option)) },
+                        onClick = {
+                            onSelectEffort(option)
+                            effortOpen = false
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun effortLabel(effort: ReasoningEffort): String = when (effort) {
+    ReasoningEffort.Default -> stringResource(R.string.effort_default)
+    ReasoningEffort.Off -> stringResource(R.string.effort_off)
+    ReasoningEffort.Minimal -> stringResource(R.string.effort_minimal)
+    ReasoningEffort.Low -> stringResource(R.string.effort_low)
+    ReasoningEffort.Medium -> stringResource(R.string.effort_medium)
+    ReasoningEffort.High -> stringResource(R.string.effort_high)
+    ReasoningEffort.XHigh -> stringResource(R.string.effort_xhigh)
+}
+
+@Composable
+private fun RuntimeChip(label: String, enabled: Boolean, onClick: () -> Unit) {
+    val colors = LocalRunColors.current
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(colors.panelRaised)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (enabled) MaterialTheme.colorScheme.primary else colors.muted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

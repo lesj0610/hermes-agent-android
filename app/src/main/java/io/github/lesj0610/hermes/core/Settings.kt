@@ -39,6 +39,26 @@ enum class LayoutMode { Auto, Phone, Tablet }
 enum class RailPanel { None, Activity, Cron, Gateway, Dashboard }
 
 /**
+ * Reasoning efforts the gateway accepts, plus [Default] for "say nothing".
+ *
+ * Sending nothing is not the same as sending `none`: `none` disables reasoning
+ * for the turn, while omitting the option leaves whatever the server is
+ * configured to do. The picker has to be able to express both.
+ */
+enum class ReasoningEffort(val wire: String?) {
+    Default(null),
+    Off("none"),
+    Minimal("minimal"),
+    Low("low"),
+    Medium("medium"),
+    High("high"),
+    XHigh("xhigh"),
+}
+
+/** The wire value the API sends for [ReasoningEffort.Off]. */
+const val REASONING_OFF = "none"
+
+/**
  * Bounds for [HermesSettings.uiScale]. Kept narrow deliberately: below 0.85 the
  * approval sheet's command text stops being readable, and above 1.4 the tablet
  * shell no longer fits three panes on real hardware.
@@ -62,6 +82,9 @@ data class HermesSettings(
     val baseUrl: String = "",
     val token: String = "",
     val model: String = "",
+    /** Provider slug for [model], when it came from the inventory. */
+    val provider: String = "",
+    val reasoningEffort: ReasoningEffort = ReasoningEffort.Default,
     /** BCP-47 tag, or empty to follow the system locale. See [Language]. */
     val language: String = "",
     val notifyApprovals: Boolean = true,
@@ -111,6 +134,8 @@ class SettingsRepository(private val context: Context) {
         val BASE_URL = stringPreferencesKey("base_url")
         val TOKEN_SEALED = stringPreferencesKey("token_sealed")
         val MODEL = stringPreferencesKey("model")
+        val PROVIDER = stringPreferencesKey("provider")
+        val REASONING = stringPreferencesKey("reasoning_effort")
         val LANGUAGE = stringPreferencesKey("language")
         val NOTIFY_APPROVALS = booleanPreferencesKey("notify_approvals")
         val NOTIFY_COMPLETION = booleanPreferencesKey("notify_completion")
@@ -142,6 +167,10 @@ class SettingsRepository(private val context: Context) {
                 baseUrl = prefs[Keys.BASE_URL].orEmpty(),
                 token = SecretStore.unseal(prefs[Keys.TOKEN_SEALED].orEmpty()),
                 model = prefs[Keys.MODEL].orEmpty(),
+                provider = prefs[Keys.PROVIDER].orEmpty(),
+                reasoningEffort = prefs[Keys.REASONING]
+                    ?.let { stored -> ReasoningEffort.entries.firstOrNull { it.name == stored } }
+                    ?: ReasoningEffort.Default,
                 language = prefs[Keys.LANGUAGE].orEmpty(),
                 notifyApprovals = prefs[Keys.NOTIFY_APPROVALS] ?: true,
                 notifyCompletion = prefs[Keys.NOTIFY_COMPLETION] ?: true,
@@ -186,8 +215,20 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setModel(model: String) {
-        context.dataStore.edit { it[Keys.MODEL] = model }
+    /**
+     * [provider] is blank when the model was typed rather than picked, which is
+     * the case on a gateway that cannot serve the inventory. The gateway
+     * honours a bare model on the run route, so the slug is genuinely optional.
+     */
+    suspend fun setModel(model: String, provider: String = "") {
+        context.dataStore.edit {
+            it[Keys.MODEL] = model
+            it[Keys.PROVIDER] = provider
+        }
+    }
+
+    suspend fun setReasoningEffort(effort: ReasoningEffort) {
+        context.dataStore.edit { it[Keys.REASONING] = effort.name }
     }
 
     suspend fun setLanguage(tag: String) {

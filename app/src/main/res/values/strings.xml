@@ -171,4 +171,11 @@
     <string name="notif_running_body">Streaming from the gateway.</string>
     <string name="notif_finished_title">Run finished</string>
     <string name="notif_failed_title">Run failed</string>
+    <string name="effort_default">Reasoning: server default</string>
+    <string name="effort_off">Reasoning: off</string>
+    <string name="effort_minimal">Reasoning: minimal</string>
+    <string name="effort_low">Reasoning: low</string>
+    <string name="effort_medium">Reasoning: medium</string>
+    <string name="effort_high">Reasoning: high</string>
+    <string name="effort_xhigh">Reasoning: xhigh</string>
 </resources>

@@ -44,10 +44,63 @@ data class RunRequest(
     val input: List<InputMessage>,
     @SerialName("session_id") val sessionId: String? = null,
     val model: String? = null,
+    /**
+     * Sent with a model chosen from the inventory. A bare model is honoured on
+     * this route, but the slug removes the ambiguity when two providers offer
+     * the same model id.
+     */
+    val provider: String? = null,
+    @SerialName("model_options") val modelOptions: ModelOptions? = null,
 )
+
+/**
+ * Per-request runtime options. The gateway reads `reasoning.effort` and ignores
+ * an effort it does not recognise rather than failing the turn.
+ */
+@Serializable
+data class ModelOptions(val reasoning: ReasoningOption? = null)
+
+@Serializable
+data class ReasoningOption(val enabled: Boolean, val effort: String? = null)
 
 @Serializable
 data class InputMessage(val role: String, val content: String)
+
+// ── model inventory ───────────────────────────────────────────────────────
+
+/**
+ * `/api/model/options` — the provider catalogue the desktop picker uses.
+ *
+ * `/v1/models` cannot back a picker: it advertises a single virtual alias for
+ * OpenAI-compatible clients, so it lists one entry however many models are
+ * configured.
+ */
+@Serializable
+data class ModelOptionsPayload(
+    val providers: List<ProviderRow> = emptyList(),
+    val model: String? = null,
+    val provider: String? = null,
+)
+
+@Serializable
+data class ProviderRow(
+    val slug: String? = null,
+    val name: String? = null,
+    val models: List<String> = emptyList(),
+    /** `{model: {fast, reasoning}}`, absent on gateways that do not enrich it. */
+    val capabilities: Map<String, ModelCapability> = emptyMap(),
+)
+
+@Serializable
+data class ModelCapability(val fast: Boolean = false, val reasoning: Boolean = false)
+
+/** One selectable model, flattened out of the provider rows. */
+data class ModelChoice(
+    val provider: String,
+    val providerLabel: String,
+    val model: String,
+    val reasoning: Boolean,
+)
 
 // ── sessions ──────────────────────────────────────────────────────────────
 

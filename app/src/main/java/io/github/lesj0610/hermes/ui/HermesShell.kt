@@ -89,6 +89,7 @@ fun HermesShell(
     val connection by viewModel.connection.collectAsStateWithLifecycle()
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val models by viewModel.models.collectAsStateWithLifecycle()
+    val modelChoices by viewModel.modelChoices.collectAsStateWithLifecycle()
     val pane by viewModel.pane.collectAsStateWithLifecycle()
     val jobs by viewModel.jobs.collectAsStateWithLifecycle()
     val health by viewModel.health.collectAsStateWithLifecycle()
@@ -368,6 +369,11 @@ fun HermesShell(
                                     onSend = viewModel::send,
                                     onStop = viewModel::stop,
                                     onDismissError = viewModel::dismissError,
+                                    modelLabel = settings.model,
+                                    modelChoices = modelChoices,
+                                    onSelectModel = viewModel::setModelChoice,
+                                    effort = settings.reasoningEffort,
+                                    onSelectEffort = viewModel::setReasoningEffort,
                                 )
                             }
                         }
@@ -417,6 +423,11 @@ fun HermesShell(
                         onStop = viewModel::stop,
                         onDismissError = viewModel::dismissError,
                         modifier = content,
+                        modelLabel = settings.model,
+                        modelChoices = modelChoices,
+                        onSelectModel = viewModel::setModelChoice,
+                        effort = settings.reasoningEffort,
+                        onSelectEffort = viewModel::setReasoningEffort,
                     )
                     Pane.Cron -> CronPane(
                         jobs = jobs,

@@ -13,6 +13,7 @@ import io.github.lesj0610.hermes.core.Graph
 import io.github.lesj0610.hermes.core.HermesSettings
 import io.github.lesj0610.hermes.core.LayoutMode
 import io.github.lesj0610.hermes.core.RailPanel
+import io.github.lesj0610.hermes.core.ReasoningEffort
 import io.github.lesj0610.hermes.data.ChatState
 import io.github.lesj0610.hermes.data.UiError
 import io.github.lesj0610.hermes.net.ActiveProfile
@@ -22,6 +23,7 @@ import io.github.lesj0610.hermes.net.DetailedHealth
 import io.github.lesj0610.hermes.net.Profile
 import io.github.lesj0610.hermes.net.HermesUnauthorizedException
 import io.github.lesj0610.hermes.net.Job
+import io.github.lesj0610.hermes.net.ModelChoice
 import io.github.lesj0610.hermes.net.ModelEntry
 import io.github.lesj0610.hermes.net.SessionSummary
 import io.github.lesj0610.hermes.net.Skill
@@ -65,6 +67,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _models = MutableStateFlow<List<ModelEntry>>(emptyList())
     val models: StateFlow<List<ModelEntry>> = _models.asStateFlow()
+
+    /**
+     * Every model the gateway can route to, flattened from the provider
+     * inventory. Empty on a gateway that cannot serve it, which is why the
+     * picker falls back to [models].
+     */
+    private val _modelChoices = MutableStateFlow<List<ModelChoice>>(emptyList())
+    val modelChoices: StateFlow<List<ModelChoice>> = _modelChoices.asStateFlow()
 
     private val _jobs = MutableStateFlow<List<Job>>(emptyList())
     val jobs: StateFlow<List<Job>> = _jobs.asStateFlow()
@@ -174,6 +184,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         runCatching { graph.api.toolsets() }.onSuccess { _toolsets.value = it }
         runCatching { graph.api.skills() }.onSuccess { _skills.value = it }
+
+        // The inventory is enrichment, not a requirement: a gateway that cannot
+        // build it leaves the picker on whatever /v1/models reported.
+        runCatching { graph.api.modelOptions() }.onSuccess { payload ->
+            _modelChoices.value = payload.providers.flatMap { row ->
+                val slug = row.slug.orEmpty()
+                row.models.map { model ->
+                    ModelChoice(
+                        provider = slug,
+                        providerLabel = row.name ?: slug,
+                        model = model,
+                        reasoning = row.capabilities[model]?.reasoning ?: false,
+                    )
+                }
+            }
+        }
     }
 
     private fun jobAction(block: suspend () -> Unit) {
@@ -200,8 +226,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun send(prompt: String) {
         viewModelScope.launch {
-            val model = graph.settings.current().model.takeIf { it.isNotBlank() }
-            graph.runEngine.send(prompt, model)
+            val current = graph.settings.current()
+            graph.runEngine.send(
+                prompt = prompt,
+                model = current.model.takeIf { it.isNotBlank() },
+                provider = current.provider.takeIf { it.isNotBlank() },
+                effort = current.reasoningEffort.wire,
+            )
         }
     }
 
@@ -218,8 +249,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun setReasoningEffort(effort: ReasoningEffort) {
+        viewModelScope.launch { graph.settings.setReasoningEffort(effort) }
+    }
+
     fun setModel(model: String) {
         viewModelScope.launch { graph.settings.setModel(model) }
+    }
+
+    /** Picked from the inventory, so the provider slug travels with the model. */
+    fun setModelChoice(choice: ModelChoice) {
+        viewModelScope.launch { graph.settings.setModel(choice.model, choice.provider) }
     }
 
     fun setLanguage(tag: String) {

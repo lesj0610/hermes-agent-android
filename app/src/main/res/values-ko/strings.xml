@@ -156,4 +156,11 @@
     <string name="notif_running_body">게이트웨이에서 스트리밍 중입니다.</string>
     <string name="notif_finished_title">실행 완료</string>
     <string name="notif_failed_title">실행 실패</string>
+    <string name="effort_default">추론: 서버 기본</string>
+    <string name="effort_off">추론: 끔</string>
+    <string name="effort_minimal">추론: 최소</string>
+    <string name="effort_low">추론: 낮음</string>
+    <string name="effort_medium">추론: 보통</string>
+    <string name="effort_high">추론: 높음</string>
+    <string name="effort_xhigh">추론: 최대</string>
 </resources>

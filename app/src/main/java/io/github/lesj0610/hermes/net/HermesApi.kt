@@ -20,6 +20,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import io.github.lesj0610.hermes.core.REASONING_OFF
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -184,7 +185,13 @@ class HermesApi(
 
     // ── runs ──────────────────────────────────────────────────────────────
 
-    suspend fun startRun(prompt: String, sessionId: String?, model: String?): RunStarted {
+    suspend fun startRun(
+        prompt: String,
+        sessionId: String?,
+        model: String?,
+        provider: String? = null,
+        effort: String? = null,
+    ): RunStarted {
         val auth = bearer()
         return client.post(url("/v1/runs")) {
             auth?.let { header(HttpHeaders.Authorization, it) }
@@ -194,8 +201,35 @@ class HermesApi(
                     input = listOf(InputMessage(role = "user", content = prompt)),
                     sessionId = sessionId,
                     model = model,
+                    provider = provider,
+                    // Omitted entirely when no effort is chosen, so the
+                    // gateway's own default stands rather than being overridden
+                    // with a guess.
+                    modelOptions = effort?.let {
+                        ModelOptions(
+                            reasoning = if (it == REASONING_OFF) {
+                                ReasoningOption(enabled = false)
+                            } else {
+                                ReasoningOption(enabled = true, effort = it)
+                            },
+                        )
+                    },
                 ),
             )
+        }.decode { body() }
+    }
+
+    /**
+     * The provider catalogue behind the model picker.
+     *
+     * Optional: a gateway that cannot build it answers 500, and the picker then
+     * falls back to whatever `/v1/models` reports rather than the screen
+     * failing.
+     */
+    suspend fun modelOptions(): ModelOptionsPayload {
+        val auth = bearer()
+        return client.get(url("/api/model/options")) {
+            auth?.let { header(HttpHeaders.Authorization, it) }
         }.decode { body() }
     }
 

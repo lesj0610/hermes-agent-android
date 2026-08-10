@@ -212,4 +212,19 @@
     <string name="artifacts_scanned">세션 %2$d개 중 최근 %1$d개에서 수집</string>
     <string name="artifacts_scanned_failed">세션 %2$d개 중 최근 %1$d개에서 수집 · %3$d개는 읽지 못함</string>
     <string name="artifacts_on_gateway">게이트웨이에 있음</string>
+    <string name="projects_title">프로젝트</string>
+    <string name="projects_new">새 프로젝트</string>
+    <string name="projects_new_why">작업 공간 이름을 정하고 에이전트 머신의 폴더를 하나 이상 추가하세요.</string>
+    <string name="projects_name">이름</string>
+    <string name="projects_folders">폴더</string>
+    <string name="projects_no_folders">추가된 폴더가 없습니다.</string>
+    <string name="projects_add_folder">폴더 추가</string>
+    <string name="projects_idea">아이디어</string>
+    <string name="projects_idea_hint">이 프로젝트는 무엇에 관한 것인가요? (IDEA.md로 저장됩니다)</string>
+    <string name="projects_create">만들기</string>
+    <string name="projects_cancel">취소</string>
+    <string name="projects_archive">보관</string>
+    <string name="projects_empty">프로젝트가 없습니다.</string>
+    <string name="projects_pick_here">이 폴더 사용</string>
+    <string name="projects_needs_dashboard">프로젝트는 이 휴대폰이 아니라 대시보드 서버에 저장됩니다. 설정에서 대시보드를 추가하면 보고 만들 수 있습니다.</string>
 </resources>

@@ -137,6 +137,9 @@ dependencies {
   implementation(libs.ktor.client.okhttp)
   implementation(libs.ktor.client.content.negotiation)
   implementation(libs.ktor.serialization.kotlinx.json)
+  // The dashboard serves the projects RPC over a WebSocket; there is no REST
+  // equivalent for it.
+  implementation(libs.ktor.client.websockets)
   implementation(libs.kotlinx.serialization.json)
 
   // Tooling. The preview annotations are compile-time only and live in the

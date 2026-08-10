@@ -455,6 +455,29 @@ fun PhotoIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     }
 }
 
+/** A folder with its tab: a directory on the agent's machine. */
+@Composable
+fun FolderIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val top = bounds.top + bounds.height * 0.18f
+        val tabRight = bounds.left + bounds.width * 0.42f
+        // The tab is a step up from the body's top edge rather than a separate
+        // shape, so the two never separate by a hairline at small sizes.
+        val folder = Path().apply {
+            moveTo(bounds.left, bounds.bottom)
+            lineTo(bounds.left, bounds.top + bounds.height * 0.06f)
+            lineTo(tabRight - bounds.width * 0.08f, bounds.top + bounds.height * 0.06f)
+            lineTo(tabRight, top)
+            lineTo(bounds.right, top)
+            lineTo(bounds.right, bounds.bottom)
+            close()
+        }
+        drawPath(folder, color, style = iconStroke())
+    }
+}
+
 /** A page with a folded corner: what the runs produced. */
 @Composable
 fun DocumentIcon(modifier: Modifier = Modifier, tint: Color? = null) {

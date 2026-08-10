@@ -28,6 +28,9 @@ import io.github.lesj0610.hermes.net.DetailedHealth
 import io.github.lesj0610.hermes.net.ModelChoice
 import io.github.lesj0610.hermes.net.ModelEntry
 import io.github.lesj0610.hermes.net.Profile
+import io.github.lesj0610.hermes.net.Project
+import io.github.lesj0610.hermes.net.ProjectFolder
+import io.github.lesj0610.hermes.net.ProjectsPayload
 import io.github.lesj0610.hermes.net.SessionSummary
 import io.github.lesj0610.hermes.net.Skill
 import io.github.lesj0610.hermes.net.Toolset
@@ -37,6 +40,7 @@ import io.github.lesj0610.hermes.ui.artifacts.Artifact
 import io.github.lesj0610.hermes.ui.artifacts.ArtifactKind
 import io.github.lesj0610.hermes.ui.artifacts.ArtifactsPane
 import io.github.lesj0610.hermes.ui.chat.ChatPane
+import io.github.lesj0610.hermes.ui.projects.ProjectsPane
 import io.github.lesj0610.hermes.ui.components.ChatIcon
 import io.github.lesj0610.hermes.ui.components.ClockIcon
 import io.github.lesj0610.hermes.ui.components.DrawerContent
@@ -336,6 +340,42 @@ class ScreenshotTest {
                 scan = ArtifactScan(running = false, scanned = 20, total = 20, available = 63),
                 onOpenSession = {},
                 onRescan = {},
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+
+    /** Projects, with the active one marked and its folders shown. */
+    @Test
+    fun projects() {
+        capture("projects", 411, 891) {
+            ProjectsPane(
+                payload = ProjectsPayload(
+                    projects = listOf(
+                        Project(
+                            id = "p1", slug = "vllm", name = "vLLM NVFP4",
+                            description = "FP4 KV cache decode path",
+                            primaryPath = "/nvme512g/vllm",
+                            folders = listOf(
+                                ProjectFolder(path = "/nvme512g/vllm", isPrimary = true),
+                                ProjectFolder(path = "/nvme512g/flashinfer"),
+                            ),
+                        ),
+                        Project(
+                            id = "p2", slug = "hermes-android", name = "Hermes Android",
+                            folders = listOf(ProjectFolder(path = "/ssd512g/hermes-android", isPrimary = true)),
+                        ),
+                    ),
+                    activeId = "p1",
+                ),
+                busy = false,
+                error = null,
+                dashboardConfigured = true,
+                onLoad = {},
+                onCreate = { _, _, _ -> },
+                onSetActive = {},
+                onArchive = { _, _ -> },
+                onBrowse = { emptyList() },
                 modifier = Modifier.fillMaxSize(),
             )
         }

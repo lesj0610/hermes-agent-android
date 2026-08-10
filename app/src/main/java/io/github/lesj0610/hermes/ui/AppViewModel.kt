@@ -20,6 +20,8 @@ import io.github.lesj0610.hermes.net.ActiveProfile
 import io.github.lesj0610.hermes.net.Capabilities
 import io.github.lesj0610.hermes.net.DashboardSkill
 import io.github.lesj0610.hermes.net.DetailedHealth
+import io.github.lesj0610.hermes.net.FsEntry
+import io.github.lesj0610.hermes.net.ProjectsPayload
 import io.github.lesj0610.hermes.net.Profile
 import io.github.lesj0610.hermes.net.HermesUnauthorizedException
 import io.github.lesj0610.hermes.net.Job
@@ -44,7 +46,7 @@ sealed interface Connection {
 }
 
 /** Which pane the user is looking at. On a tablet several are visible at once. */
-enum class Pane { Chat, Artifacts, Cron, Gateway, Dashboard, Settings }
+enum class Pane { Chat, Projects, Artifacts, Cron, Gateway, Dashboard, Settings }
 
 /**
  * How many sessions the artifact scan reads.
@@ -94,6 +96,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _sessions = MutableStateFlow<List<SessionSummary>>(emptyList())
     val sessions: StateFlow<List<SessionSummary>> = _sessions.asStateFlow()
+
+    private val _projects = MutableStateFlow(ProjectsPayload())
+    val projects: StateFlow<ProjectsPayload> = _projects.asStateFlow()
+
+    private val _projectsBusy = MutableStateFlow(false)
+    val projectsBusy: StateFlow<Boolean> = _projectsBusy.asStateFlow()
+
+    private val _projectsError = MutableStateFlow<String?>(null)
+    val projectsError: StateFlow<String?> = _projectsError.asStateFlow()
 
     private val _artifacts = MutableStateFlow<List<Artifact>>(emptyList())
     val artifacts: StateFlow<List<Artifact>> = _artifacts.asStateFlow()
@@ -458,6 +469,92 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    // ── projects ──────────────────────────────────────────────────────────
+
+    /**
+     * Projects are the dashboard's, not the phone's.
+     *
+     * They live in the profile's `projects.db` and are reached over the
+     * dashboard's JSON-RPC socket — the same store the desktop writes to, which
+     * is the point: a project made here is one the desktop opens. The gateway's
+     * HTTP surface has no projects route, so without a configured dashboard
+     * there is nothing to show, and the screen says so rather than looking empty.
+     */
+    fun loadProjects() {
+        viewModelScope.launch {
+            if (!graph.settings.current().dashboardConfigured) {
+                _projectsError.value = null
+                _projects.value = ProjectsPayload()
+                return@launch
+            }
+            _projectsBusy.value = true
+            runCatching { graph.dashboard.projects() }
+                .onSuccess {
+                    _projects.value = it
+                    _projectsError.value = null
+                }
+                .onFailure { _projectsError.value = it.message ?: it::class.simpleName.orEmpty() }
+            _projectsBusy.value = false
+        }
+    }
+
+    /**
+     * Creates a project and, when an idea was written, saves it as IDEA.md in
+     * the primary folder — which is what the desktop's New project dialog does
+     * with that field, and where the agent will find it.
+     */
+    fun createProject(name: String, idea: String, folders: List<String>) {
+        viewModelScope.launch {
+            _projectsBusy.value = true
+            runCatching {
+                val primary = folders.firstOrNull()
+                graph.dashboard.createProject(
+                    name = name,
+                    description = idea.takeIf { it.isNotBlank() },
+                    folders = folders,
+                    primaryPath = primary,
+                )
+                if (idea.isNotBlank() && primary != null) {
+                    // Best effort: the project itself is created either way, and
+                    // failing the whole action over a file write would leave the
+                    // user unsure whether the project exists.
+                    runCatching {
+                        graph.dashboard.fsWriteText("${primary.trimEnd('/')}/IDEA.md", idea)
+                    }
+                }
+                graph.dashboard.projects()
+            }
+                .onSuccess {
+                    _projects.value = it
+                    _projectsError.value = null
+                }
+                .onFailure { _projectsError.value = it.message ?: it::class.simpleName.orEmpty() }
+            _projectsBusy.value = false
+        }
+    }
+
+    fun setActiveProject(id: String) = projectAction { graph.dashboard.setActiveProject(id) }
+
+    fun archiveProject(id: String, archived: Boolean) =
+        projectAction { graph.dashboard.archiveProject(id, archived) }
+
+    private fun projectAction(block: suspend () -> ProjectsPayload) {
+        viewModelScope.launch {
+            _projectsBusy.value = true
+            runCatching { block() }
+                .onSuccess {
+                    _projects.value = it
+                    _projectsError.value = null
+                }
+                .onFailure { _projectsError.value = it.message ?: it::class.simpleName.orEmpty() }
+            _projectsBusy.value = false
+        }
+    }
+
+    /** Lists a directory on the gateway host, for the folder picker. */
+    suspend fun browseGateway(path: String): List<FsEntry> =
+        runCatching { graph.dashboard.fsList(path).entries }.getOrDefault(emptyList())
 
     fun setActiveProfile(name: String) {
         viewModelScope.launch {

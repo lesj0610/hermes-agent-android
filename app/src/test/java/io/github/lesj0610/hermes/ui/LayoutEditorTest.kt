@@ -84,8 +84,8 @@ class LayoutEditorTest {
         // server state and configuration you check on — and live under the
         // settings row rather than beside the conversation.
         assertEquals(
-            listOf(Pane.Chat, Pane.Artifacts, Pane.Cron),
-            drawerDestinations(showCron = true),
+            listOf(Pane.Chat, Pane.Projects, Pane.Artifacts, Pane.Cron),
+            drawerDestinations(showCron = true, showProjects = true),
         )
     }
 
@@ -117,6 +117,7 @@ class LayoutEditorTest {
 
     @Test
     fun `the drawer drops panels this gateway cannot serve`() {
+        // Projects need a dashboard, which the gateway cannot answer for.
         assertEquals(listOf(Pane.Chat, Pane.Artifacts), drawerDestinations(showCron = false))
     }
 

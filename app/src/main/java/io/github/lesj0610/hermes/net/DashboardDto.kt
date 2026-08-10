@@ -1,5 +1,6 @@
 package io.github.lesj0610.hermes.net
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -77,3 +78,72 @@ data class SkillToggleRequest(
     val enabled: Boolean,
     val profile: String? = null,
 )
+
+// ── projects ──────────────────────────────────────────────────────────────
+
+/**
+ * A named, multi-folder workspace, stored server-side in the profile's
+ * `projects.db`.
+ *
+ * This is the desktop's Projects feature, not a phone-local list — which is the
+ * point of it: a project made here is the same project the desktop opens, and
+ * the sessions grouped under it are grouped by the folders recorded here.
+ *
+ * Reached over the dashboard's `/api/ws` JSON-RPC bridge; the gateway's own HTTP
+ * surface has no projects route.
+ */
+@Serializable
+data class Project(
+    val id: String,
+    val slug: String = "",
+    val name: String,
+    val description: String? = null,
+    val icon: String? = null,
+    val color: String? = null,
+    @SerialName("board_slug") val boardSlug: String? = null,
+    @SerialName("primary_path") val primaryPath: String? = null,
+    val archived: Boolean = false,
+    @SerialName("created_at") val createdAt: Long = 0,
+    val folders: List<ProjectFolder> = emptyList(),
+)
+
+@Serializable
+data class ProjectFolder(
+    val path: String,
+    val label: String? = null,
+    @SerialName("is_primary") val isPrimary: Boolean = false,
+    @SerialName("added_at") val addedAt: Long = 0,
+)
+
+@Serializable
+data class ProjectsPayload(
+    val projects: List<Project> = emptyList(),
+    @SerialName("active_id") val activeId: String? = null,
+)
+
+@Serializable
+data class ProjectEnvelope(val project: Project? = null)
+
+// ── gateway filesystem ────────────────────────────────────────────────────
+
+/**
+ * One entry from `GET /api/fs/list`.
+ *
+ * The paths are the gateway host's, not the phone's — which is why a project's
+ * folders are picked by browsing this rather than with an Android file picker.
+ */
+@Serializable
+data class FsEntry(
+    val name: String,
+    val path: String,
+    val isDirectory: Boolean = false,
+)
+
+@Serializable
+data class FsListResponse(
+    val entries: List<FsEntry> = emptyList(),
+    val error: String? = null,
+)
+
+@Serializable
+data class FsWriteTextRequest(val path: String, val content: String)

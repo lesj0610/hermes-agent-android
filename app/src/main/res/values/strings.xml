@@ -224,4 +224,19 @@
     <string name="artifacts_scanned">From the %1$d most recent of %2$d sessions</string>
     <string name="artifacts_scanned_failed">From the %1$d most recent of %2$d sessions · %3$d could not be read</string>
     <string name="artifacts_on_gateway">on the gateway</string>
+    <string name="projects_title">Projects</string>
+    <string name="projects_new">New project</string>
+    <string name="projects_new_why">Name a workspace and add one or more folders on the agent’s machine.</string>
+    <string name="projects_name">Name</string>
+    <string name="projects_folders">Folders</string>
+    <string name="projects_no_folders">No folders added yet.</string>
+    <string name="projects_add_folder">Add folder</string>
+    <string name="projects_idea">Idea</string>
+    <string name="projects_idea_hint">What’s this project about? (saved to IDEA.md)</string>
+    <string name="projects_create">Create</string>
+    <string name="projects_cancel">Cancel</string>
+    <string name="projects_archive">Archive</string>
+    <string name="projects_empty">No projects yet.</string>
+    <string name="projects_pick_here">Use this folder</string>
+    <string name="projects_needs_dashboard">Projects are stored by the dashboard server, not on this phone. Add the dashboard in Settings to see and create them.</string>
 </resources>

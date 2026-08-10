@@ -45,8 +45,12 @@ fun railPanelOptions(
  * as the conversation. They live under Settings, which is reachable from the
  * drawer's bottom row. The rail can still show either one beside the transcript.
  */
-fun drawerDestinations(showCron: Boolean): List<Pane> = buildList {
+fun drawerDestinations(showCron: Boolean, showProjects: Boolean = false): List<Pane> = buildList {
     add(Pane.Chat)
+    // Gated on a configured dashboard rather than on a gateway capability:
+    // projects live in the dashboard's per-profile store and the gateway cannot
+    // answer for them.
+    if (showProjects) add(Pane.Projects)
     // Unconditional: artifacts are read out of the session histories every
     // gateway serves, not from a route one might lack.
     add(Pane.Artifacts)

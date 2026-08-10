@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +47,12 @@ fun PaneDivider(
         modifier
             .fillMaxHeight()
             .width(12.dp)
+            // Painted, not transparent. Between two panes of a Scaffold the
+            // background arrives from behind and this changed nothing; the
+            // docked drawer sits outside one, and there an unpainted 12dp strip
+            // let the window's own black through — a gutter whose two edges read
+            // as a thick double line rather than as one seam.
+            .background(MaterialTheme.colorScheme.background)
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
                     onDragStart = { dragging = true },

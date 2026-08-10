@@ -459,7 +459,9 @@ fun HermesShell(
             // The drawer *is* the left column here, not something drawn over
             // one. That is the whole point of pinning: three columns, with the
             // menu as the first of them, the way the desktop shell reads.
-            Row(Modifier.fillMaxSize()) {
+            // The Row paints its own background: nothing else does at this
+            // level, and any pixel it leaves unclaimed shows the bare window.
+            Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                 Column(
                     Modifier
                         .width(drawerWidth.dp)

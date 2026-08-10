@@ -1,7 +1,10 @@
 package io.github.lesj0610.hermes.ui
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -23,12 +26,14 @@ import io.github.lesj0610.hermes.ui.components.ClockIcon
 import io.github.lesj0610.hermes.ui.components.DrawerContent
 import io.github.lesj0610.hermes.ui.components.DrawerEntry
 import io.github.lesj0610.hermes.ui.components.GridIcon
+import io.github.lesj0610.hermes.ui.components.PaneDivider
 import io.github.lesj0610.hermes.ui.components.ServerIcon
 import io.github.lesj0610.hermes.ui.theme.HermesTheme
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -52,6 +57,12 @@ class ScreenshotTest {
     val compose = createComposeRule()
 
     private fun capture(name: String, width: Int, height: Int, content: @Composable () -> Unit) {
+        // The window is resized to match, not just the Surface inside it. The
+        // class-level qualifier is 411dp, so without this a 690dp capture was
+        // measured against a 411dp window and came out squeezed — the render
+        // would have shown a layout bug the app does not have, and hidden the
+        // proportions being checked.
+        RuntimeEnvironment.setQualifiers("w${width}dp-h${height}dp-xhdpi")
         compose.setContent {
             HermesTheme {
                 // Surface, not a bare Box: in the app the Scaffold paints the
@@ -159,6 +170,53 @@ class ScreenshotTest {
                 arranging = false,
                 onArrange = {},
             )
+        }
+    }
+
+    /**
+     * The docked drawer beside the transcript, at the unfolded Fold 5's width.
+     *
+     * This frame is assembled the way the shell assembles it — drawer, divider,
+     * content — rather than through HermesShell, which needs a ViewModel. It
+     * exists because the seam between the two is where an unpainted gap shows,
+     * and a gap there reads as a second divider.
+     */
+    @Test
+    fun dockedDrawer() {
+        capture("shell-docked", 690, 800) {
+            Row(Modifier.fillMaxSize()) {
+                Column(Modifier.width(300.dp).fillMaxSize()) {
+                    DrawerContent(
+                        modelLabel = "opus-5",
+                        connectionLabel = "연결됨",
+                        connectionColor = Color(0xFF4ADE80),
+                        destinations = listOf(
+                            DrawerEntry("대화", true) { ChatIcon(tint = it) },
+                            DrawerEntry("예약", false) { ClockIcon(tint = it) },
+                            DrawerEntry("게이트웨이", false) { ServerIcon(tint = it) },
+                        ),
+                        onDestination = {},
+                        sessions = sampleSessions,
+                        selectedSessionId = "1",
+                        onSession = {},
+                        onNewChat = {},
+                        settingsSelected = false,
+                        onSettings = {},
+                        pinned = true,
+                        pinEnabled = true,
+                        onTogglePin = {},
+                        arrangeLabel = "배치",
+                        arranging = false,
+                        onArrange = {},
+                    )
+                }
+                PaneDivider(onDelta = {}, onCommit = {})
+                ChatPane(
+                    state = ChatState(sessionId = "s1", items = transcript, phase = RunPhase.Running("r1")),
+                    onSend = {}, onStop = {}, onDismissError = {},
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 

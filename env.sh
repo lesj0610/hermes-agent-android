@@ -4,7 +4,7 @@
 # source 해서 쓴다. 전역 셸 설정(~/.bashrc, /etc/profile)은 건드리지 않고,
 # 시스템 패키지도 설치하지 않는다. 이 셸 세션 안에서만 유효하다.
 #
-#   source /ssd512g/hermes-android/env.sh
+#   source ./env.sh
 #   ./gradlew assembleDebug
 #
 # SDK 패키지 관리(android CLI)는 이 파일이 아니라 ./sdk.sh 를 쓴다.

@@ -118,12 +118,12 @@ class ScreenshotTest {
     }
 
     private val transcript = listOf(
-        TranscriptItem.UserText("u1", "디코드 커널 벤치 한 번 돌려주고 이전 결과랑 비교해줘"),
+        TranscriptItem.UserText("u1", "벤치 한 번 돌려주고 이전 결과랑 비교해줘"),
         TranscriptItem.AssistantText("a1", "벤치 스크립트부터 확인하겠습니다.", streaming = false),
-        TranscriptItem.ToolCall("t1", "read_file", "bench/decode_fp4.py · 214줄", ToolState.Completed, 0.4),
+        TranscriptItem.ToolCall("t1", "read_file", "bench/latency.py · 214줄", ToolState.Completed, 0.4),
         TranscriptItem.ToolCall(
             "t2", "bash",
-            "python bench/decode_fp4.py --seq 4096\n[24/50] 1.83 ms/iter",
+            "python bench/latency.py --seq 4096\n[24/50] 1.83 ms/iter",
             ToolState.Running,
         ),
         TranscriptItem.AssistantText("a2", "중간 결과는 1.83 ms/iter", streaming = true),
@@ -167,11 +167,11 @@ class ScreenshotTest {
     }
 
     private val sampleSessions = listOf(
-        SessionSummary(id = "1", title = "FP4 dequant 벤치", model = "opus-5",
+        SessionSummary(id = "1", title = "커널 벤치", model = "opus-5",
             preview = "중간 결과는 1.83 ms/iter…"),
         SessionSummary(id = "2", title = "게이트웨이 로그 점검", model = "opus-5",
             preview = "승인 대기 · bash", pinned = true),
-        SessionSummary(id = "3", title = "Termux 설치 경로 확인",
+        SessionSummary(id = "3", title = "설치 경로 확인",
             toolCallCount = 5, endedAt = "2026-08-08", endReason = "completed"),
     )
 
@@ -296,7 +296,7 @@ class ScreenshotTest {
         capture("settings", 411, 891) {
             SettingsPane(
                 settings = HermesSettings(
-                    baseUrl = "http://192.168.0.20:8642",
+                    baseUrl = "http://gateway.example:8642",
                     layoutMode = LayoutMode.Auto,
                 ),
                 connection = Connection.Connected("2.4.1", 38),
@@ -341,18 +341,18 @@ class ScreenshotTest {
             ArtifactsPane(
                 artifacts = listOf(
                     Artifact(
-                        id = "1", kind = ArtifactKind.Image, value = "/tmp/bench/decode_fp4.png",
-                        label = "decode_fp4.png", sessionId = "1", sessionTitle = "FP4 dequant 벤치",
+                        id = "1", kind = ArtifactKind.Image, value = "/tmp/bench/latency.png",
+                        label = "latency.png", sessionId = "1", sessionTitle = "커널 벤치",
                         timestamp = null,
                     ),
                     Artifact(
-                        id = "2", kind = ArtifactKind.File, value = "/home/u/hermes/report.pdf",
-                        label = "report.pdf", sessionId = "1", sessionTitle = "FP4 dequant 벤치",
+                        id = "2", kind = ArtifactKind.File, value = "/home/agent/out/report.pdf",
+                        label = "report.pdf", sessionId = "1", sessionTitle = "커널 벤치",
                         timestamp = null,
                     ),
                     Artifact(
-                        id = "3", kind = ArtifactKind.Link, value = "https://github.com/vllm-project/vllm/pull/39074",
-                        label = "39074", sessionId = "2", sessionTitle = "게이트웨이 로그 점검",
+                        id = "3", kind = ArtifactKind.Link, value = "https://example.org/reports/latency",
+                        label = "latency", sessionId = "2", sessionTitle = "게이트웨이 로그 점검",
                         timestamp = null,
                     ),
                 ),
@@ -372,17 +372,17 @@ class ScreenshotTest {
                 payload = ProjectsPayload(
                     projects = listOf(
                         Project(
-                            id = "p1", slug = "vllm", name = "vLLM NVFP4",
-                            description = "FP4 KV cache decode path",
-                            primaryPath = "/nvme512g/vllm",
+                            id = "p1", slug = "kernels", name = "Kernel work",
+                            description = "Decode path benchmarks",
+                            primaryPath = "/home/agent/work/kernels",
                             folders = listOf(
-                                ProjectFolder(path = "/nvme512g/vllm", isPrimary = true),
-                                ProjectFolder(path = "/nvme512g/flashinfer"),
+                                ProjectFolder(path = "/home/agent/work/kernels", isPrimary = true),
+                                ProjectFolder(path = "/home/agent/work/bench"),
                             ),
                         ),
                         Project(
-                            id = "p2", slug = "hermes-android", name = "Hermes Android",
-                            folders = listOf(ProjectFolder(path = "/ssd512g/hermes-android", isPrimary = true)),
+                            id = "p2", slug = "mobile", name = "Mobile client",
+                            folders = listOf(ProjectFolder(path = "/home/agent/work/mobile", isPrimary = true)),
                         ),
                     ),
                     activeId = "p1",

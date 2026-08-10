@@ -21,6 +21,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -160,12 +162,6 @@ fun HermesShell(
         )
         val expanded = layout != ShellLayout.Single
 
-        // Pinning costs a column, so it is only on offer where there is one to
-        // spare. The stored preference is read, not rewritten, when it is not:
-        // a foldable that is currently two columns wide will be three again.
-        val pinnable = canPinDrawer(layout)
-        val docked = pinnable && settings.drawerPinned
-
         // Column widths live in transient state while a divider is being dragged
         // and are written back once the gesture ends. Persisting per frame would
         // queue a DataStore write per pixel of travel.
@@ -176,6 +172,30 @@ fun HermesShell(
             mutableFloatStateOf(settings.railWidth)
         }
         val commitWidths = { viewModel.setColumnWidths(drawerWidth, railWidth) }
+
+        // Docking is judged against the measured width, not the tier. Forcing
+        // tablet mode on a 690dp foldable asks three columns of a window with
+        // room for two, and answering by pane count produced three slivers with
+        // the transcript wrapping one character per line.
+        val widthDp = maxWidth.value
+        val pinnable = expanded
+        val canDock = pinnable && canDockDrawer(widthDp, drawerWidth)
+        val docked = canDock && settings.drawerPinned
+
+        // The rail yields to the drawer, never the transcript. Docking on a
+        // two-column window drops the rail rather than squeezing the
+        // conversation, and undocking brings it straight back.
+        val occupied = if (docked) drawerWidth else 0f
+        val showRail = expanded &&
+            railPanel != RailPanel.None &&
+            railFits(widthDp, occupied, railWidth)
+
+        // Dragging must not be able to starve the transcript either.
+        val drawerMax = (widthDp - MIN_CENTER_WIDTH_DP).coerceAtMost(RAIL_WIDTH_MAX)
+        val railMax = (widthDp - occupied - MIN_CENTER_WIDTH_DP).coerceAtMost(RAIL_WIDTH_MAX)
+
+        val notices = remember { SnackbarHostState() }
+        val pinBlockedNotice = stringResource(R.string.drawer_pin_unavailable)
 
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         val drawerScope = rememberCoroutineScope()
@@ -225,10 +245,20 @@ fun HermesShell(
                     viewModel.show(Pane.Settings)
                     if (!docked) closeDrawer()
                 },
-                pinned = if (pinnable) settings.drawerPinned else null,
+                pinned = if (pinnable) docked else null,
+                pinEnabled = canDock,
                 onTogglePin = {
-                    viewModel.setDrawerPinned(!settings.drawerPinned)
-                    closeDrawer()
+                    if (canDock) {
+                        viewModel.setDrawerPinned(!settings.drawerPinned)
+                        closeDrawer()
+                    } else {
+                        // Refusing silently would read as a dead button. The
+                        // stored preference is left alone: this window is too
+                        // narrow, not the user's choice wrong.
+                        drawerScope.launch {
+                            notices.showSnackbar(pinBlockedNotice)
+                        }
+                    }
                 },
                 // Arranging columns is meaningless where there is only one, so
                 // the control is absent rather than present and inert.
@@ -332,11 +362,11 @@ fun HermesShell(
                             }
                         }
 
-                        if (railPanel != RailPanel.None) {
+                        if (showRail) {
                             PaneDivider(
                                 onDelta = { delta ->
                                     railWidth = (railWidth - delta)
-                                        .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
+                                        .coerceIn(RAIL_WIDTH_MIN, railMax.coerceAtLeast(RAIL_WIDTH_MIN))
                                 },
                                 onCommit = commitWidths,
                             )
@@ -441,7 +471,7 @@ fun HermesShell(
                 PaneDivider(
                     onDelta = { delta ->
                         drawerWidth = (drawerWidth + delta)
-                            .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
+                            .coerceIn(RAIL_WIDTH_MIN, drawerMax.coerceAtLeast(RAIL_WIDTH_MIN))
                     },
                     onCommit = commitWidths,
                 )
@@ -462,6 +492,14 @@ fun HermesShell(
                 body()
             }
         }
+
+        // Outside the Scaffold on purpose: the notice that explains a refused
+        // dock is raised from inside the drawer, and a host nested in the
+        // content would surface it underneath the sheet that triggered it.
+        SnackbarHost(
+            hostState = notices,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
+        )
 
         // The sheet sits above whichever layout is showing: an approval blocks
         // the run regardless of which pane has focus.

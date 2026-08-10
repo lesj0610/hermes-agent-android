@@ -40,6 +40,7 @@
     <string name="layout_show_rail">레일 표시</string>
     <string name="drawer_pin">메뉴 고정</string>
     <string name="drawer_unpin">고정 해제</string>
+    <string name="drawer_pin_unavailable">이 화면 폭에서는 메뉴를 고정할 수 없습니다</string>
     <string name="layout_status_bar_hide">상태바 숨김</string>
     <string name="layout_status_bar_show">상태바 표시</string>
     <string name="rail_none">숨김</string>

@@ -95,13 +95,20 @@ class LayoutEditorTest {
     }
 
     @Test
-    fun `the drawer docks only where a third column exists`() {
-        // The unfolded Fold 5 is 690dp: two columns, both spoken for. Docking
-        // there would evict the rail, which reads as a lost panel rather than a
-        // setting taking effect.
-        assertEquals(true, canPinDrawer(ShellLayout.Triple))
-        assertEquals(false, canPinDrawer(ShellLayout.Dual))
-        assertEquals(false, canPinDrawer(ShellLayout.Single))
+    fun `docking is judged by width, not by pane count`() {
+        // Tablet mode forced on the unfolded Fold 5 asks for three columns from
+        // 690dp. The drawer still fits; what does not is the rail as well.
+        assertEquals(true, canDockDrawer(widthDp = 690f, drawerWidthDp = 300f))
+        assertEquals(false, canDockDrawer(widthDp = 690f, drawerWidthDp = 420f))
+    }
+
+    @Test
+    fun `the rail yields to the docked drawer rather than the transcript`() {
+        // 690 − 300 drawer − 300 rail leaves 90dp of conversation, which is not
+        // a conversation. Undocked, the same rail fits.
+        assertEquals(false, railFits(widthDp = 690f, occupiedDp = 300f, railWidthDp = 300f))
+        assertEquals(true, railFits(widthDp = 690f, occupiedDp = 0f, railWidthDp = 300f))
+        assertEquals(true, railFits(widthDp = 1100f, occupiedDp = 300f, railWidthDp = 300f))
     }
 
     @Test

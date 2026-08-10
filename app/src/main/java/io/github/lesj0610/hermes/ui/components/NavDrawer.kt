@@ -76,8 +76,11 @@ data class DrawerEntry(
  * height and scrolling, and the controls pinned at the bottom where a long
  * history cannot push them away.
  *
- * [pinned] is null where the window cannot spare a column for a docked drawer,
- * and the toggle is then absent rather than present and inert.
+ * [pinned] is null on a single-column window, where docking is not a concept and
+ * the toggle is absent. Where it is a concept but the current width cannot hold
+ * it, [pinEnabled] is false: the control stays visible and dimmed, and pressing
+ * it says why rather than doing nothing — a control that vanishes as the window
+ * narrows is harder to understand than one that explains itself.
  */
 @Composable
 fun DrawerContent(
@@ -93,6 +96,7 @@ fun DrawerContent(
     settingsSelected: Boolean,
     onSettings: () -> Unit,
     pinned: Boolean?,
+    pinEnabled: Boolean,
     onTogglePin: () -> Unit,
     arrangeLabel: String?,
     arranging: Boolean,
@@ -164,7 +168,11 @@ fun DrawerContent(
             if (pinned != null) {
                 IconButton(onClick = onTogglePin) {
                     LayoutIcon(
-                        tint = if (pinned) MaterialTheme.colorScheme.primary else colors.muted,
+                        tint = when {
+                            !pinEnabled -> colors.muted.copy(alpha = 0.35f)
+                            pinned -> MaterialTheme.colorScheme.primary
+                            else -> colors.muted
+                        },
                         modifier = Modifier.semantics { contentDescription = pinLabel },
                     )
                 }

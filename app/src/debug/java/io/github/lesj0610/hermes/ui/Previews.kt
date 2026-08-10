@@ -137,6 +137,7 @@ private fun PreviewDrawer() = Frame {
         settingsSelected = false,
         onSettings = {},
         pinned = true,
+        pinEnabled = true,
         onTogglePin = {},
         arrangeLabel = "배치",
         arranging = false,

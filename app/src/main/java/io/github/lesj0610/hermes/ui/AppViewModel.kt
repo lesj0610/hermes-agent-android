@@ -97,6 +97,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _sessions = MutableStateFlow<List<SessionSummary>>(emptyList())
     val sessions: StateFlow<List<SessionSummary>> = _sessions.asStateFlow()
 
+    /** One-shot message about a session action, shown as a snackbar. */
+    private val _sessionNotice = MutableStateFlow<String?>(null)
+    val sessionNotice: StateFlow<String?> = _sessionNotice.asStateFlow()
+
     private val _projects = MutableStateFlow(ProjectsPayload())
     val projects: StateFlow<ProjectsPayload> = _projects.asStateFlow()
 
@@ -469,6 +473,76 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    // ── session actions ───────────────────────────────────────────────────
+
+    /**
+     * Applies [block] to a session and re-reads the list.
+     *
+     * Re-read rather than patched locally: the server owns pin ordering and the
+     * archived filter, and guessing the resulting list is how a row reappears
+     * on the next refresh after looking gone.
+     */
+    private fun sessionAction(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            runCatching { block() }
+                .onSuccess { loadSessions() }
+                .onFailure { _sessionNotice.value = it.message ?: it::class.simpleName.orEmpty() }
+        }
+    }
+
+    fun renameSession(sessionId: String, title: String) =
+        sessionAction { graph.api.patchSession(sessionId, title = title) }
+
+    fun setSessionPinned(sessionId: String, pinned: Boolean) =
+        sessionAction { graph.api.patchSession(sessionId, pinned = pinned) }
+
+    /**
+     * Archives rather than deletes: this is the reversible one, and it is the
+     * flag the session list filters on.
+     */
+    fun archiveSession(sessionId: String) = sessionAction {
+        graph.api.patchSession(sessionId, archived = true)
+        if (chat.value.sessionId == sessionId) graph.runEngine.openSession(null)
+    }
+
+    /**
+     * Deletes permanently. The route removes the messages and the transcript
+     * files on the agent's host; the UI confirms before calling this.
+     */
+    fun deleteSession(sessionId: String) = sessionAction {
+        graph.api.deleteSession(sessionId)
+        if (chat.value.sessionId == sessionId) graph.runEngine.openSession(null)
+    }
+
+    /** Forks the session and opens the copy, which is what branching is for. */
+    fun branchSession(sessionId: String) = sessionAction {
+        val forked = graph.api.forkSession(sessionId)
+        graph.runEngine.openSession(forked.id)
+        _pane.value = Pane.Chat
+    }
+
+    /** The transcript as plain text, for sharing. Null when it cannot be read. */
+    suspend fun exportSession(session: SessionSummary): String? =
+        runCatching {
+            val messages = graph.api.messages(session.id)
+            buildString {
+                append(session.title?.takeIf { it.isNotBlank() } ?: session.id)
+                append("\n\n")
+                messages.forEach { message ->
+                    val text = message.text
+                    if (text.isBlank()) return@forEach
+                    append("[")
+                    append(message.role?.uppercase() ?: "?")
+                    append("] ")
+                    message.toolName?.takeIf { it.isNotBlank() }?.let { append(it + "\n") }
+                    append(text)
+                    append("\n\n")
+                }
+            }
+        }.getOrNull()
+
+    fun clearSessionNotice() { _sessionNotice.value = null }
 
     // ── projects ──────────────────────────────────────────────────────────
 

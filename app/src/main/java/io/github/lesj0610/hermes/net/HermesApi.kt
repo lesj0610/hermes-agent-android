@@ -9,6 +9,7 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.client.request.patch
 import io.ktor.client.request.post
 import io.ktor.client.request.prepareGet
 import io.ktor.client.request.setBody
@@ -116,6 +117,49 @@ class HermesApi(
         return client.get(url("/api/sessions/$sessionId/messages")) {
             auth?.let { header(HttpHeaders.Authorization, it) }
         }.decode { body<MessageListResponse>().data }
+    }
+
+    /**
+     * Updates the durable per-session flags.
+     *
+     * The route rejects any field it does not know, so only what the server
+     * accepts is ever sent: title, pinned, archived. Omitted fields are left
+     * alone rather than reset.
+     */
+    suspend fun patchSession(
+        sessionId: String,
+        title: String? = null,
+        pinned: Boolean? = null,
+        archived: Boolean? = null,
+    ) {
+        val auth = bearer()
+        client.patch(url("/api/sessions/$sessionId")) {
+            auth?.let { header(HttpHeaders.Authorization, it) }
+            contentType(ContentType.Application.Json)
+            setBody(SessionPatch(title = title, pinned = pinned, archived = archived))
+        }.decode { }
+    }
+
+    /** Copies a session into an independent one that keeps its history. */
+    suspend fun forkSession(sessionId: String): SessionSummary {
+        val auth = bearer()
+        return client.post(url("/api/sessions/$sessionId/fork")) {
+            auth?.let { header(HttpHeaders.Authorization, it) }
+        }.decode { body() }
+    }
+
+    /**
+     * Removes a session permanently.
+     *
+     * This is not the archive flag. The server deletes the row, its messages
+     * and the on-disk transcript files, and cascades to delegate children.
+     * Nothing here or on the desktop can undo it.
+     */
+    suspend fun deleteSession(sessionId: String) {
+        val auth = bearer()
+        client.delete(url("/api/sessions/$sessionId")) {
+            auth?.let { header(HttpHeaders.Authorization, it) }
+        }.decode { }
     }
 
     // ── operational surface ───────────────────────────────────────────────

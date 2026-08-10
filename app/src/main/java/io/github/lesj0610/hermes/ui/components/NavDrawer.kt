@@ -80,6 +80,8 @@ fun DrawerContent(
     sessions: List<SessionSummary>,
     selectedSessionId: String?,
     onSession: (SessionSummary) -> Unit,
+    /** Absent in previews and screenshots, where there is nothing to act on. */
+    onSessionAction: ((SessionSummary, SessionAction) -> Unit)? = null,
     onSearch: () -> Unit,
     onNewChat: () -> Unit,
     settingsSelected: Boolean,
@@ -167,6 +169,9 @@ fun DrawerContent(
                         session = session,
                         selected = session.id == selectedSessionId,
                         onClick = { onSession(session) },
+                        onAction = onSessionAction?.let { act ->
+                            { action -> act(session, action) }
+                        },
                     )
                 }
             }

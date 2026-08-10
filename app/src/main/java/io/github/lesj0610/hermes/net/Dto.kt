@@ -176,6 +176,20 @@ data class SessionSummary(
     val archived: Boolean = false,
 )
 
+/**
+ * A partial session update.
+ *
+ * Nulls are dropped rather than sent: the route treats a present key as an
+ * instruction, so serialising an absent field as null would clear a title
+ * nobody asked to clear.
+ */
+@Serializable
+data class SessionPatch(
+    val title: String? = null,
+    val pinned: Boolean? = null,
+    val archived: Boolean? = null,
+)
+
 @Serializable
 data class MessageListResponse(val data: List<StoredMessage> = emptyList())
 

@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.net.SessionSummary
 import io.github.lesj0610.hermes.ui.components.SearchIcon
+import io.github.lesj0610.hermes.ui.components.SessionAction
 import io.github.lesj0610.hermes.ui.components.SessionRow
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
 
@@ -57,6 +58,7 @@ fun SearchPane(
     sessions: List<SessionSummary>,
     selectedSessionId: String?,
     onSelect: (SessionSummary) -> Unit,
+    onSessionAction: ((SessionSummary, SessionAction) -> Unit)? = null,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -94,6 +96,9 @@ fun SearchPane(
                             session = session,
                             selected = session.id == selectedSessionId,
                             onClick = { onSelect(session) },
+                            onAction = onSessionAction?.let { act ->
+                                { action -> act(session, action) }
+                            },
                         )
                     }
                 }

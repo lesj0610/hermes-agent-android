@@ -1,5 +1,8 @@
 package io.github.lesj0610.hermes.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -14,12 +17,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -32,6 +37,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -60,6 +66,7 @@ import io.github.lesj0610.hermes.ui.components.DocumentIcon
 import io.github.lesj0610.hermes.ui.components.FolderIcon
 import io.github.lesj0610.hermes.ui.components.DrawerContent
 import io.github.lesj0610.hermes.ui.components.DrawerEntry
+import io.github.lesj0610.hermes.ui.components.SessionAction
 import io.github.lesj0610.hermes.ui.components.GridIcon
 import io.github.lesj0610.hermes.ui.components.ServerIcon
 import io.github.lesj0610.hermes.ui.components.SettingsIcon
@@ -69,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.data.TranscriptItem
 import io.github.lesj0610.hermes.net.ModelChoice
+import io.github.lesj0610.hermes.net.SessionSummary
 import io.github.lesj0610.hermes.ui.chat.ApprovalSheet
 import io.github.lesj0610.hermes.ui.artifacts.ArtifactsPane
 import io.github.lesj0610.hermes.ui.projects.ProjectsPane
@@ -103,6 +111,7 @@ fun HermesShell(
     val projectsPayload by viewModel.projects.collectAsStateWithLifecycle()
     val projectsBusy by viewModel.projectsBusy.collectAsStateWithLifecycle()
     val projectsError by viewModel.projectsError.collectAsStateWithLifecycle()
+    val sessionNotice by viewModel.sessionNotice.collectAsStateWithLifecycle()
     val artifactScan by viewModel.artifactScan.collectAsStateWithLifecycle()
     val voiceState by viewModel.voiceState.collectAsStateWithLifecycle()
     val conversing by viewModel.voiceConversing.collectAsStateWithLifecycle()
@@ -271,6 +280,47 @@ fun HermesShell(
             }
         }
 
+
+        // Session actions from the row menu. They live here rather than in the
+        // drawer because two of them leave the app's own surfaces — the
+        // clipboard and the share sheet — and two need a confirmation the row
+        // cannot host.
+        var renaming by remember { mutableStateOf<SessionSummary?>(null) }
+        var deleting by remember { mutableStateOf<SessionSummary?>(null) }
+        val clipboardCopied = stringResource(R.string.session_copied)
+        val onSessionAction: (SessionSummary, SessionAction) -> Unit = { session, action ->
+            when (action) {
+                SessionAction.Rename -> renaming = session
+                SessionAction.Pin -> viewModel.setSessionPinned(session.id, !session.pinned)
+                SessionAction.CopyId -> {
+                    context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(
+                        ClipData.newPlainText(session.id, session.id),
+                    )
+                    drawerScope.launch { notices.showSnackbar(clipboardCopied) }
+                }
+                SessionAction.Branch -> viewModel.branchSession(session.id)
+                SessionAction.Export -> drawerScope.launch {
+                    // Built here and handed to the system sheet: the app has no
+                    // business deciding where a transcript should end up.
+                    val text = viewModel.exportSession(session)
+                    if (text != null) {
+                        context.startActivity(
+                            Intent.createChooser(
+                                Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TITLE, session.title.orEmpty())
+                                    putExtra(Intent.EXTRA_TEXT, text)
+                                },
+                                null,
+                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
+                }
+                SessionAction.Archive -> viewModel.archiveSession(session.id)
+                SessionAction.Delete -> deleting = session
+            }
+        }
+
         // Docked or floating, the same contents. Only the frame differs.
         val drawer: @Composable () -> Unit = {
             DrawerContent(
@@ -290,6 +340,7 @@ fun HermesShell(
                 },
                 sessions = sessions,
                 selectedSessionId = chat.sessionId,
+                onSessionAction = onSessionAction,
                 onSession = { session ->
                     viewModel.openSession(session.id)
                     viewModel.show(Pane.Chat)
@@ -643,6 +694,7 @@ fun HermesShell(
             SearchPane(
                 sessions = sessions,
                 selectedSessionId = chat.sessionId,
+                onSessionAction = onSessionAction,
                 onSelect = { session ->
                     viewModel.openSession(session.id)
                     viewModel.show(Pane.Chat)
@@ -650,6 +702,71 @@ fun HermesShell(
                 },
                 onClose = { searchOpen = false },
             )
+        }
+
+
+        // Renaming and deleting need a surface of their own: one takes typing,
+        // and the other is the only irreversible thing this app can do to
+        // someone's history.
+        renaming?.let { session ->
+            var draft by remember(session.id) { mutableStateOf(session.title.orEmpty()) }
+            AlertDialog(
+                onDismissRequest = { renaming = null },
+                title = { Text(stringResource(R.string.session_rename_title)) },
+                text = {
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.renameSession(session.id, draft.trim())
+                        renaming = null
+                    }) { Text(stringResource(R.string.action_save)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { renaming = null }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                },
+            )
+        }
+
+        deleting?.let { session ->
+            AlertDialog(
+                onDismissRequest = { deleting = null },
+                title = { Text(stringResource(R.string.session_delete_title)) },
+                // Says what is destroyed and names the reversible alternative.
+                // The route removes the messages and the transcript files on the
+                // agent's host, and nothing in either client can undo that.
+                text = { Text(stringResource(R.string.session_delete_body)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.deleteSession(session.id)
+                        deleting = null
+                    }) {
+                        Text(stringResource(R.string.session_delete), color = colors.failed)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { deleting = null }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                },
+            )
+        }
+
+        // A failed action says so rather than leaving the list looking unchanged
+        // for no stated reason.
+        sessionNotice?.let { message ->
+            val text = stringResource(R.string.session_action_failed, message)
+            LaunchedEffect(message) {
+                notices.showSnackbar(text)
+                viewModel.clearSessionNotice()
+            }
         }
 
         // Outside the Scaffold on purpose: the notice that explains a refused

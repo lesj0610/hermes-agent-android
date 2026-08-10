@@ -45,9 +45,9 @@ import io.github.lesj0610.hermes.ui.components.ChatIcon
 import io.github.lesj0610.hermes.ui.components.ClockIcon
 import io.github.lesj0610.hermes.ui.components.DrawerContent
 import io.github.lesj0610.hermes.ui.components.DrawerEntry
-import io.github.lesj0610.hermes.ui.components.GridIcon
+import io.github.lesj0610.hermes.ui.components.DocumentIcon
+import io.github.lesj0610.hermes.ui.components.FolderIcon
 import io.github.lesj0610.hermes.ui.components.PaneDivider
-import io.github.lesj0610.hermes.ui.components.ServerIcon
 import io.github.lesj0610.hermes.ui.search.SearchPane
 import io.github.lesj0610.hermes.ui.theme.HermesTheme
 import org.junit.Rule
@@ -154,7 +154,7 @@ class ScreenshotTest {
         SessionSummary(id = "1", title = "FP4 dequant 벤치", model = "opus-5",
             preview = "중간 결과는 1.83 ms/iter…"),
         SessionSummary(id = "2", title = "게이트웨이 로그 점검", model = "opus-5",
-            preview = "승인 대기 · bash"),
+            preview = "승인 대기 · bash", pinned = true),
         SessionSummary(id = "3", title = "Termux 설치 경로 확인",
             toolCallCount = 5, endedAt = "2026-08-08", endReason = "completed"),
     )
@@ -182,16 +182,19 @@ class ScreenshotTest {
                 modelLabel = "opus-5",
                 connectionLabel = "연결됨",
                 connectionColor = Color(0xFF4ADE80),
+                // The destinations the app actually offers now: gateway and
+                // workspace moved under settings.
                 destinations = listOf(
                     DrawerEntry("대화", true) { ChatIcon(tint = it) },
+                    DrawerEntry("프로젝트", false) { FolderIcon(tint = it) },
+                    DrawerEntry("아티팩트", false) { DocumentIcon(tint = it) },
                     DrawerEntry("예약", false) { ClockIcon(tint = it) },
-                    DrawerEntry("게이트웨이", false) { ServerIcon(tint = it) },
-                    DrawerEntry("워크스페이스", false) { GridIcon(tint = it) },
                 ),
                 onDestination = {},
                 sessions = sampleSessions,
                 selectedSessionId = "1",
                 onSession = {},
+                onSessionAction = { _, _ -> },
                 onSearch = {},
                 onNewChat = {},
                 settingsSelected = false,
@@ -225,8 +228,8 @@ class ScreenshotTest {
                         connectionColor = Color(0xFF4ADE80),
                         destinations = listOf(
                             DrawerEntry("대화", true) { ChatIcon(tint = it) },
+                            DrawerEntry("아티팩트", false) { DocumentIcon(tint = it) },
                             DrawerEntry("예약", false) { ClockIcon(tint = it) },
-                            DrawerEntry("게이트웨이", false) { ServerIcon(tint = it) },
                         ),
                         onDestination = {},
                         sessions = sampleSessions,

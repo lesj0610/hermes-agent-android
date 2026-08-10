@@ -239,4 +239,21 @@
     <string name="projects_empty">No projects yet.</string>
     <string name="projects_pick_here">Use this folder</string>
     <string name="projects_needs_dashboard">Projects are stored by the dashboard server, not on this phone. Add the dashboard in Settings to see and create them.</string>
+    <string name="session_rename">Rename</string>
+    <string name="session_pin">Pin</string>
+    <string name="session_unpin">Unpin</string>
+    <string name="session_copy_id">Copy ID</string>
+    <string name="session_branch">Branch</string>
+    <string name="session_export">Export</string>
+    <string name="session_archive">Archive</string>
+    <string name="session_delete">Delete</string>
+    <string name="session_rename_title">Rename session</string>
+    <string name="session_delete_title">Delete this session?</string>
+    <string name="session_delete_body">The messages and the transcript files on the agent’s machine are removed too. This cannot be undone — archive hides it instead and keeps everything.</string>
+    <string name="session_copied">Session ID copied</string>
+    <string name="session_branched">Branched into a new session</string>
+    <string name="session_archived">Archived</string>
+    <string name="session_action_failed">That did not work: %1$s</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
 </resources>

@@ -455,6 +455,44 @@ fun PhotoIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     }
 }
 
+/** Three dots: this row has a menu. */
+@Composable
+fun MoreIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val radius = bounds.width * 0.09f
+        repeat(3) { index ->
+            drawCircle(
+                color,
+                radius = radius,
+                center = Offset(bounds.center.x, bounds.top + bounds.height * (0.18f + index * 0.32f)),
+            )
+        }
+    }
+}
+
+/** A pushpin, for the sessions kept at the top of the list. */
+@Composable
+fun PinIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val head = bounds.width * 0.30f
+        val centre = Offset(bounds.center.x, bounds.top + bounds.height * 0.36f)
+        drawCircle(color, radius = head, center = centre, style = iconStroke())
+        // The needle, angled the way a pin sits when it is holding something
+        // rather than pointing straight down.
+        drawLine(
+            color,
+            Offset(centre.x, centre.y + head),
+            Offset(bounds.center.x - bounds.width * 0.10f, bounds.bottom),
+            STROKE_DP.dp.toPx(),
+            StrokeCap.Round,
+        )
+    }
+}
+
 /** A folder with its tab: a directory on the agent's machine. */
 @Composable
 fun FolderIcon(modifier: Modifier = Modifier, tint: Color? = null) {

@@ -31,8 +31,6 @@
     <string name="approval_choice_always">항상</string>
     <string name="approval_choice_deny">거부</string>
 
-    <string name="drawer_go_to">이동</string>
-    <string name="drawer_actions">동작</string>
     <string name="layout_title">레이아웃</string>
     <string name="layout_edit">배치</string>
     <string name="layout_done">완료</string>
@@ -49,6 +47,7 @@
     <string name="rail_activity_empty">도구 실행이 여기 표시됩니다.</string>
 
     <string name="sessions_title">세션</string>
+    <string name="drawer_all_sessions">세션 전체 보기</string>
     <string name="sessions_search">세션 검색</string>
     <string name="sessions_empty">세션이 없습니다.</string>
     <!-- 한국어는 수 구분이 없으므로 other 하나만 둔다. -->

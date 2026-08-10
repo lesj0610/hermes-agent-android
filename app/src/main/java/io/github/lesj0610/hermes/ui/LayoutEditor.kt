@@ -29,21 +29,27 @@ fun railPanelOptions(
     }
 
 /**
- * Panel destinations for the navigation drawer, paired with the pane each opens.
+ * Destinations listed at the top of the navigation drawer, in order.
  *
- * Activity is excluded: it has no pane of its own — it is a view of the open
- * transcript, which the centre already shows. [RailPanel.None] is not a place.
+ * Chat leads and is always present — it is where the app opens and returns to.
+ * The rest appear only where the server behind them exists.
+ *
+ * Sessions is absent on purpose: the drawer body holds the session list itself,
+ * so a row leading to a separate screen showing the same list would be a detour
+ * through something the drawer already displays. Activity is absent because it
+ * has no pane of its own — it is a view of the open transcript, already in the
+ * centre.
  */
-fun drawerDestinations(available: List<RailPanel>): List<Pair<RailPanel, Pane>> =
-    available.mapNotNull { panel ->
-        when (panel) {
-            RailPanel.Sessions -> panel to Pane.Sessions
-            RailPanel.Cron -> panel to Pane.Cron
-            RailPanel.Gateway -> panel to Pane.Gateway
-            RailPanel.Dashboard -> panel to Pane.Dashboard
-            RailPanel.Activity, RailPanel.None -> null
-        }
-    }
+fun drawerDestinations(
+    showCron: Boolean,
+    showGateway: Boolean,
+    showDashboard: Boolean = false,
+): List<Pane> = buildList {
+    add(Pane.Chat)
+    if (showCron) add(Pane.Cron)
+    if (showGateway) add(Pane.Gateway)
+    if (showDashboard) add(Pane.Dashboard)
+}
 
 /**
  * The next panel when the rail's cycle button is tapped.

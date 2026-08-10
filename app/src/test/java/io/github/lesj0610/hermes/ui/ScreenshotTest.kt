@@ -6,6 +6,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
@@ -17,6 +18,7 @@ import io.github.lesj0610.hermes.data.ToolState
 import io.github.lesj0610.hermes.data.TranscriptItem
 import io.github.lesj0610.hermes.net.SessionSummary
 import io.github.lesj0610.hermes.ui.chat.ChatPane
+import io.github.lesj0610.hermes.ui.components.DrawerContent
 import io.github.lesj0610.hermes.ui.sessions.SessionsPane
 import io.github.lesj0610.hermes.ui.theme.HermesTheme
 import org.junit.Rule
@@ -128,6 +130,43 @@ class ScreenshotTest {
                 state = ChatState(sessionId = "s1", items = transcript, phase = RunPhase.Running("r1")),
                 onSend = {}, onStop = {}, onDismissError = {},
                 modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+
+    /**
+     * The drawer at its natural width, which is where the three-band layout —
+     * destinations, session list, pinned bottom row — either reads or does not.
+     */
+    @Test
+    fun drawer() {
+        capture("drawer", 300, 891) {
+            DrawerContent(
+                modelLabel = "opus-5",
+                connectionLabel = "연결됨",
+                connectionColor = Color(0xFF4ADE80),
+                destinations = listOf(
+                    "대화" to true,
+                    "예약" to false,
+                    "게이트웨이" to false,
+                    "워크스페이스" to false,
+                ),
+                onDestination = {},
+                sessions = listOf(
+                    SessionSummary(id = "1", title = "FP4 dequant 벤치", model = "opus-5"),
+                    SessionSummary(id = "2", title = "게이트웨이 로그 점검", model = "opus-5"),
+                    SessionSummary(
+                        id = "3", title = "Termux 설치 경로 확인",
+                        endedAt = "2026-08-08", endReason = "completed",
+                    ),
+                ),
+                selectedSessionId = "1",
+                onAllSessions = {},
+                onSession = {},
+                onNewChat = {},
+                onSettings = {},
+                arrangeLabel = null,
+                onArrange = {},
             )
         }
     }

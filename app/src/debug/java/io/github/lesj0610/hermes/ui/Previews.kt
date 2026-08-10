@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import io.github.lesj0610.hermes.core.HermesSettings
@@ -20,6 +21,7 @@ import io.github.lesj0610.hermes.net.Profile
 import io.github.lesj0610.hermes.net.SessionSummary
 import io.github.lesj0610.hermes.ui.chat.ApprovalSheet
 import io.github.lesj0610.hermes.ui.chat.ChatPane
+import io.github.lesj0610.hermes.ui.components.DrawerContent
 import io.github.lesj0610.hermes.ui.cron.CronPane
 import io.github.lesj0610.hermes.ui.dashboard.DashboardPane
 import io.github.lesj0610.hermes.ui.sessions.SessionsPane
@@ -103,6 +105,35 @@ private fun PreviewApproval() = Frame {
             smartDenied = false,
         ),
         onChoice = {},
+    )
+}
+
+/**
+ * Rendered at drawer width rather than phone width: the three bands only read
+ * correctly in the space the sheet actually gets.
+ */
+@Preview(name = "Drawer", widthDp = 300, heightDp = 780, showBackground = true)
+@Composable
+private fun PreviewDrawer() = Frame {
+    DrawerContent(
+        modelLabel = "opus-5",
+        connectionLabel = "연결됨",
+        connectionColor = Color(0xFF4ADE80),
+        destinations = listOf(
+            "대화" to true,
+            "예약" to false,
+            "게이트웨이" to false,
+            "워크스페이스" to false,
+        ),
+        onDestination = {},
+        sessions = sampleSessions,
+        selectedSessionId = "1",
+        onSession = {},
+        onAllSessions = {},
+        onNewChat = {},
+        onSettings = {},
+        arrangeLabel = null,
+        onArrange = {},
     )
 }
 

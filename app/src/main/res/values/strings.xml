@@ -34,8 +34,6 @@
     <string name="approval_choice_deny">Deny</string>
 
     <!-- Layout editor -->
-    <string name="drawer_go_to">Go to</string>
-    <string name="drawer_actions">Actions</string>
     <string name="layout_title">Layout</string>
     <string name="layout_edit">Arrange</string>
     <string name="layout_done">Done</string>
@@ -54,6 +52,7 @@
 
     <!-- Sessions -->
     <string name="sessions_title">Sessions</string>
+    <string name="drawer_all_sessions">See all sessions</string>
     <string name="sessions_search">Search sessions</string>
     <string name="sessions_empty">No sessions yet.</string>
     <plurals name="sessions_tool_count">

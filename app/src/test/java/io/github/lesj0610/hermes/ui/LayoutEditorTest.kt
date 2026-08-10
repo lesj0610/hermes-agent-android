@@ -75,34 +75,37 @@ class LayoutEditorTest {
     }
 
     @Test
-    fun `the drawer lists every panel that has a pane of its own`() {
+    fun `chat leads the drawer, then whatever the servers support`() {
         // Reachability no longer depends on window size: the drawer carries the
         // same destinations everywhere, which is what fixed panels being
         // stranded in a two-pane window.
-        val options = railPanelOptions(showCron = true, showGateway = true, showDashboard = true)
-
         assertEquals(
-            listOf(Pane.Sessions, Pane.Cron, Pane.Gateway, Pane.Dashboard),
-            drawerDestinations(options).map { it.second },
+            listOf(Pane.Chat, Pane.Cron, Pane.Gateway, Pane.Dashboard),
+            drawerDestinations(showCron = true, showGateway = true, showDashboard = true),
         )
     }
 
     @Test
-    fun `the drawer omits activity, which has no pane of its own`() {
-        // Activity is a view of the open transcript, already in the centre.
-        val options = railPanelOptions(showCron = false, showGateway = false)
+    fun `sessions and activity are not destinations`() {
+        // Sessions is the drawer's own body; Activity is a view of the open
+        // transcript, already in the centre. Neither earns a row.
+        val destinations = drawerDestinations(showCron = true, showGateway = true, showDashboard = true)
 
-        assertEquals(listOf(RailPanel.Sessions), drawerDestinations(options).map { it.first })
+        assertEquals(false, destinations.contains(Pane.Sessions))
     }
 
     @Test
     fun `the drawer drops panels this gateway cannot serve`() {
-        val options = railPanelOptions(showCron = false, showGateway = true, showDashboard = false)
-
         assertEquals(
-            listOf(Pane.Sessions, Pane.Gateway),
-            drawerDestinations(options).map { it.second },
+            listOf(Pane.Chat, Pane.Gateway),
+            drawerDestinations(showCron = false, showGateway = true, showDashboard = false),
         )
+    }
+
+    @Test
+    fun `chat survives a gateway that supports nothing else`() {
+        // With every capability absent the drawer must still lead somewhere.
+        assertEquals(listOf(Pane.Chat), drawerDestinations(showCron = false, showGateway = false))
     }
 
     @Test

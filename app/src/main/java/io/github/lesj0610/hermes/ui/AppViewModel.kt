@@ -99,7 +99,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _dashboardSkills = MutableStateFlow<List<DashboardSkill>>(emptyList())
     val dashboardSkills: StateFlow<List<DashboardSkill>> = _dashboardSkills.asStateFlow()
 
-    private val _pane = MutableStateFlow(Pane.Sessions)
+    // Opens on the conversation, not on a list of them. The session list is in
+    // the drawer, one gesture away, so landing on it first put a screen between
+    // the user and the thing they opened the app to do.
+    private val _pane = MutableStateFlow(Pane.Chat)
     val pane: StateFlow<Pane> = _pane.asStateFlow()
 
     init {

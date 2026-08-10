@@ -20,16 +20,6 @@ import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.core.RailPanel
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
 
-@Composable
-fun railPanelLabel(panel: RailPanel): String = when (panel) {
-    RailPanel.None -> stringResource(R.string.rail_none)
-    RailPanel.Sessions -> stringResource(R.string.sessions_title)
-    RailPanel.Activity -> stringResource(R.string.rail_activity)
-    RailPanel.Cron -> stringResource(R.string.cron_title)
-    RailPanel.Gateway -> stringResource(R.string.gateway_title)
-    RailPanel.Dashboard -> stringResource(R.string.dashboard_title)
-}
-
 /**
  * Wraps a rail's content, adding the editing controls when layout edit mode is
  * on.

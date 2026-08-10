@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Density
@@ -48,11 +49,9 @@ import io.github.lesj0610.hermes.core.RailSide
 import io.github.lesj0610.hermes.ui.components.PaneDivider
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
-import io.github.lesj0610.hermes.ui.components.DrawerDestination
-import io.github.lesj0610.hermes.ui.components.DrawerSection
+import io.github.lesj0610.hermes.ui.components.DrawerContent
 import io.github.lesj0610.hermes.ui.components.HamburgerIcon
 import io.github.lesj0610.hermes.ui.components.RailHost
-import io.github.lesj0610.hermes.ui.components.railPanelLabel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.data.TranscriptItem
@@ -189,74 +188,56 @@ fun HermesShell(
         ModalNavigationDrawer(
             drawerState = drawerState,
             drawerContent = {
+                val destinations = drawerDestinations(showCron, showGateway, showDashboard)
+                val (connColor, connLabel) = connectionStatus(connection)
+                val closeDrawer = { drawerScope.launch { drawerState.close() }; Unit }
+
                 ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.background) {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = 20.dp, top = 22.dp, bottom = 2.dp),
-                    )
-                    Text(
-                        text = settings.model.ifBlank {
+                    DrawerContent(
+                        modelLabel = settings.model.ifBlank {
                             stringResource(R.string.settings_model_default)
                         },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.muted,
-                        modifier = Modifier.padding(start = 20.dp, bottom = 10.dp),
-                    )
-                    HorizontalDivider(color = colors.line)
-
-                    DrawerSection(stringResource(R.string.drawer_go_to))
-                    // Every destination is listed, including ones a rail is
-                    // already showing. Working out which entries a given window
-                    // happens to omit is harder than reading a stable list.
-                    drawerDestinations(railOptions).forEach { (panel, target) ->
-                        DrawerDestination(
-                            label = railPanelLabel(panel),
-                            selected = pane == target,
-                            onClick = {
-                                viewModel.show(target)
-                                drawerScope.launch { drawerState.close() }
-                            },
-                        )
-                    }
-                    DrawerDestination(
-                        label = stringResource(R.string.nav_chat),
-                        selected = pane == Pane.Chat,
-                        onClick = {
+                        connectionLabel = connLabel,
+                        connectionColor = connColor,
+                        destinations = destinations.map { paneLabel(it) to (pane == it) },
+                        onDestination = { index ->
+                            viewModel.show(destinations[index])
+                            closeDrawer()
+                        },
+                        sessions = sessions,
+                        selectedSessionId = chat.sessionId,
+                        onSession = { session ->
+                            viewModel.openSession(session.id)
                             viewModel.show(Pane.Chat)
-                            drawerScope.launch { drawerState.close() }
+                            closeDrawer()
                         },
-                    )
-                    DrawerDestination(
-                        label = stringResource(R.string.nav_settings),
-                        selected = pane == Pane.Settings,
-                        onClick = {
-                            viewModel.show(Pane.Settings)
-                            drawerScope.launch { drawerState.close() }
+                        onAllSessions = {
+                            viewModel.show(Pane.Sessions)
+                            closeDrawer()
                         },
-                    )
-
-                    DrawerSection(stringResource(R.string.drawer_actions))
-                    DrawerDestination(
-                        label = stringResource(R.string.action_new_session),
-                        selected = false,
-                        onClick = {
+                        onNewChat = {
                             viewModel.openSession(null)
-                            drawerScope.launch { drawerState.close() }
+                            viewModel.show(Pane.Chat)
+                            closeDrawer()
+                        },
+                        onSettings = {
+                            viewModel.show(Pane.Settings)
+                            closeDrawer()
+                        },
+                        // Arranging rails is meaningless where there is only one
+                        // pane, so the control is absent rather than inert.
+                        arrangeLabel = if (expanded) {
+                            stringResource(
+                                if (editingLayout) R.string.layout_done else R.string.layout_edit,
+                            )
+                        } else {
+                            null
+                        },
+                        onArrange = {
+                            editingLayout = !editingLayout
+                            closeDrawer()
                         },
                     )
-                    if (expanded) {
-                        DrawerDestination(
-                            label = stringResource(
-                                if (editingLayout) R.string.layout_done else R.string.layout_edit,
-                            ),
-                            selected = editingLayout,
-                            onClick = {
-                                editingLayout = !editingLayout
-                                drawerScope.launch { drawerState.close() }
-                            },
-                        )
-                    }
                 }
             },
         ) {
@@ -266,14 +247,7 @@ fun HermesShell(
                     title = {
                         Column {
                             Text(
-                                text = when {
-                                    pane == Pane.Sessions -> stringResource(R.string.sessions_title)
-                                    pane == Pane.Settings -> stringResource(R.string.settings_title)
-                                    pane == Pane.Cron -> stringResource(R.string.cron_title)
-                                    pane == Pane.Gateway -> stringResource(R.string.gateway_title)
-                                    pane == Pane.Dashboard -> stringResource(R.string.dashboard_title)
-                                    else -> stringResource(R.string.nav_chat)
-                                },
+                                text = paneLabel(pane),
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             ConnectionLine(connection)
@@ -545,15 +519,32 @@ private fun LayoutEditBar(
 
 @Composable
 private fun ConnectionLine(connection: Connection) {
+    val (color, label) = connectionStatus(connection)
+    Text(text = label, style = MaterialTheme.typography.labelSmall, color = color)
+}
+
+/** A pane's name, used by both the title bar and the drawer's destination rows. */
+@Composable
+private fun paneLabel(pane: Pane): String = when (pane) {
+    Pane.Sessions -> stringResource(R.string.sessions_title)
+    Pane.Settings -> stringResource(R.string.settings_title)
+    Pane.Cron -> stringResource(R.string.cron_title)
+    Pane.Gateway -> stringResource(R.string.gateway_title)
+    Pane.Dashboard -> stringResource(R.string.dashboard_title)
+    Pane.Chat -> stringResource(R.string.nav_chat)
+}
+
+/** Colour and wording for a connection state, shared by the bar and the drawer. */
+@Composable
+private fun connectionStatus(connection: Connection): Pair<Color, String> {
     val colors = LocalRunColors.current
-    val (color, label) = when (connection) {
+    return when (connection) {
         is Connection.Connected -> colors.completed to stringResource(R.string.connection_connected)
         Connection.Checking -> colors.muted to stringResource(R.string.connection_checking)
         Connection.NotConfigured -> colors.awaiting to stringResource(R.string.connection_not_configured)
         Connection.Unauthorized -> colors.failed to stringResource(R.string.connection_unauthorized)
         is Connection.Unreachable -> colors.failed to stringResource(R.string.connection_unreachable)
     }
-    Text(text = label, style = MaterialTheme.typography.labelSmall, color = color)
 }
 
 /**

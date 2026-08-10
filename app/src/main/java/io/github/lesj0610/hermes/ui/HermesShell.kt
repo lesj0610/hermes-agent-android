@@ -229,10 +229,16 @@ fun HermesShell(
         val (connColor, connLabel) = connectionStatus(connection)
 
         // What the next turn will actually run on: the override if one is set,
-        // otherwise the model the gateway reports it is on. Blank only while
-        // the inventory has not been read — and then nothing is shown, rather
-        // than a "default" label that names no model.
-        val activeModel = settings.model.ifBlank { serverModel }
+        // otherwise the model the gateway reports it is on.
+        //
+        // The last resort is /v1/models, and only when it lists exactly one
+        // entry — that is the single virtual alias an OpenAI-compatible client
+        // sees, so it names the right thing. With several entries there is no
+        // way to tell which one is current, and guessing would put a wrong
+        // model name next to the reasoning level.
+        val activeModel = settings.model
+            .ifBlank { serverModel }
+            .ifBlank { models.singleOrNull()?.id.orEmpty() }
 
         // Docked or floating, the same contents. Only the frame differs.
         val drawer: @Composable () -> Unit = {
@@ -328,7 +334,7 @@ fun HermesShell(
                         }
                     },
                     actions = {
-                        settings.model.takeIf { it.isNotBlank() }?.let { model ->
+                        activeModel.takeIf { it.isNotBlank() }?.let { model ->
                             Text(
                                 text = model,
                                 style = MaterialTheme.typography.labelSmall,

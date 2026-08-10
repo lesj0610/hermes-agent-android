@@ -29,6 +29,14 @@ import kotlinx.serialization.json.jsonPrimitive
 @Serializable
 data class Capabilities(
     val mode: String? = null,
+    /**
+     * The model this gateway is running, straight from the capabilities probe.
+     *
+     * Worth taking here because this route answers on every reachable gateway
+     * and costs nothing, while the inventory behind `/api/model/options` builds
+     * provider catalogues and can fail on its own.
+     */
+    val model: String? = null,
     val features: JsonObject? = null,
     val endpoints: JsonObject? = null,
 ) {

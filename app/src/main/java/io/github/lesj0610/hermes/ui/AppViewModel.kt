@@ -253,6 +253,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun loadOperational() {
         val caps = runCatching { graph.api.capabilities() }.getOrNull()
         _capabilities.value = caps
+        // Taken before the inventory call so the model has a name as soon as the
+        // gateway answers at all. The inventory is allowed to replace it below,
+        // but is not allowed to be the only source: it builds provider
+        // catalogues and fails on gateways this one probe still answers on.
+        caps?.model?.takeIf { it.isNotBlank() }?.let { _serverModel.value = it }
 
         if (caps?.jobsAdmin != false) {
             runCatching { graph.api.jobs() }.onSuccess { _jobs.value = it }
@@ -266,7 +271,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // The inventory is enrichment, not a requirement: a gateway that cannot
         // build it leaves the picker on whatever /v1/models reported.
         runCatching { graph.api.modelOptions() }.onSuccess { payload ->
-            _serverModel.value = payload.model.orEmpty()
+            payload.model?.takeIf { it.isNotBlank() }?.let { _serverModel.value = it }
             _modelChoices.value = payload.providers.flatMap { row ->
                 val slug = row.slug.orEmpty()
                 row.models.map { model ->

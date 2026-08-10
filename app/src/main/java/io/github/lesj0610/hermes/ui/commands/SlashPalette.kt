@@ -84,7 +84,7 @@ private fun Hint(text: String, color: androidx.compose.ui.graphics.Color) {
 @Composable
 private fun CommandRow(command: SlashCommand, onPick: (SlashCommand) -> Unit) {
     val colors = LocalRunColors.current
-    val runnable = command.ability != CommandAbility.Unavailable
+    val runnable = command.ability != CommandAbility.LocalToDesktop
 
     Row(
         Modifier

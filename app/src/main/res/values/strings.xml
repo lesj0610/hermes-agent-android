@@ -266,4 +266,6 @@
     <string name="commands_needs_dashboard">Slash commands come from the dashboard. Add it in Settings.</string>
     <string name="commands_no_session">Open a conversation first.</string>
     <string name="commands_use_chip">Model and reasoning are on the chip beside the message box.</string>
+    <string name="commands_run">Run</string>
+    <string name="commands_run_confirm">This runs on the agent’s machine — it may call a model and have side effects.</string>
 </resources>

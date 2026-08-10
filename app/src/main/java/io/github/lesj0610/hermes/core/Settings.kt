@@ -112,6 +112,14 @@ data class HermesSettings(
     /** Provider slug for [model], when it came from the inventory. */
     val provider: String = "",
     val reasoningEffort: ReasoningEffort = ReasoningEffort.DEFAULT,
+    /**
+     * True once the user has picked a level themselves.
+     *
+     * Until then the gateway's own configured level is allowed to seed the
+     * chip, so a fresh install agrees with the server instead of overriding it
+     * with a guess. After a deliberate pick, the server never overwrites it.
+     */
+    val reasoningTouched: Boolean = false,
     /** BCP-47 tag, or empty to follow the system locale. See [Language]. */
     val language: String = "",
     val notifyApprovals: Boolean = true,
@@ -163,6 +171,7 @@ class SettingsRepository(private val context: Context) {
         val MODEL = stringPreferencesKey("model")
         val PROVIDER = stringPreferencesKey("provider")
         val REASONING = stringPreferencesKey("reasoning_effort")
+        val REASONING_TOUCHED = booleanPreferencesKey("reasoning_touched")
         val LANGUAGE = stringPreferencesKey("language")
         val NOTIFY_APPROVALS = booleanPreferencesKey("notify_approvals")
         val NOTIFY_COMPLETION = booleanPreferencesKey("notify_completion")
@@ -196,6 +205,7 @@ class SettingsRepository(private val context: Context) {
                 model = prefs[Keys.MODEL].orEmpty(),
                 provider = prefs[Keys.PROVIDER].orEmpty(),
                 reasoningEffort = ReasoningEffort.of(prefs[Keys.REASONING]),
+                reasoningTouched = prefs[Keys.REASONING_TOUCHED] ?: false,
                 language = prefs[Keys.LANGUAGE].orEmpty(),
                 notifyApprovals = prefs[Keys.NOTIFY_APPROVALS] ?: true,
                 notifyCompletion = prefs[Keys.NOTIFY_COMPLETION] ?: true,
@@ -252,8 +262,16 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setReasoningEffort(effort: ReasoningEffort) {
-        context.dataStore.edit { it[Keys.REASONING] = effort.name }
+    /**
+     * [touched] marks a deliberate choice. The server-seeded value passes
+     * false, so a later sync can still correct it; a pick from the chip passes
+     * true and is never overwritten.
+     */
+    suspend fun setReasoningEffort(effort: ReasoningEffort, touched: Boolean = true) {
+        context.dataStore.edit {
+            it[Keys.REASONING] = effort.name
+            if (touched) it[Keys.REASONING_TOUCHED] = true
+        }
     }
 
     suspend fun setLanguage(tag: String) {

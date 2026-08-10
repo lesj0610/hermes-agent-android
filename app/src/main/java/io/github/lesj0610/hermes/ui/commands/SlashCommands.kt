@@ -25,8 +25,16 @@ enum class CommandAbility {
     /** Rewrites the stored session, which the next turn will read. */
     Mutate,
 
-    /** Real on the desktop, unreachable from here. The row says why. */
-    Unavailable,
+    /** A skill, quick or plugin command the gateway runs on request. */
+    Dispatch,
+
+    /**
+     * Drawn by the desktop's own UI, with no server-side execution at all.
+     *
+     * Not "blocked": the gateway answers `not a quick/plugin/bundle/skill
+     * command` for these, because rendering a help screen is not work it does.
+     */
+    LocalToDesktop,
 }
 
 /** What tapping a runnable command does. */
@@ -91,12 +99,23 @@ private val MUTATE: Map<String, CommandAction> = mapOf(
 /**
  * Turns the server's catalogue into rows, tagged with what this client can do.
  *
- * Unknown commands are kept and marked unavailable rather than dropped: the
- * registry grows, and a new command should appear as "not here yet" rather
- * than not appear.
+ * The dispatchable set is taken from the catalogue's own `skills` map rather
+ * than guessed from names: the gateway is explicit about which commands
+ * `command.dispatch` will run, and the first attempt at this tiering guessed
+ * wrong in the direction that matters — it marked eighty working commands
+ * unavailable.
  */
-fun buildCommands(catalog: CommandCatalog): List<SlashCommand> =
-    catalog.pairs.mapNotNull { pair ->
+fun buildCommands(catalog: CommandCatalog): List<SlashCommand> {
+    val dispatchable = catalog.skills.keys.map { it.lowercase() }.toSet()
+    // Quick commands are the user's own; the catalogue files them under a
+    // category of that name and they dispatch the same way skills do.
+    val userCommands = catalog.categories
+        .filter { it.name.contains("user", ignoreCase = true) }
+        .flatMap { it.pairs }
+        .mapNotNull { it.getOrNull(0)?.lowercase() }
+        .toSet()
+
+    return catalog.pairs.mapNotNull { pair ->
         val name = pair.getOrNull(0)?.trim().orEmpty()
         if (name.isBlank()) return@mapNotNull null
         val description = pair.getOrNull(1).orEmpty()
@@ -111,9 +130,13 @@ fun buildCommands(catalog: CommandCatalog): List<SlashCommand> =
             QUERY.containsKey(key) -> SlashCommand(
                 name, description, CommandAbility.Query, method = QUERY[key],
             )
-            else -> SlashCommand(name, description, CommandAbility.Unavailable)
+            key in dispatchable || key in userCommands -> SlashCommand(
+                name, description, CommandAbility.Dispatch,
+            )
+            else -> SlashCommand(name, description, CommandAbility.LocalToDesktop)
         }
     }
+}
 
 /**
  * Filters by what has been typed after the slash.
@@ -135,7 +158,7 @@ fun filterCommands(commands: List<SlashCommand>, query: String): List<SlashComma
     }
     return matched.sortedWith(
         compareBy(
-            { it.ability == CommandAbility.Unavailable },
+            { it.ability == CommandAbility.LocalToDesktop },
             { it.name },
         ),
     )

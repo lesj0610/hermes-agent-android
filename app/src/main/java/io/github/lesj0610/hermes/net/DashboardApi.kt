@@ -329,6 +329,30 @@ class DashboardApi(
     }
 
     /**
+     * Runs a skill, quick or plugin command.
+     *
+     * `command.dispatch` needs no session, but it is not a query: dispatching
+     * runs the command, model calls and all. The built-in registry commands are
+     * not dispatchable — the server answers "not a quick/plugin/bundle/skill
+     * command" — because those are things the desktop's own UI draws rather
+     * than work the gateway performs.
+     */
+    suspend fun dispatchCommand(name: String, arg: String = ""): JsonElement =
+        rpcSession {
+            it.callRaw(
+                "command.dispatch",
+                buildJsonObject {
+                    put("name", name.removePrefix("/"))
+                    put("arg", arg)
+                },
+            )
+        }
+
+    /** Reads a config key — `reasoning` answers with the level in force. */
+    suspend fun configGet(key: String): JsonElement =
+        rpcSession { it.callRaw("config.get", buildJsonObject { put("key", key) }) }
+
+    /**
      * Runs a read-only informational RPC and returns its raw result.
      *
      * These take no session and mutate nothing — `tools.list`, `plugins.list`,

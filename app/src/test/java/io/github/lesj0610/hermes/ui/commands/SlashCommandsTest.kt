@@ -1,6 +1,7 @@
 package io.github.lesj0610.hermes.ui.commands
 
 import io.github.lesj0610.hermes.net.CommandCatalog
+import kotlinx.serialization.json.JsonNull
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -16,8 +17,10 @@ class SlashCommandsTest {
             listOf("/new", "Start a new session"),
             listOf("/compress", "Compact the conversation"),
             listOf("/tools", "List tools"),
+            listOf("/arxiv", "Fetch a paper"),
             listOf("/personality", "Switch personality"),
         ),
+        skills = mapOf("/arxiv" to JsonNull),
     )
 
     @Test
@@ -26,8 +29,10 @@ class SlashCommandsTest {
         assertEquals(CommandAbility.Navigate, byName.getValue("/new").ability)
         assertEquals(CommandAbility.Mutate, byName.getValue("/compress").ability)
         assertEquals(CommandAbility.Query, byName.getValue("/tools").ability)
-        // Live-agent runtime state: it would vanish with the temporary session.
-        assertEquals(CommandAbility.Unavailable, byName.getValue("/personality").ability)
+        // Named by the catalogue as a skill, so the gateway will run it.
+        assertEquals(CommandAbility.Dispatch, byName.getValue("/arxiv").ability)
+        // Drawn by the desktop's own UI; the gateway has nothing to execute.
+        assertEquals(CommandAbility.LocalToDesktop, byName.getValue("/personality").ability)
     }
 
     @Test
@@ -36,13 +41,13 @@ class SlashCommandsTest {
         // yet" rather than silently missing, which is how Schedule disappeared.
         val built = buildCommands(CommandCatalog(pairs = listOf(listOf("/brandnew", "x"))))
         assertEquals(1, built.size)
-        assertEquals(CommandAbility.Unavailable, built.single().ability)
+        assertEquals(CommandAbility.LocalToDesktop, built.single().ability)
     }
 
     @Test
     fun `runnable commands sort above the rest`() {
         val sorted = filterCommands(buildCommands(catalog), "/")
-        assertEquals(CommandAbility.Unavailable, sorted.last().ability)
+        assertEquals(CommandAbility.LocalToDesktop, sorted.last().ability)
     }
 
     @Test

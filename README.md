@@ -16,7 +16,7 @@ from the machine.
 |---|---|
 | Chat | Live transcript over SSE, tool cards, approval sheet, stop |
 | Composer | Camera, photo and text-file attachments; model and reasoning level; dictation; spoken conversation |
-| Commands | Typing `/` opens the gateway's own command registry. What this client can run, runs; the rest is listed and marked, not hidden |
+| Commands | Typing `/` opens the gateway's own registry: skills and quick commands run on the agent, read-only queries answer inline, `/compress` compacts the conversation. What has no server-side action is listed and marked, not hidden |
 | Sessions | Drawer list with search, and a per-session menu: rename, pin, copy ID, branch, export, archive, delete |
 | Artifacts | The images, files and links the recent runs produced, gathered from the session transcripts |
 | Projects | The desktop's named multi-folder workspaces — read and written server-side, not stored on the phone (needs the optional dashboard) |
@@ -66,10 +66,11 @@ These are properties of the surfaces the app is built on, not oversights:
   is a separate request; the screen says how many it read.
 - **Voice is on-device and half duplex.** The gateway has no audio surface, so
   nothing recorded leaves as audio, and the app listens or speaks, not both.
-- **Most slash commands are desktop-only.** They act on a live gateway session
-  this client does not own. The ones that navigate, read server state, or
-  rewrite stored history do work — `/compress` resumes the stored session,
-  compacts it and closes it again, and the next turn reads the result.
+- **Some slash commands only exist in the desktop's own UI.** `/help`, `/tools`
+  and the like are screens the desktop draws; the gateway answers "not a
+  quick/plugin/bundle/skill command" because there is nothing on the server to
+  run. Skills, quick commands and plugin commands do run, and so does
+  `/compress`.
 - **Deleting a session is permanent.** It is the same call the desktop's Delete
   makes: the row, its messages and the transcript files on the agent's host all
   go. Archive is the reversible one.
@@ -126,7 +127,7 @@ Hermes Agent source; the client was written against its HTTP surface.
 
 ## Status
 
-Version 1.1. Compiles, unit tests pass, lint clean, release AAB builds, and the
+Version 1.2. Compiles, unit tests pass, lint clean, release AAB builds, and the
 app runs against a live gateway.
 
 Not yet exercised on hardware: the camera and file attachment round trip, the

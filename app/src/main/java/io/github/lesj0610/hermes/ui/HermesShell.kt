@@ -169,6 +169,9 @@ fun HermesShell(
         onPauseOrDispose { }
     }
 
+    // Once, and only until the user picks a level themselves.
+    LaunchedEffect(Unit) { viewModel.syncReasoningFromServer() }
+
     // A run ending is kept, but silently — no indicator, no gesture waiting on
     // it. This is not a refresh the user asked for; it is the list catching up
     // with something they just did. Without it a conversation started here
@@ -356,6 +359,8 @@ fun HermesShell(
         // What a slash command does. Navigation cases stay here because they
         // move the shell; the rest is the view model's.
         val compressingLabel = stringResource(R.string.commands_compressing)
+        val runningLabel = stringResource(R.string.commands_running, "")
+        var pendingCommand by remember { mutableStateOf<SlashCommand?>(null) }
         val onCommand: (SlashCommand) -> Unit = { command ->
             when (command.ability) {
                 CommandAbility.Query -> viewModel.runCommandQuery(command)
@@ -381,7 +386,12 @@ fun HermesShell(
                     -> drawerScope.launch { notices.showSnackbar(chipHint) }
                     else -> Unit
                 }
-                CommandAbility.Unavailable -> Unit
+                // An action, so it asks first. Dispatching runs the command on
+                // the agent's host — model calls and side effects included —
+                // which is not something a tap in a filtered list should do
+                // without a beat.
+                CommandAbility.Dispatch -> pendingCommand = command
+                CommandAbility.LocalToDesktop -> Unit
             }
         }
 
@@ -831,6 +841,25 @@ fun HermesShell(
                 },
                 dismissButton = {
                     TextButton(onClick = { deleting = null }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                },
+            )
+        }
+
+        pendingCommand?.let { command ->
+            AlertDialog(
+                onDismissRequest = { pendingCommand = null },
+                title = { Text(command.name, fontFamily = FontFamily.Monospace) },
+                text = { Text(stringResource(R.string.commands_run_confirm)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.dispatchCommand(command, runningLabel)
+                        pendingCommand = null
+                    }) { Text(stringResource(R.string.commands_run)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingCommand = null }) {
                         Text(stringResource(R.string.action_cancel))
                     }
                 },

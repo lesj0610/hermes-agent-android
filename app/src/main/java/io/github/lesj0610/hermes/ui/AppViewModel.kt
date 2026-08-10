@@ -36,6 +36,8 @@ import io.github.lesj0610.hermes.ui.commands.SlashCommand
 import io.github.lesj0610.hermes.ui.commands.buildCommands
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import io.github.lesj0610.hermes.voice.VoiceController
 import io.github.lesj0610.hermes.voice.VoiceState
 import java.util.Locale
@@ -687,6 +689,55 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         text = it.message ?: it::class.simpleName.orEmpty(),
                         failed = true,
                     )
+                }
+        }
+    }
+
+    /**
+     * Runs a skill, quick or plugin command on the gateway.
+     *
+     * An action, not a query: dispatching runs the command, model calls
+     * included, so the caller confirms first and this reports progress from the
+     * start. Found the hard way — a blind dispatch during testing fired a real
+     * skill on the host.
+     */
+    fun dispatchCommand(command: SlashCommand, runningLabel: String) {
+        viewModelScope.launch {
+            _commandOutput.value = CommandOutput(command.name, running = true, text = runningLabel)
+            runCatching { graph.dashboard.dispatchCommand(command.name) }
+                .onSuccess { _commandOutput.value = CommandOutput(command.name, text = prettyJson(it)) }
+                .onFailure {
+                    _commandOutput.value = CommandOutput(
+                        command.name,
+                        text = it.message ?: it::class.simpleName.orEmpty(),
+                        failed = true,
+                    )
+                }
+        }
+    }
+
+    /**
+     * Seeds the reasoning level from the gateway's own config, once.
+     *
+     * The app sends an effort with every turn, so its value is what runs — but
+     * on a fresh install that value was a guess while the gateway had a level
+     * configured. `config.get` answers without a session, so the chip can start
+     * out agreeing with the server instead of silently overriding it.
+     */
+    fun syncReasoningFromServer() {
+        viewModelScope.launch {
+            if (!graph.settings.current().dashboardConfigured) return@launch
+            if (graph.settings.current().reasoningTouched) return@launch
+            runCatching { graph.dashboard.configGet("reasoning") }
+                .getOrNull()
+                ?.let { element ->
+                    val value = (element as? JsonObject)
+                        ?.get("value")?.let { v -> (v as? JsonPrimitive)?.content }
+                        ?.lowercase()
+                        ?: return@let
+                    ReasoningEffort.entries
+                        .firstOrNull { it.wire == value }
+                        ?.let { graph.settings.setReasoningEffort(it, touched = false) }
                 }
         }
     }

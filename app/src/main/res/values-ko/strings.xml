@@ -254,4 +254,6 @@
     <string name="commands_needs_dashboard">슬래시 명령은 대시보드에서 옵니다. 설정에서 추가하세요.</string>
     <string name="commands_no_session">먼저 대화를 여세요.</string>
     <string name="commands_use_chip">모델과 추론 단계는 입력창 옆 칩에 있습니다.</string>
+    <string name="commands_run">실행</string>
+    <string name="commands_run_confirm">에이전트 머신에서 실행됩니다 — 모델 호출과 부수 효과가 있을 수 있습니다.</string>
 </resources>

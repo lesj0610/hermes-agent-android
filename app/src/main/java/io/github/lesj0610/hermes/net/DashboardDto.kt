@@ -2,6 +2,7 @@ package io.github.lesj0610.hermes.net
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 /**
  * Wire types for the dashboard server (`hermes dashboard` / `hermes serve`,
@@ -176,6 +177,15 @@ data class WsTicketResponse(
 data class CommandCatalog(
     val pairs: List<List<String>> = emptyList(),
     val categories: List<CommandCategory> = emptyList(),
+    /**
+     * Skill commands, keyed by `/name`.
+     *
+     * These are the ones `command.dispatch` actually runs — the built-in
+     * registry entries are drawn by the desktop's own UI and have no
+     * server-side execution at all. Keeping the map means the palette can tell
+     * the two apart instead of guessing from the name.
+     */
+    val skills: Map<String, JsonElement> = emptyMap(),
     @SerialName("skill_count") val skillCount: Int = 0,
     val warning: String? = null,
 )

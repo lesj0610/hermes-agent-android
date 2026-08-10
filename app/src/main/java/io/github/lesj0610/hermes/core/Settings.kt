@@ -30,16 +30,13 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 enum class LayoutMode { Auto, Phone, Tablet }
 
 /**
- * What a side rail is showing.
+ * What the rail beside the transcript is showing. [None] hides it.
  *
- * Both rails draw from the same set, which is why there is no separate "swap
- * sides" control: putting the session list on the right is just choosing it for
- * the right rail. [None] hides that rail entirely.
+ * There is no session list here: the drawer *is* the session column, and when
+ * pinned it occupies the left of the shell. Offering the same list as a rail as
+ * well would have meant two places showing one thing.
  */
-enum class RailPanel { None, Sessions, Activity, Cron, Gateway, Dashboard }
-
-/** Which side of the transcript a rail sits on. */
-enum class RailSide { Left, Right }
+enum class RailPanel { None, Activity, Cron, Gateway, Dashboard }
 
 /**
  * Bounds for [HermesSettings.uiScale]. Kept narrow deliberately: below 0.85 the
@@ -51,11 +48,11 @@ const val UI_SCALE_MAX = 1.40f
 const val UI_SCALE_STEP = 0.05f
 
 /**
- * Bounds for the multi-pane rail widths, in dp.
+ * Bounds for the column widths, in dp, shared by the pinned drawer and the rail.
  *
  * The floor keeps a session title readable rather than elided to nothing; the
  * ceiling keeps the transcript — the reason the app exists — from being squeezed
- * into a column narrower than the rails beside it.
+ * into a column narrower than the ones beside it.
  */
 const val RAIL_WIDTH_MIN = 220f
 const val RAIL_WIDTH_MAX = 480f
@@ -76,11 +73,20 @@ data class HermesSettings(
      * Clamped to [UI_SCALE_MIN]..[UI_SCALE_MAX].
      */
     val uiScale: Float = 1.0f,
-    /** Multi-pane rail widths in dp, adjustable by dragging the dividers. */
-    val sessionRailWidth: Float = RAIL_WIDTH_DEFAULT,
-    val activityRailWidth: Float = RAIL_WIDTH_DEFAULT,
-    val leftRail: RailPanel = RailPanel.Sessions,
-    val rightRail: RailPanel = RailPanel.Activity,
+    /** Column widths in dp, adjustable by dragging the dividers. */
+    val drawerWidth: Float = RAIL_WIDTH_DEFAULT,
+    val railWidth: Float = RAIL_WIDTH_DEFAULT,
+    val railPanel: RailPanel = RailPanel.Activity,
+    /**
+     * Whether the drawer stays open as the shell's left column.
+     *
+     * Only honoured where the window can hold three columns; a two-column
+     * window has both of its slots spoken for by the transcript and the rail,
+     * so there the drawer opens over the content instead. The preference is
+     * still remembered in that case rather than being rewritten, since the same
+     * device may be a foldable that unfolds back into three.
+     */
+    val drawerPinned: Boolean = true,
     val showStatusBar: Boolean = true,
     /**
      * Dashboard server (`hermes dashboard`, default port 9119). Optional: the
@@ -110,10 +116,10 @@ class SettingsRepository(private val context: Context) {
         val NOTIFY_COMPLETION = booleanPreferencesKey("notify_completion")
         val LAYOUT_MODE = stringPreferencesKey("layout_mode")
         val UI_SCALE = floatPreferencesKey("ui_scale")
-        val RAIL_SESSIONS = floatPreferencesKey("rail_sessions_width")
-        val RAIL_ACTIVITY = floatPreferencesKey("rail_activity_width")
-        val LEFT_RAIL = stringPreferencesKey("left_rail")
-        val RIGHT_RAIL = stringPreferencesKey("right_rail")
+        val DRAWER_WIDTH = floatPreferencesKey("drawer_width")
+        val RAIL_WIDTH = floatPreferencesKey("rail_width")
+        val RAIL_PANEL = stringPreferencesKey("rail_panel")
+        val DRAWER_PINNED = booleanPreferencesKey("drawer_pinned")
         val SHOW_STATUS_BAR = booleanPreferencesKey("show_status_bar")
         val DASHBOARD_URL = stringPreferencesKey("dashboard_url")
         val DASHBOARD_USER = stringPreferencesKey("dashboard_username")
@@ -145,12 +151,12 @@ class SettingsRepository(private val context: Context) {
                     ?.let { stored -> LayoutMode.entries.firstOrNull { it.name == stored } }
                     ?: LayoutMode.Auto,
                 uiScale = (prefs[Keys.UI_SCALE] ?: 1.0f).coerceIn(UI_SCALE_MIN, UI_SCALE_MAX),
-                sessionRailWidth = (prefs[Keys.RAIL_SESSIONS] ?: RAIL_WIDTH_DEFAULT)
+                drawerWidth = (prefs[Keys.DRAWER_WIDTH] ?: RAIL_WIDTH_DEFAULT)
                     .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX),
-                activityRailWidth = (prefs[Keys.RAIL_ACTIVITY] ?: RAIL_WIDTH_DEFAULT)
+                railWidth = (prefs[Keys.RAIL_WIDTH] ?: RAIL_WIDTH_DEFAULT)
                     .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX),
-                leftRail = rail(prefs[Keys.LEFT_RAIL], RailPanel.Sessions),
-                rightRail = rail(prefs[Keys.RIGHT_RAIL], RailPanel.Activity),
+                railPanel = rail(prefs[Keys.RAIL_PANEL], RailPanel.Activity),
+                drawerPinned = prefs[Keys.DRAWER_PINNED] ?: true,
                 showStatusBar = prefs[Keys.SHOW_STATUS_BAR] ?: true,
                 dashboardUrl = prefs[Keys.DASHBOARD_URL].orEmpty(),
                 dashboardUsername = prefs[Keys.DASHBOARD_USER].orEmpty(),
@@ -207,17 +213,19 @@ class SettingsRepository(private val context: Context) {
     }
 
     /** Called once when a divider drag ends, not per frame. */
-    suspend fun setRailWidths(sessionDp: Float, activityDp: Float) {
+    suspend fun setColumnWidths(drawerDp: Float, railDp: Float) {
         context.dataStore.edit {
-            it[Keys.RAIL_SESSIONS] = sessionDp.coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
-            it[Keys.RAIL_ACTIVITY] = activityDp.coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
+            it[Keys.DRAWER_WIDTH] = drawerDp.coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
+            it[Keys.RAIL_WIDTH] = railDp.coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
         }
     }
 
-    suspend fun setRailPanel(side: RailSide, panel: RailPanel) {
-        context.dataStore.edit {
-            it[if (side == RailSide.Left) Keys.LEFT_RAIL else Keys.RIGHT_RAIL] = panel.name
-        }
+    suspend fun setRailPanel(panel: RailPanel) {
+        context.dataStore.edit { it[Keys.RAIL_PANEL] = panel.name }
+    }
+
+    suspend fun setDrawerPinned(pinned: Boolean) {
+        context.dataStore.edit { it[Keys.DRAWER_PINNED] = pinned }
     }
 
     suspend fun setShowStatusBar(show: Boolean) {
@@ -227,11 +235,11 @@ class SettingsRepository(private val context: Context) {
     /** Restores every layout choice. Server settings and the API key are untouched. */
     suspend fun resetLayout() {
         context.dataStore.edit {
-            it.remove(Keys.LEFT_RAIL)
-            it.remove(Keys.RIGHT_RAIL)
+            it.remove(Keys.RAIL_PANEL)
+            it.remove(Keys.DRAWER_PINNED)
             it.remove(Keys.SHOW_STATUS_BAR)
-            it.remove(Keys.RAIL_SESSIONS)
-            it.remove(Keys.RAIL_ACTIVITY)
+            it.remove(Keys.DRAWER_WIDTH)
+            it.remove(Keys.RAIL_WIDTH)
             it.remove(Keys.LAYOUT_MODE)
             it.remove(Keys.UI_SCALE)
         }

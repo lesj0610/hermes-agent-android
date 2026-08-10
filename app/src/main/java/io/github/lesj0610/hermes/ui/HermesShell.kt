@@ -2,6 +2,7 @@ package io.github.lesj0610.hermes.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,7 +46,6 @@ import io.github.lesj0610.hermes.core.LayoutMode
 import io.github.lesj0610.hermes.core.RAIL_WIDTH_MAX
 import io.github.lesj0610.hermes.core.RAIL_WIDTH_MIN
 import io.github.lesj0610.hermes.core.RailPanel
-import io.github.lesj0610.hermes.core.RailSide
 import io.github.lesj0610.hermes.ui.components.PaneDivider
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -54,7 +54,6 @@ import io.github.lesj0610.hermes.ui.components.ClockIcon
 import io.github.lesj0610.hermes.ui.components.DrawerContent
 import io.github.lesj0610.hermes.ui.components.DrawerEntry
 import io.github.lesj0610.hermes.ui.components.GridIcon
-import io.github.lesj0610.hermes.ui.components.ListIcon
 import io.github.lesj0610.hermes.ui.components.ServerIcon
 import io.github.lesj0610.hermes.ui.components.SettingsIcon
 import io.github.lesj0610.hermes.ui.components.HamburgerIcon
@@ -69,7 +68,6 @@ import io.github.lesj0610.hermes.ui.dashboard.DashboardPane
 import io.github.lesj0610.hermes.ui.gateway.GatewayPane
 import io.github.lesj0610.hermes.ui.components.StatusBar
 import io.github.lesj0610.hermes.ui.components.ToolCard
-import io.github.lesj0610.hermes.ui.sessions.SessionsPane
 import io.github.lesj0610.hermes.ui.settings.PermissionState
 import io.github.lesj0610.hermes.ui.settings.SettingsPane
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
@@ -106,24 +104,16 @@ fun HermesShell(
 
     val showDashboard = settings.dashboardConfigured
     val railOptions = railPanelOptions(showCron, showGateway, showDashboard)
-    val leftPanel = effectiveRailPanel(settings.leftRail, showCron, showGateway, showDashboard)
-    val rightPanel = effectiveRailPanel(settings.rightRail, showCron, showGateway, showDashboard)
+    val railPanel = effectiveRailPanel(settings.railPanel, showCron, showGateway, showDashboard)
 
     // Edit mode is transient on purpose: it is a mode you enter, change
     // something in, and leave. Persisting it would greet the next launch with
     // controls the user is done with.
     var editingLayout by remember { mutableStateOf(false) }
 
-    // Both rails draw from the same renderer, which is what lets either side
-    // host any panel — and is why the editor needs no separate "swap sides".
     val railContent: @Composable (RailPanel) -> Unit = { panel ->
         when (panel) {
             RailPanel.None -> Unit
-            RailPanel.Sessions -> SessionsPane(
-                sessions = sessions,
-                selectedId = chat.sessionId,
-                onSelect = viewModel::openSession,
-            )
             RailPanel.Activity -> ActivityRail(chat.items)
             RailPanel.Cron -> CronPane(
                 jobs = jobs,
@@ -170,92 +160,94 @@ fun HermesShell(
         )
         val expanded = layout != ShellLayout.Single
 
-        // What the shell is actually drawing, which is what decides whether a
-        // panel still needs a top-bar entry to be reachable.
-        val visibleRails = when (layout) {
-            ShellLayout.Triple -> listOf(leftPanel, rightPanel)
-            ShellLayout.Dual -> listOf(leftPanel)
-            ShellLayout.Single -> emptyList()
-        }
+        // Pinning costs a column, so it is only on offer where there is one to
+        // spare. The stored preference is read, not rewritten, when it is not:
+        // a foldable that is currently two columns wide will be three again.
+        val pinnable = canPinDrawer(layout)
+        val docked = pinnable && settings.drawerPinned
 
-        // Rail widths live in transient state while a divider is being dragged
+        // Column widths live in transient state while a divider is being dragged
         // and are written back once the gesture ends. Persisting per frame would
         // queue a DataStore write per pixel of travel.
-        var sessionRail by remember(settings.sessionRailWidth) {
-            mutableFloatStateOf(settings.sessionRailWidth)
+        var drawerWidth by remember(settings.drawerWidth) {
+            mutableFloatStateOf(settings.drawerWidth)
         }
-        var activityRail by remember(settings.activityRailWidth) {
-            mutableFloatStateOf(settings.activityRailWidth)
+        var railWidth by remember(settings.railWidth) {
+            mutableFloatStateOf(settings.railWidth)
         }
-        val commitRails = { viewModel.setRailWidths(sessionRail, activityRail) }
+        val commitWidths = { viewModel.setColumnWidths(drawerWidth, railWidth) }
 
         val drawerState = rememberDrawerState(DrawerValue.Closed)
         val drawerScope = rememberCoroutineScope()
+        val closeDrawer = { drawerScope.launch { drawerState.close() }; Unit }
 
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                val destinations = drawerDestinations(showCron, showGateway, showDashboard)
-                val (connColor, connLabel) = connectionStatus(connection)
-                val closeDrawer = { drawerScope.launch { drawerState.close() }; Unit }
+        // Undocked, the drawer covers part of the window and no more — the
+        // transcript stays visible behind the scrim, which is what tells you the
+        // conversation is still there and one tap away.
+        val sheetWidth = (maxWidth * 0.82f).coerceAtMost(340.dp)
 
-                ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.background) {
-                    DrawerContent(
-                        modelLabel = settings.model.ifBlank {
-                            stringResource(R.string.settings_model_default)
-                        },
-                        connectionLabel = connLabel,
-                        connectionColor = connColor,
-                        destinations = destinations.map { target ->
-                            DrawerEntry(
-                                label = paneLabel(target),
-                                selected = pane == target,
-                                icon = { tint -> PaneIcon(target, tint) },
-                            )
-                        },
-                        onDestination = { index ->
-                            viewModel.show(destinations[index])
-                            closeDrawer()
-                        },
-                        sessions = sessions,
-                        selectedSessionId = chat.sessionId,
-                        onSession = { session ->
-                            viewModel.openSession(session.id)
-                            viewModel.show(Pane.Chat)
-                            closeDrawer()
-                        },
-                        onAllSessions = {
-                            viewModel.show(Pane.Sessions)
-                            closeDrawer()
-                        },
-                        onNewChat = {
-                            viewModel.openSession(null)
-                            viewModel.show(Pane.Chat)
-                            closeDrawer()
-                        },
-                        settingsSelected = pane == Pane.Settings,
-                        onSettings = {
-                            viewModel.show(Pane.Settings)
-                            closeDrawer()
-                        },
-                        // Arranging rails is meaningless where there is only one
-                        // pane, so the control is absent rather than inert.
-                        arrangeLabel = if (expanded) {
-                            stringResource(
-                                if (editingLayout) R.string.layout_done else R.string.layout_edit,
-                            )
-                        } else {
-                            null
-                        },
-                        arranging = editingLayout,
-                        onArrange = {
-                            editingLayout = !editingLayout
-                            closeDrawer()
-                        },
+        val destinations = drawerDestinations(showCron, showGateway, showDashboard)
+        val (connColor, connLabel) = connectionStatus(connection)
+
+        // Docked or floating, the same contents. Only the frame differs.
+        val drawer: @Composable () -> Unit = {
+            DrawerContent(
+                modelLabel = settings.model.ifBlank {
+                    stringResource(R.string.settings_model_default)
+                },
+                connectionLabel = connLabel,
+                connectionColor = connColor,
+                destinations = destinations.map { target ->
+                    DrawerEntry(
+                        label = paneLabel(target),
+                        selected = pane == target,
+                        icon = { tint -> PaneIcon(target, tint) },
                     )
-                }
-            },
-        ) {
+                },
+                onDestination = { index ->
+                    viewModel.show(destinations[index])
+                    if (!docked) closeDrawer()
+                },
+                sessions = sessions,
+                selectedSessionId = chat.sessionId,
+                onSession = { session ->
+                    viewModel.openSession(session.id)
+                    viewModel.show(Pane.Chat)
+                    if (!docked) closeDrawer()
+                },
+                onNewChat = {
+                    viewModel.openSession(null)
+                    viewModel.show(Pane.Chat)
+                    if (!docked) closeDrawer()
+                },
+                settingsSelected = pane == Pane.Settings,
+                onSettings = {
+                    viewModel.show(Pane.Settings)
+                    if (!docked) closeDrawer()
+                },
+                pinned = if (pinnable) settings.drawerPinned else null,
+                onTogglePin = {
+                    viewModel.setDrawerPinned(!settings.drawerPinned)
+                    closeDrawer()
+                },
+                // Arranging columns is meaningless where there is only one, so
+                // the control is absent rather than present and inert.
+                arrangeLabel = if (expanded) {
+                    stringResource(
+                        if (editingLayout) R.string.layout_done else R.string.layout_edit,
+                    )
+                } else {
+                    null
+                },
+                arranging = editingLayout,
+                onArrange = {
+                    editingLayout = !editingLayout
+                    if (!docked) closeDrawer()
+                },
+            )
+        }
+
+        val body: @Composable () -> Unit = {
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -269,12 +261,13 @@ fun HermesShell(
                         }
                     },
                     navigationIcon = {
-                        // One menu, one place, at every window size. Spreading
-                        // destinations across the bar cluttered the tablet
-                        // layout and still left two-pane windows with panels
-                        // that had no entry at all.
-                        IconButton(onClick = { drawerScope.launch { drawerState.open() } }) {
-                            HamburgerIcon()
+                        // Nothing to open while the drawer is docked — the menu
+                        // is already on screen, and a button that reopens what
+                        // you are looking at reads as broken.
+                        if (!docked) {
+                            IconButton(onClick = { drawerScope.launch { drawerState.open() } }) {
+                                HamburgerIcon()
+                            }
                         }
                     },
                     actions = {
@@ -296,34 +289,10 @@ fun HermesShell(
             val content = Modifier.fillMaxSize().padding(padding)
 
             if (expanded) {
-                // Three panes fill the height; the status strip pins to the
+                // The columns fill the height; the status strip pins to the
                 // bottom edge, matching the desktop shell.
                 Column(content) {
                     Row(Modifier.weight(1f)) {
-                        if (leftPanel != RailPanel.None) {
-                            RailHost(
-                                panel = leftPanel,
-                                editing = editingLayout,
-                                onCycle = {
-                                    viewModel.setRailPanel(
-                                        RailSide.Left,
-                                        nextRailPanel(leftPanel, railOptions),
-                                    )
-                                },
-                                onHide = { viewModel.setRailPanel(RailSide.Left, RailPanel.None) },
-                                modifier = Modifier.width(sessionRail.dp),
-                            ) {
-                                railContent(leftPanel)
-                            }
-                            PaneDivider(
-                                onDelta = { delta ->
-                                    sessionRail = (sessionRail + delta)
-                                        .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
-                                },
-                                onCommit = commitRails,
-                            )
-                        }
-
                         Column(Modifier.weight(1f)) {
                             if (pane == Pane.Cron) {
                                 CronPane(
@@ -363,29 +332,24 @@ fun HermesShell(
                             }
                         }
 
-                        // The right rail is the first thing to go when the window
-                        // is only medium-wide: the transcript needs the room more.
-                        if (layout == ShellLayout.Triple && rightPanel != RailPanel.None) {
+                        if (railPanel != RailPanel.None) {
                             PaneDivider(
                                 onDelta = { delta ->
-                                    activityRail = (activityRail - delta)
+                                    railWidth = (railWidth - delta)
                                         .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
                                 },
-                                onCommit = commitRails,
+                                onCommit = commitWidths,
                             )
                             RailHost(
-                                panel = rightPanel,
+                                panel = railPanel,
                                 editing = editingLayout,
                                 onCycle = {
-                                    viewModel.setRailPanel(
-                                        RailSide.Right,
-                                        nextRailPanel(rightPanel, railOptions),
-                                    )
+                                    viewModel.setRailPanel(nextRailPanel(railPanel, railOptions))
                                 },
-                                onHide = { viewModel.setRailPanel(RailSide.Right, RailPanel.None) },
-                                modifier = Modifier.width(activityRail.dp),
+                                onHide = { viewModel.setRailPanel(RailPanel.None) },
+                                modifier = Modifier.width(railWidth.dp),
                             ) {
-                                railContent(rightPanel)
+                                railContent(railPanel)
                             }
                         }
                     }
@@ -393,10 +357,8 @@ fun HermesShell(
                     if (editingLayout) {
                         LayoutEditBar(
                             settings = settings,
-                            hiddenLeft = leftPanel == RailPanel.None,
-                            hiddenRight = rightPanel == RailPanel.None,
-                            onShowLeft = { viewModel.setRailPanel(RailSide.Left, RailPanel.Sessions) },
-                            onShowRight = { viewModel.setRailPanel(RailSide.Right, RailPanel.Activity) },
+                            railHidden = railPanel == RailPanel.None,
+                            onShowRail = { viewModel.setRailPanel(RailPanel.Activity) },
                             onToggleStatusBar = viewModel::setShowStatusBar,
                             onReset = viewModel::resetLayout,
                             onDone = { editingLayout = false },
@@ -409,12 +371,6 @@ fun HermesShell(
                 }
             } else {
                 when (pane) {
-                    Pane.Sessions -> SessionsPane(
-                        sessions = sessions,
-                        selectedId = chat.sessionId,
-                        onSelect = viewModel::openSession,
-                        modifier = content,
-                    )
                     Pane.Chat -> ChatPane(
                         state = chat,
                         onSend = viewModel::send,
@@ -469,6 +425,44 @@ fun HermesShell(
         }
         }
 
+        if (docked) {
+            // The drawer *is* the left column here, not something drawn over
+            // one. That is the whole point of pinning: three columns, with the
+            // menu as the first of them, the way the desktop shell reads.
+            Row(Modifier.fillMaxSize()) {
+                Column(
+                    Modifier
+                        .width(drawerWidth.dp)
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                ) {
+                    drawer()
+                }
+                PaneDivider(
+                    onDelta = { delta ->
+                        drawerWidth = (drawerWidth + delta)
+                            .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX)
+                    },
+                    onCommit = commitWidths,
+                )
+                Box(Modifier.weight(1f)) { body() }
+            }
+        } else {
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                drawerContent = {
+                    ModalDrawerSheet(
+                        drawerContainerColor = MaterialTheme.colorScheme.background,
+                        modifier = Modifier.width(sheetWidth),
+                    ) {
+                        drawer()
+                    }
+                },
+            ) {
+                body()
+            }
+        }
+
         // The sheet sits above whichever layout is showing: an approval blocks
         // the run regardless of which pane has focus.
         chat.pendingApproval?.let { approval ->
@@ -479,19 +473,17 @@ fun HermesShell(
 }
 
 /**
- * Controls that belong to the layout rather than to any one rail: bringing a
- * hidden rail back, the status bar, and the way out of the mode.
+ * Controls that belong to the layout rather than to the rail: bringing a hidden
+ * rail back, the status bar, and the way out of the mode.
  *
- * A hidden rail has no header to press, so restoring one has to live here —
- * otherwise hiding a rail would be a one-way door.
+ * A hidden rail has no header to press, so restoring it has to live here —
+ * otherwise hiding it would be a one-way door.
  */
 @Composable
 private fun LayoutEditBar(
     settings: HermesSettings,
-    hiddenLeft: Boolean,
-    hiddenRight: Boolean,
-    onShowLeft: () -> Unit,
-    onShowRight: () -> Unit,
+    railHidden: Boolean,
+    onShowRail: () -> Unit,
     onToggleStatusBar: (Boolean) -> Unit,
     onReset: () -> Unit,
     onDone: () -> Unit,
@@ -512,11 +504,8 @@ private fun LayoutEditBar(
             color = colors.muted,
             modifier = Modifier.padding(end = 6.dp),
         )
-        if (hiddenLeft) {
-            TextButton(onClick = onShowLeft) { Text(stringResource(R.string.layout_show_left)) }
-        }
-        if (hiddenRight) {
-            TextButton(onClick = onShowRight) { Text(stringResource(R.string.layout_show_right)) }
+        if (railHidden) {
+            TextButton(onClick = onShowRail) { Text(stringResource(R.string.layout_show_rail)) }
         }
         TextButton(onClick = { onToggleStatusBar(!settings.showStatusBar) }) {
             Text(
@@ -550,14 +539,12 @@ private fun PaneIcon(pane: Pane, tint: Color) = when (pane) {
     Pane.Cron -> ClockIcon(tint = tint)
     Pane.Gateway -> ServerIcon(tint = tint)
     Pane.Dashboard -> GridIcon(tint = tint)
-    Pane.Sessions -> ListIcon(tint = tint)
     Pane.Settings -> SettingsIcon(tint = tint)
 }
 
 /** A pane's name, used by both the title bar and the drawer's destination rows. */
 @Composable
 private fun paneLabel(pane: Pane): String = when (pane) {
-    Pane.Sessions -> stringResource(R.string.sessions_title)
     Pane.Settings -> stringResource(R.string.settings_title)
     Pane.Cron -> stringResource(R.string.cron_title)
     Pane.Gateway -> stringResource(R.string.gateway_title)

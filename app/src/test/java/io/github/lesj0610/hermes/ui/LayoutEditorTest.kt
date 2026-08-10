@@ -9,7 +9,7 @@ class LayoutEditorTest {
     @Test
     fun `options drop panels the gateway cannot serve`() {
         assertEquals(
-            listOf(RailPanel.None, RailPanel.Sessions, RailPanel.Activity),
+            listOf(RailPanel.None, RailPanel.Activity),
             railPanelOptions(showCron = false, showGateway = false),
         )
     }
@@ -23,7 +23,7 @@ class LayoutEditorTest {
     @Test
     fun `cycling wraps around`() {
         val options = railPanelOptions(showCron = true, showGateway = true)
-        assertEquals(RailPanel.Sessions, nextRailPanel(RailPanel.None, options))
+        assertEquals(RailPanel.Activity, nextRailPanel(RailPanel.None, options))
         assertEquals(RailPanel.None, nextRailPanel(options.last(), options))
     }
 
@@ -86,12 +86,22 @@ class LayoutEditorTest {
     }
 
     @Test
-    fun `sessions and activity are not destinations`() {
-        // Sessions is the drawer's own body; Activity is a view of the open
-        // transcript, already in the centre. Neither earns a row.
-        val destinations = drawerDestinations(showCron = true, showGateway = true, showDashboard = true)
+    fun `the session list is neither a destination nor a rail`() {
+        // It is the drawer's own body. A row leading to a screen showing the
+        // same list would be a detour through what is already open.
+        val options = railPanelOptions(showCron = true, showGateway = true, showDashboard = true)
 
-        assertEquals(false, destinations.contains(Pane.Sessions))
+        assertEquals(false, options.any { it.name == "Sessions" })
+    }
+
+    @Test
+    fun `the drawer docks only where a third column exists`() {
+        // The unfolded Fold 5 is 690dp: two columns, both spoken for. Docking
+        // there would evict the rail, which reads as a lost panel rather than a
+        // setting taking effect.
+        assertEquals(true, canPinDrawer(ShellLayout.Triple))
+        assertEquals(false, canPinDrawer(ShellLayout.Dual))
+        assertEquals(false, canPinDrawer(ShellLayout.Single))
     }
 
     @Test
@@ -111,8 +121,8 @@ class LayoutEditorTest {
     @Test
     fun `panels needing no capability are unaffected`() {
         assertEquals(
-            RailPanel.Sessions,
-            effectiveRailPanel(RailPanel.Sessions, showCron = false, showGateway = false),
+            RailPanel.Activity,
+            effectiveRailPanel(RailPanel.Activity, showCron = false, showGateway = false),
         )
     }
 }

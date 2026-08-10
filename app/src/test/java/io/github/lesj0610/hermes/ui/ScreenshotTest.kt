@@ -24,7 +24,6 @@ import io.github.lesj0610.hermes.ui.components.DrawerContent
 import io.github.lesj0610.hermes.ui.components.DrawerEntry
 import io.github.lesj0610.hermes.ui.components.GridIcon
 import io.github.lesj0610.hermes.ui.components.ServerIcon
-import io.github.lesj0610.hermes.ui.sessions.SessionsPane
 import io.github.lesj0610.hermes.ui.theme.HermesTheme
 import org.junit.Rule
 import org.junit.Test
@@ -108,24 +107,14 @@ class ScreenshotTest {
         }
     }
 
-    @Test
-    fun sessionsList() {
-        capture("sessions-phone", 411, 891) {
-            SessionsPane(
-                sessions = listOf(
-                    SessionSummary(id = "1", title = "FP4 dequant 벤치", model = "opus-5",
-                        preview = "중간 결과는 1.83 ms/iter…"),
-                    SessionSummary(id = "2", title = "게이트웨이 로그 점검", model = "opus-5",
-                        preview = "승인 대기 · bash", endedAt = "2026-08-09"),
-                    SessionSummary(id = "3", title = "Termux 설치 경로 확인",
-                        toolCallCount = 5, endedAt = "2026-08-08", endReason = "completed"),
-                ),
-                selectedId = "1",
-                onSelect = {},
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-    }
+    private val sampleSessions = listOf(
+        SessionSummary(id = "1", title = "FP4 dequant 벤치", model = "opus-5",
+            preview = "중간 결과는 1.83 ms/iter…"),
+        SessionSummary(id = "2", title = "게이트웨이 로그 점검", model = "opus-5",
+            preview = "승인 대기 · bash"),
+        SessionSummary(id = "3", title = "Termux 설치 경로 확인",
+            toolCallCount = 5, endedAt = "2026-08-08", endReason = "completed"),
+    )
 
     /** Tablet width, so rail proportions and the wider transcript can be judged. */
     @Test
@@ -157,20 +146,14 @@ class ScreenshotTest {
                     DrawerEntry("워크스페이스", false) { GridIcon(tint = it) },
                 ),
                 onDestination = {},
-                sessions = listOf(
-                    SessionSummary(id = "1", title = "FP4 dequant 벤치", model = "opus-5"),
-                    SessionSummary(id = "2", title = "게이트웨이 로그 점검", model = "opus-5"),
-                    SessionSummary(
-                        id = "3", title = "Termux 설치 경로 확인",
-                        endedAt = "2026-08-08", endReason = "completed",
-                    ),
-                ),
+                sessions = sampleSessions,
                 selectedSessionId = "1",
-                onAllSessions = {},
                 onSession = {},
                 onNewChat = {},
                 settingsSelected = false,
                 onSettings = {},
+                pinned = true,
+                onTogglePin = {},
                 arrangeLabel = "배치",
                 arranging = false,
                 onArrange = {},

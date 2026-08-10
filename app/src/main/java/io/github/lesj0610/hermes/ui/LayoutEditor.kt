@@ -3,13 +3,13 @@ package io.github.lesj0610.hermes.ui
 import io.github.lesj0610.hermes.core.RailPanel
 
 /**
- * Which panels a rail may show on this gateway.
+ * Which panels the rail may show on this gateway.
  *
  * Filtered by what the server actually supports, so the editor never offers a
  * choice that would produce an empty rail: picking "Schedule" against a gateway
  * with no job support would otherwise look like a bug rather than a limitation.
  *
- * [RailPanel.None] is always offered — hiding a rail needs no server support.
+ * [RailPanel.None] is always offered — hiding the rail needs no server support.
  */
 fun railPanelOptions(
     showCron: Boolean,
@@ -18,7 +18,6 @@ fun railPanelOptions(
 ): List<RailPanel> =
     buildList {
         add(RailPanel.None)
-        add(RailPanel.Sessions)
         add(RailPanel.Activity)
         if (showCron) add(RailPanel.Cron)
         if (showGateway) add(RailPanel.Gateway)

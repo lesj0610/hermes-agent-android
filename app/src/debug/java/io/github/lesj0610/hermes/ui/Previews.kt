@@ -29,7 +29,6 @@ import io.github.lesj0610.hermes.ui.components.GridIcon
 import io.github.lesj0610.hermes.ui.components.ServerIcon
 import io.github.lesj0610.hermes.ui.cron.CronPane
 import io.github.lesj0610.hermes.ui.dashboard.DashboardPane
-import io.github.lesj0610.hermes.ui.sessions.SessionsPane
 import io.github.lesj0610.hermes.ui.settings.PermissionState
 import io.github.lesj0610.hermes.ui.settings.SettingsPane
 import io.github.lesj0610.hermes.ui.theme.HermesTheme
@@ -134,20 +133,15 @@ private fun PreviewDrawer() = Frame {
         sessions = sampleSessions,
         selectedSessionId = "1",
         onSession = {},
-        onAllSessions = {},
         onNewChat = {},
         settingsSelected = false,
         onSettings = {},
+        pinned = true,
+        onTogglePin = {},
         arrangeLabel = "배치",
         arranging = false,
         onArrange = {},
     )
-}
-
-@Preview(name = "Sessions", device = Devices.PHONE, showBackground = true)
-@Composable
-private fun PreviewSessions() = Frame {
-    SessionsPane(sessions = sampleSessions, selectedId = "1", onSelect = {})
 }
 
 @Preview(name = "Schedule", device = Devices.PHONE, showBackground = true)

@@ -233,22 +233,48 @@ fun GridIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     }
 }
 
-/** A list of rows: every session, in full. */
+/** A magnifier: filter the session list. */
 @Composable
-fun ListIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+fun SearchIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     val color = tint ?: LocalRunColors.current.muted
     Canvas(modifier.size(ICON_DP.dp)) {
         val bounds = iconBounds()
-        repeat(3) { row ->
-            val y = bounds.top + bounds.height * (0.15f + row * 0.35f)
-            drawCircle(color, radius = 1.4.dp.toPx(), center = Offset(bounds.left + 1.dp.toPx(), y))
+        val radius = bounds.width * 0.33f
+        val centre = Offset(bounds.left + radius + 1.dp.toPx(), bounds.top + radius + 1.dp.toPx())
+        drawCircle(color, radius = radius, center = centre, style = iconStroke())
+        // The handle leaves the lens on the diagonal, at the radius, so it meets
+        // the circle rather than crossing into it.
+        val edge = radius * 0.7071f
+        drawLine(
+            color,
+            Offset(centre.x + edge, centre.y + edge),
+            Offset(bounds.right, bounds.bottom),
+            STROKE_DP.dp.toPx(),
+            StrokeCap.Round,
+        )
+    }
+}
+
+/** Sliders: adjust how the columns are arranged. */
+@Composable
+fun SlidersIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        // Knobs at different offsets per track, which is what distinguishes
+        // this from a plain list at small sizes.
+        val knobs = listOf(0.68f, 0.34f, 0.55f)
+        knobs.forEachIndexed { row, at ->
+            val y = bounds.top + bounds.height * (0.14f + row * 0.36f)
             drawLine(
-                color, Offset(bounds.left + 6.dp.toPx(), y), Offset(bounds.right, y),
+                color, Offset(bounds.left, y), Offset(bounds.right, y),
                 STROKE_DP.dp.toPx(), StrokeCap.Round,
             )
+            drawCircle(color, radius = 2.2.dp.toPx(), center = Offset(bounds.left + bounds.width * at, y))
         }
     }
 }
+
 
 /** The usual cogwheel. */
 @Composable

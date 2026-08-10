@@ -13,7 +13,6 @@ import io.github.lesj0610.hermes.core.Graph
 import io.github.lesj0610.hermes.core.HermesSettings
 import io.github.lesj0610.hermes.core.LayoutMode
 import io.github.lesj0610.hermes.core.RailPanel
-import io.github.lesj0610.hermes.core.RailSide
 import io.github.lesj0610.hermes.data.ChatState
 import io.github.lesj0610.hermes.data.UiError
 import io.github.lesj0610.hermes.net.ActiveProfile
@@ -38,7 +37,7 @@ sealed interface Connection {
 }
 
 /** Which pane the user is looking at. On a tablet several are visible at once. */
-enum class Pane { Sessions, Chat, Cron, Gateway, Dashboard, Settings }
+enum class Pane { Chat, Cron, Gateway, Dashboard, Settings }
 
 /** State of the optional dashboard connection, which is independent of the gateway's. */
 sealed interface DashboardState {
@@ -304,12 +303,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { graph.settings.setUiScale(scale) }
     }
 
-    fun setRailWidths(sessionDp: Float, activityDp: Float) {
-        viewModelScope.launch { graph.settings.setRailWidths(sessionDp, activityDp) }
+    fun setColumnWidths(drawerDp: Float, railDp: Float) {
+        viewModelScope.launch { graph.settings.setColumnWidths(drawerDp, railDp) }
     }
 
-    fun setRailPanel(side: RailSide, panel: RailPanel) {
-        viewModelScope.launch { graph.settings.setRailPanel(side, panel) }
+    fun setRailPanel(panel: RailPanel) {
+        viewModelScope.launch { graph.settings.setRailPanel(panel) }
+    }
+
+    fun setDrawerPinned(pinned: Boolean) {
+        viewModelScope.launch { graph.settings.setDrawerPinned(pinned) }
     }
 
     fun setShowStatusBar(show: Boolean) {

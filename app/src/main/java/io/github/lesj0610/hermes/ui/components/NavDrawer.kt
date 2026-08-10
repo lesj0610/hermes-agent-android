@@ -2,23 +2,35 @@ package io.github.lesj0610.hermes.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -32,7 +44,6 @@ import io.github.lesj0610.hermes.ui.theme.LocalRunColors
 @Composable
 fun railPanelLabel(panel: RailPanel): String = when (panel) {
     RailPanel.None -> stringResource(R.string.rail_none)
-    RailPanel.Sessions -> stringResource(R.string.sessions_title)
     RailPanel.Activity -> stringResource(R.string.rail_activity)
     RailPanel.Cron -> stringResource(R.string.cron_title)
     RailPanel.Gateway -> stringResource(R.string.gateway_title)
@@ -53,17 +64,20 @@ data class DrawerEntry(
 )
 
 /**
- * Drawer contents: identity, destinations, the session list, and a pinned
- * bottom row.
+ * The drawer: identity, destinations, the session list, and a pinned bottom row.
  *
- * The shape follows what a chat app's drawer is actually for. Destinations are
- * few and fixed at the top; the session list takes the remaining height and
- * scrolls, because switching conversations is the thing done most often; and
- * new session, arrange and settings stay pinned at the bottom where they are
- * reachable without scrolling past a long history.
+ * This is the app's session column, whether it is floating over the transcript
+ * or docked beside it, which is why the list here carries the search field and
+ * the preview line rather than a separate screen doing so. An earlier build had
+ * both — a short list in the drawer and a full one behind "see all" — and the
+ * second was a detour through a screen showing what the drawer already had open.
  *
- * An earlier version listed sessions as a single destination alongside the rest,
- * which buried the one list the drawer exists to show.
+ * The bands are fixed: destinations at the top, the list taking the remaining
+ * height and scrolling, and the controls pinned at the bottom where a long
+ * history cannot push them away.
+ *
+ * [pinned] is null where the window cannot spare a column for a docked drawer,
+ * and the toggle is then absent rather than present and inert.
  */
 @Composable
 fun DrawerContent(
@@ -75,10 +89,11 @@ fun DrawerContent(
     sessions: List<SessionSummary>,
     selectedSessionId: String?,
     onSession: (SessionSummary) -> Unit,
-    onAllSessions: () -> Unit,
     onNewChat: () -> Unit,
     settingsSelected: Boolean,
     onSettings: () -> Unit,
+    pinned: Boolean?,
+    onTogglePin: () -> Unit,
     arrangeLabel: String?,
     arranging: Boolean,
     onArrange: () -> Unit,
@@ -88,24 +103,71 @@ fun DrawerContent(
     // composable scopes.
     val newSessionLabel = stringResource(R.string.action_new_session)
     val settingsLabel = stringResource(R.string.nav_settings)
+    val searchLabel = stringResource(R.string.sessions_search)
+    val pinLabel = stringResource(
+        if (pinned == true) R.string.drawer_unpin else R.string.drawer_pin,
+    )
+
+    // The field is summoned rather than permanent: it is used occasionally, and
+    // a text box parked above the list costs a row of height on every open.
+    var searching by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    // Titles are often absent on fresh sessions, so the preview line has to be
+    // searchable too or half the list is unreachable by name.
+    val visible = remember(sessions, query) {
+        if (query.isBlank()) {
+            sessions
+        } else {
+            sessions.filter { session ->
+                listOfNotNull(session.title, session.preview, session.model)
+                    .any { it.contains(query, ignoreCase = true) }
+            }
+        }
+    }
 
     Column(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(start = 20.dp, top = 22.dp, bottom = 10.dp, end = 16.dp)) {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 2.dp),
-            ) {
-                StatusDot(connectionColor, size = 6)
+        Row(
+            Modifier.fillMaxWidth().padding(start = 20.dp, top = 18.dp, bottom = 10.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
                 Text(
-                    text = listOf(modelLabel, connectionLabel).joinToString(" · "),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.muted,
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleMedium,
                 )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 2.dp),
+                ) {
+                    StatusDot(connectionColor, size = 6)
+                    Text(
+                        text = listOf(modelLabel, connectionLabel).joinToString(" · "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.muted,
+                    )
+                }
+            }
+            IconButton(
+                onClick = {
+                    searching = !searching
+                    // Leaving a filter applied behind a hidden field would make
+                    // the list look like it had lost sessions.
+                    if (!searching) query = ""
+                },
+            ) {
+                SearchIcon(
+                    tint = if (searching) MaterialTheme.colorScheme.primary else colors.muted,
+                    modifier = Modifier.semantics { contentDescription = searchLabel },
+                )
+            }
+            if (pinned != null) {
+                IconButton(onClick = onTogglePin) {
+                    LayoutIcon(
+                        tint = if (pinned) MaterialTheme.colorScheme.primary else colors.muted,
+                        modifier = Modifier.semantics { contentDescription = pinLabel },
+                    )
+                }
             }
         }
         HorizontalDivider(color = colors.line)
@@ -115,54 +177,44 @@ fun DrawerContent(
         }
 
         HorizontalDivider(color = colors.line, modifier = Modifier.padding(top = 6.dp))
-        DrawerSection(stringResource(R.string.sessions_title))
-
-        // weight(1f) so the history scrolls inside the drawer instead of pushing
-        // the bottom row off-screen once it grows.
-        LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
-            items(sessions, key = { it.id }) { session ->
-                val running = session.endedAt.isNullOrBlank() && session.endReason.isNullOrBlank()
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { onSession(session) }
-                        .padding(start = 20.dp, end = 16.dp, top = 9.dp, bottom = 9.dp),
-                    horizontalArrangement = Arrangement.spacedBy(9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    StatusDot(if (running) colors.running else colors.muted, size = 6)
+        if (searching) {
+            val focus = remember { FocusRequester() }
+            LaunchedEffect(Unit) { focus.requestFocus() }
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .focusRequester(focus),
+                placeholder = {
                     Text(
-                        text = session.title?.takeIf { it.isNotBlank() }
-                            ?: stringResource(R.string.sessions_untitled),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (session.id == selectedSessionId) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        stringResource(R.string.sessions_search),
+                        style = MaterialTheme.typography.bodySmall,
                     )
-                }
-            }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(20.dp),
+            )
+        }
 
-            // The rows above carry a title and nothing else. Preview text, tool
-            // counts and end reasons live on the full screen, which this reaches
-            // — otherwise that detail would have nowhere left to be seen.
-            item {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { onAllSessions() }
-                        .padding(start = 18.dp, end = 16.dp, top = 10.dp, bottom = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ListIcon(tint = colors.muted, modifier = Modifier.size(16.dp))
-                    Text(
-                        text = stringResource(R.string.drawer_all_sessions),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.muted,
+        if (visible.isEmpty()) {
+            // weight(1f) here too, so an empty list still holds the bottom row
+            // down at the edge instead of letting it float up mid-sheet.
+            Box(Modifier.weight(1f).fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = stringResource(R.string.sessions_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.muted,
+                )
+            }
+        } else {
+            LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+                items(visible, key = { it.id }) { session ->
+                    SessionRow(
+                        session = session,
+                        selected = session.id == selectedSessionId,
+                        onClick = { onSession(session) },
                     )
                 }
             }
@@ -170,7 +222,7 @@ fun DrawerContent(
 
         HorizontalDivider(color = colors.line)
         // Icons, not labels: this row is fixed, tapped by position rather than
-        // read, and three words across a 300dp sheet crowded out the space that
+        // read, and three words across a 300dp column crowded out the space that
         // makes the row read as pinned.
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -183,10 +235,10 @@ fun DrawerContent(
                 )
             }
             Row {
-                // Only meaningful where there are rails to arrange.
+                // Only meaningful where there are columns to arrange.
                 arrangeLabel?.let { label ->
                     IconButton(onClick = onArrange) {
-                        LayoutIcon(
+                        SlidersIcon(
                             tint = if (arranging) MaterialTheme.colorScheme.primary else colors.muted,
                             modifier = Modifier.semantics { contentDescription = label },
                         )
@@ -198,6 +250,60 @@ fun DrawerContent(
                         modifier = Modifier.semantics { contentDescription = settingsLabel },
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * One session.
+ *
+ * The dot carries state, because docked beside the transcript this list is
+ * permanently in view and a run needing attention has to read at a glance
+ * without stealing focus from the conversation.
+ */
+@Composable
+private fun SessionRow(session: SessionSummary, selected: Boolean, onClick: () -> Unit) {
+    val colors = LocalRunColors.current
+    val dotColor = when {
+        session.endReason.isNullOrBlank() && session.endedAt.isNullOrBlank() -> colors.running
+        session.endReason == "cancelled" -> colors.muted
+        else -> colors.completed
+    }
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(start = 18.dp, end = 14.dp, top = 9.dp, bottom = 9.dp),
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        StatusDot(dotColor, Modifier.padding(top = 5.dp), size = 6)
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = session.title?.takeIf { it.isNotBlank() }
+                    ?: stringResource(R.string.sessions_untitled),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val subtitle = session.preview?.takeIf { it.isNotBlank() }
+                ?: session.toolCallCount?.let {
+                    pluralStringResource(R.plurals.sessions_tool_count, it, it)
+                }
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -226,16 +332,3 @@ fun DrawerDestination(
     )
 }
 
-/** Section label inside the drawer. */
-@Composable
-fun DrawerSection(title: String) {
-    val colors = LocalRunColors.current
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelSmall,
-        color = colors.muted,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, top = 12.dp, bottom = 4.dp),
-    )
-}

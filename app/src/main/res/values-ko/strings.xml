@@ -37,8 +37,9 @@
     <string name="layout_reset">기본값</string>
     <string name="layout_swap_panel">변경</string>
     <string name="layout_hide">숨김</string>
-    <string name="layout_show_left">왼쪽 레일 표시</string>
-    <string name="layout_show_right">오른쪽 레일 표시</string>
+    <string name="layout_show_rail">레일 표시</string>
+    <string name="drawer_pin">메뉴 고정</string>
+    <string name="drawer_unpin">고정 해제</string>
     <string name="layout_status_bar_hide">상태바 숨김</string>
     <string name="layout_status_bar_show">상태바 표시</string>
     <string name="rail_none">숨김</string>
@@ -46,8 +47,6 @@
     <string name="rail_activity">활동</string>
     <string name="rail_activity_empty">도구 실행이 여기 표시됩니다.</string>
 
-    <string name="sessions_title">세션</string>
-    <string name="drawer_all_sessions">세션 전체 보기</string>
     <string name="sessions_search">세션 검색</string>
     <string name="sessions_empty">세션이 없습니다.</string>
     <!-- 한국어는 수 구분이 없으므로 other 하나만 둔다. -->

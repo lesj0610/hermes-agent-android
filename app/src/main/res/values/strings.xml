@@ -40,8 +40,9 @@
     <string name="layout_reset">Reset</string>
     <string name="layout_swap_panel">Change</string>
     <string name="layout_hide">Hide</string>
-    <string name="layout_show_left">Show left rail</string>
-    <string name="layout_show_right">Show right rail</string>
+    <string name="layout_show_rail">Show rail</string>
+    <string name="drawer_pin">Dock the menu</string>
+    <string name="drawer_unpin">Undock the menu</string>
     <string name="layout_status_bar_hide">Hide status bar</string>
     <string name="layout_status_bar_show">Show status bar</string>
     <string name="rail_none">Hidden</string>
@@ -51,8 +52,6 @@
     <string name="rail_activity_empty">Tool calls show up here.</string>
 
     <!-- Sessions -->
-    <string name="sessions_title">Sessions</string>
-    <string name="drawer_all_sessions">See all sessions</string>
     <string name="sessions_search">Search sessions</string>
     <string name="sessions_empty">No sessions yet.</string>
     <plurals name="sessions_tool_count">

@@ -26,10 +26,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,7 +87,19 @@ fun ProjectsPane(
     var creating by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<Project?>(null) }
 
-    LaunchedEffect(dashboardConfigured) { if (dashboardConfigured) onLoad() }
+    // Same rule as the session list: no refresh button, re-read at the moments
+    // the list goes stale. This effect covers both — it fires when the pane is
+    // first composed, which is when it becomes visible, and again whenever the
+    // app returns to the foreground while it is still on screen. Projects are
+    // made on the desktop too, and that is exactly the time away this catches.
+    //
+    // Scoped to the pane rather than to the shell on purpose: a load here is a
+    // ticket mint plus a WebSocket handshake, which is not worth spending while
+    // nobody is looking at projects.
+    LifecycleResumeEffect(dashboardConfigured) {
+        if (dashboardConfigured) onLoad()
+        onPauseOrDispose { }
+    }
     BackHandler(enabled = creating) { creating = false }
 
     if (!dashboardConfigured) {
@@ -139,8 +153,15 @@ fun ProjectsPane(
                 )
             }
         } else {
+            // The pull is the escape hatch for a change made elsewhere while
+            // this screen was already open.
+            PullToRefreshBox(
+                isRefreshing = busy,
+                onRefresh = onLoad,
+                modifier = Modifier.weight(1f),
+            ) {
             LazyColumn(
-                Modifier.weight(1f),
+                Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -158,6 +179,7 @@ fun ProjectsPane(
                         },
                     )
                 }
+            }
             }
         }
 
@@ -178,9 +200,6 @@ fun ProjectsPane(
                     text = stringResource(R.string.projects_new),
                     modifier = Modifier.padding(start = 6.dp),
                 )
-            }
-            TextButton(onClick = onLoad, enabled = !busy) {
-                Text(stringResource(R.string.artifacts_rescan))
             }
         }
     }

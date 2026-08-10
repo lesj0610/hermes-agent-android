@@ -233,6 +233,29 @@ fun GridIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     }
 }
 
+/** An upward arrow: send the message. */
+@Composable
+fun SendIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val stroke = STROKE_DP.dp.toPx() * 1.2f
+        drawLine(
+            color, Offset(bounds.center.x, bounds.bottom),
+            Offset(bounds.center.x, bounds.top), stroke, StrokeCap.Round,
+        )
+        val head = bounds.width * 0.32f
+        drawLine(
+            color, Offset(bounds.center.x - head, bounds.top + head),
+            Offset(bounds.center.x, bounds.top), stroke, StrokeCap.Round,
+        )
+        drawLine(
+            color, Offset(bounds.center.x + head, bounds.top + head),
+            Offset(bounds.center.x, bounds.top), stroke, StrokeCap.Round,
+        )
+    }
+}
+
 /** A microphone: dictate one message. */
 @Composable
 fun MicIcon(modifier: Modifier = Modifier, tint: Color? = null) {

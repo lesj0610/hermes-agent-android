@@ -53,6 +53,13 @@ import androidx.compose.ui.semantics.semantics
 import io.github.lesj0610.hermes.ui.components.MicIcon
 import io.github.lesj0610.hermes.ui.components.WaveformIcon
 import io.github.lesj0610.hermes.voice.VoiceState
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.graphics.Color
+import io.github.lesj0610.hermes.ui.components.SendIcon
 
 @Composable
 fun ChatPane(
@@ -137,16 +144,14 @@ fun ChatPane(
         }
 
         HorizontalDivider(color = colors.line)
-        RuntimeBar(
+        Composer(
+            enabled = !state.isBusy,
+            onSend = onSend,
             modelLabel = modelLabel,
             modelChoices = modelChoices,
             onSelectModel = onSelectModel,
             effort = effort,
             onSelectEffort = onSelectEffort,
-        )
-        Composer(
-            enabled = !state.isBusy,
-            onSend = onSend,
             voiceAvailable = voiceAvailable,
             voiceState = voiceState,
             conversing = conversing,
@@ -155,82 +160,6 @@ fun ChatPane(
             onDictationConsumed = onDictationConsumed,
             onToggleConversation = onToggleConversation,
         )
-    }
-}
-
-/**
- * The model and reasoning-effort choices, directly above the input.
- *
- * They sit here rather than in settings because both are per-turn decisions —
- * a cheap model for a quick question, xhigh for something hard — and the
- * gateway accepts both on the run request. Burying them a screen away would
- * make the choice cost more than the turn it applies to.
- */
-@Composable
-private fun RuntimeBar(
-    modelLabel: String,
-    modelChoices: List<ModelChoice>,
-    onSelectModel: (ModelChoice) -> Unit,
-    effort: ReasoningEffort,
-    onSelectEffort: (ReasoningEffort) -> Unit,
-) {
-    val colors = LocalRunColors.current
-    var modelsOpen by remember { mutableStateOf(false) }
-    var effortOpen by remember { mutableStateOf(false) }
-
-    Row(
-        Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box {
-            // The chip is inert rather than absent when the gateway cannot serve
-            // the inventory: the model in use is still worth showing.
-            RuntimeChip(
-                label = modelLabel.ifBlank { stringResource(R.string.settings_model_default) },
-                enabled = modelChoices.isNotEmpty(),
-                onClick = { modelsOpen = true },
-            )
-            DropdownMenu(expanded = modelsOpen, onDismissRequest = { modelsOpen = false }) {
-                modelChoices.forEach { choice ->
-                    DropdownMenuItem(
-                        text = {
-                            Column {
-                                Text(choice.model, style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    text = choice.providerLabel,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = colors.muted,
-                                )
-                            }
-                        },
-                        onClick = {
-                            onSelectModel(choice)
-                            modelsOpen = false
-                        },
-                    )
-                }
-            }
-        }
-
-        Box {
-            RuntimeChip(
-                label = effortLabel(effort),
-                enabled = true,
-                onClick = { effortOpen = true },
-            )
-            DropdownMenu(expanded = effortOpen, onDismissRequest = { effortOpen = false }) {
-                ReasoningEffort.entries.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(effortLabel(option)) },
-                        onClick = {
-                            onSelectEffort(option)
-                            effortOpen = false
-                        },
-                    )
-                }
-            }
-        }
     }
 }
 
@@ -365,6 +294,11 @@ private fun StopBar(stopping: Boolean, onStop: () -> Unit, modifier: Modifier = 
 private fun Composer(
     enabled: Boolean,
     onSend: (String) -> Unit,
+    modelLabel: String,
+    modelChoices: List<ModelChoice>,
+    onSelectModel: (ModelChoice) -> Unit,
+    effort: ReasoningEffort,
+    onSelectEffort: (ReasoningEffort) -> Unit,
     voiceAvailable: Boolean,
     voiceState: VoiceState,
     conversing: Boolean,
@@ -375,9 +309,12 @@ private fun Composer(
 ) {
     val colors = LocalRunColors.current
     var draft by remember { mutableStateOf("") }
+    var modelsOpen by remember { mutableStateOf(false) }
+    var effortOpen by remember { mutableStateOf(false) }
     // Resolved out here: a semantics block is not a composable scope.
     val dictateLabel = stringResource(R.string.voice_dictate)
     val conversationLabel = stringResource(R.string.voice_conversation)
+    val sendLabel = stringResource(R.string.chat_send)
 
     // Dictation lands in the box rather than being sent, so a misheard word can
     // be fixed before it costs a turn. Appended, so it adds to whatever was
@@ -389,50 +326,146 @@ private fun Composer(
         }
     }
 
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    // One surface holding the input and everything that acts on it. Splitting
+    // the runtime pickers into a strip of their own read as a separate toolbar
+    // that happened to sit above the composer, rather than as part of the
+    // message being written.
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(colors.panel)
+            .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 6.dp),
     ) {
-        if (voiceAvailable) {
-            IconButton(onClick = onDictate, enabled = enabled) {
-                MicIcon(
-                    tint = if (voiceState == VoiceState.Listening) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        colors.muted
-                    },
-                    modifier = Modifier.semantics {
-                        contentDescription = dictateLabel
-                    },
-                )
-            }
-            IconButton(onClick = onToggleConversation) {
-                WaveformIcon(
-                    tint = if (conversing) MaterialTheme.colorScheme.primary else colors.muted,
-                    modifier = Modifier.semantics {
-                        contentDescription = conversationLabel
-                    },
-                )
-            }
-        }
-        OutlinedTextField(
+        // No border of its own: the container already is the field's outline,
+        // and a second one inside it reads as a box in a box.
+        TextField(
             value = draft,
             onValueChange = { draft = it },
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.fillMaxWidth(),
             enabled = enabled,
             placeholder = { Text(stringResource(R.string.chat_input_hint)) },
             maxLines = 5,
-            shape = RoundedCornerShape(22.dp),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+            ),
         )
-        Button(
-            onClick = {
-                onSend(draft)
-                draft = ""
-            },
-            enabled = enabled && draft.isNotBlank(),
+
+        Row(
+            Modifier.fillMaxWidth().padding(start = 6.dp, end = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(stringResource(R.string.chat_send))
+            Box {
+                // Inert rather than absent when the gateway cannot serve the
+                // inventory: the model in use is still worth showing.
+                RuntimeChip(
+                    label = modelLabel.ifBlank { stringResource(R.string.settings_model_default) },
+                    enabled = modelChoices.isNotEmpty(),
+                    onClick = { modelsOpen = true },
+                )
+                DropdownMenu(expanded = modelsOpen, onDismissRequest = { modelsOpen = false }) {
+                    modelChoices.forEach { choice ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(choice.model, style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        text = choice.providerLabel,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = colors.muted,
+                                    )
+                                }
+                            },
+                            onClick = {
+                                onSelectModel(choice)
+                                modelsOpen = false
+                            },
+                        )
+                    }
+                }
+            }
+
+            Box {
+                RuntimeChip(
+                    label = effortLabel(effort),
+                    enabled = true,
+                    onClick = { effortOpen = true },
+                )
+                DropdownMenu(expanded = effortOpen, onDismissRequest = { effortOpen = false }) {
+                    ReasoningEffort.entries.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(effortLabel(option)) },
+                            onClick = {
+                                onSelectEffort(option)
+                                effortOpen = false
+                            },
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            if (voiceAvailable) {
+                IconButton(onClick = onDictate, enabled = enabled) {
+                    MicIcon(
+                        tint = if (voiceState == VoiceState.Listening) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            colors.muted
+                        },
+                        modifier = Modifier.semantics { contentDescription = dictateLabel },
+                    )
+                }
+            }
+
+            // One circular button, showing whichever action the draft implies:
+            // an empty box means the next thing you do is talk, a filled one
+            // means send. Two permanent buttons made the emptier of them look
+            // disabled half the time.
+            val hasDraft = draft.isNotBlank()
+            FilledIconButton(
+                onClick = {
+                    if (hasDraft) {
+                        onSend(draft)
+                        draft = ""
+                    } else {
+                        onToggleConversation()
+                    }
+                },
+                enabled = enabled || !hasDraft,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = if (hasDraft || conversing) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        colors.panelRaised
+                    },
+                ),
+            ) {
+                val tint = if (hasDraft || conversing) {
+                    MaterialTheme.colorScheme.onPrimary
+                } else {
+                    colors.muted
+                }
+                if (hasDraft) {
+                    SendIcon(
+                        tint = tint,
+                        modifier = Modifier.semantics { contentDescription = sendLabel },
+                    )
+                } else {
+                    WaveformIcon(
+                        tint = tint,
+                        modifier = Modifier.semantics { contentDescription = conversationLabel },
+                    )
+                }
+            }
         }
     }
 }

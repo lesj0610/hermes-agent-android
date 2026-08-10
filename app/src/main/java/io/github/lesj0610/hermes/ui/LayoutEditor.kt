@@ -12,14 +12,15 @@ import io.github.lesj0610.hermes.core.RailPanel
  * [RailPanel.None] is always offered — hiding the rail needs no server support.
  */
 fun railPanelOptions(
-    showCron: Boolean,
     showGateway: Boolean,
     showDashboard: Boolean = false,
 ): List<RailPanel> =
     buildList {
         add(RailPanel.None)
         add(RailPanel.Activity)
-        if (showCron) add(RailPanel.Cron)
+        // Unconditional: the gateway registers every /api/jobs route whatever
+        // its capability report says. See drawerDestinations.
+        add(RailPanel.Cron)
         if (showGateway) add(RailPanel.Gateway)
         // Gated on a configured dashboard rather than on a gateway capability:
         // it is a different server entirely, and offering it unconfigured would
@@ -31,7 +32,6 @@ fun railPanelOptions(
  * Destinations listed at the top of the navigation drawer, in order.
  *
  * Chat leads and is always present — it is where the app opens and returns to.
- * Schedule appears only where the server behind it exists.
  *
  * Sessions is absent on purpose: the drawer body holds the session list itself,
  * so a row leading to a separate screen showing the same list would be a detour
@@ -45,7 +45,7 @@ fun railPanelOptions(
  * as the conversation. They live under Settings, which is reachable from the
  * drawer's bottom row. The rail can still show either one beside the transcript.
  */
-fun drawerDestinations(showCron: Boolean, showProjects: Boolean = false): List<Pane> = buildList {
+fun drawerDestinations(showProjects: Boolean = false): List<Pane> = buildList {
     add(Pane.Chat)
     // Gated on a configured dashboard rather than on a gateway capability:
     // projects live in the dashboard's per-profile store and the gateway cannot
@@ -54,7 +54,12 @@ fun drawerDestinations(showCron: Boolean, showProjects: Boolean = false): List<P
     // Unconditional: artifacts are read out of the session histories every
     // gateway serves, not from a route one might lack.
     add(Pane.Artifacts)
-    if (showCron) add(Pane.Cron)
+    // Schedule is unconditional. It used to be gated on the `jobs_admin`
+    // capability, which the gateway hardcodes to false while registering every
+    // /api/jobs route regardless — so the row could never appear, and the jobs
+    // were never even fetched. The flag describes some other admin surface;
+    // it does not describe whether this list works.
+    add(Pane.Cron)
 }
 
 /**
@@ -81,12 +86,10 @@ fun nextRailPanel(current: RailPanel, options: List<RailPanel>): RailPanel {
  */
 fun effectiveRailPanel(
     stored: RailPanel,
-    showCron: Boolean,
     showGateway: Boolean,
     showDashboard: Boolean = false,
 ): RailPanel =
     when (stored) {
-        RailPanel.Cron -> if (showCron) stored else RailPanel.None
         RailPanel.Gateway -> if (showGateway) stored else RailPanel.None
         RailPanel.Dashboard -> if (showDashboard) stored else RailPanel.None
         else -> stored

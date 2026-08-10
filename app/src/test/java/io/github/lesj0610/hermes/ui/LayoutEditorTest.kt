@@ -9,9 +9,18 @@ class LayoutEditorTest {
     @Test
     fun `options drop panels the gateway cannot serve`() {
         assertEquals(
-            listOf(RailPanel.None, RailPanel.Activity),
-            railPanelOptions(showCron = false, showGateway = false),
+            listOf(RailPanel.None, RailPanel.Activity, RailPanel.Cron),
+            railPanelOptions(showGateway = false),
         )
+    }
+
+    @Test
+    fun `schedule is offered whatever the capability report says`() {
+        // The gateway reports jobs_admin=false unconditionally while serving
+        // every /api/jobs route. Gating on it hid a working screen, so the
+        // panel no longer consults it.
+        assertEquals(true, railPanelOptions(showGateway = false).contains(RailPanel.Cron))
+        assertEquals(true, drawerDestinations().contains(Pane.Cron))
     }
 
     @Test
@@ -22,27 +31,28 @@ class LayoutEditorTest {
 
     @Test
     fun `cycling wraps around`() {
-        val options = railPanelOptions(showCron = true, showGateway = true)
+        val options = railPanelOptions(showGateway = true)
         assertEquals(RailPanel.Activity, nextRailPanel(RailPanel.None, options))
         assertEquals(RailPanel.None, nextRailPanel(options.last(), options))
     }
 
     @Test
     fun `cycling recovers from a value no longer offered`() {
-        // Chosen against a gateway with cron, then reconnected to one without.
-        val options = railPanelOptions(showCron = false, showGateway = false)
-        assertEquals(RailPanel.None, nextRailPanel(RailPanel.Cron, options))
+        // Chosen against a gateway with the panel, then reconnected to one
+        // that cannot serve it.
+        val options = railPanelOptions(showGateway = false)
+        assertEquals(RailPanel.None, nextRailPanel(RailPanel.Dashboard, options))
     }
 
     @Test
     fun `an unsupported stored choice renders as hidden without being rewritten`() {
         assertEquals(
             RailPanel.None,
-            effectiveRailPanel(RailPanel.Cron, showCron = false, showGateway = true),
+            effectiveRailPanel(RailPanel.Gateway, showGateway = false),
         )
         assertEquals(
-            RailPanel.Cron,
-            effectiveRailPanel(RailPanel.Cron, showCron = true, showGateway = true),
+            RailPanel.Gateway,
+            effectiveRailPanel(RailPanel.Gateway, showGateway = true),
         )
     }
 
@@ -52,12 +62,12 @@ class LayoutEditorTest {
         // is a separate server, so the gateway cannot answer for it.
         assertEquals(
             false,
-            railPanelOptions(showCron = true, showGateway = true, showDashboard = false)
+            railPanelOptions(showGateway = true, showDashboard = false)
                 .contains(RailPanel.Dashboard),
         )
         assertEquals(
             true,
-            railPanelOptions(showCron = true, showGateway = true, showDashboard = true)
+            railPanelOptions(showGateway = true, showDashboard = true)
                 .contains(RailPanel.Dashboard),
         )
     }
@@ -66,11 +76,11 @@ class LayoutEditorTest {
     fun `a dashboard rail collapses when the dashboard is removed`() {
         assertEquals(
             RailPanel.None,
-            effectiveRailPanel(RailPanel.Dashboard, showCron = true, showGateway = true, showDashboard = false),
+            effectiveRailPanel(RailPanel.Dashboard, showGateway = true, showDashboard = false),
         )
         assertEquals(
             RailPanel.Dashboard,
-            effectiveRailPanel(RailPanel.Dashboard, showCron = true, showGateway = true, showDashboard = true),
+            effectiveRailPanel(RailPanel.Dashboard, showGateway = true, showDashboard = true),
         )
     }
 
@@ -85,7 +95,7 @@ class LayoutEditorTest {
         // settings row rather than beside the conversation.
         assertEquals(
             listOf(Pane.Chat, Pane.Projects, Pane.Artifacts, Pane.Cron),
-            drawerDestinations(showCron = true, showProjects = true),
+            drawerDestinations(showProjects = true),
         )
     }
 
@@ -93,7 +103,7 @@ class LayoutEditorTest {
     fun `the session list is neither a destination nor a rail`() {
         // It is the drawer's own body. A row leading to a screen showing the
         // same list would be a detour through what is already open.
-        val options = railPanelOptions(showCron = true, showGateway = true, showDashboard = true)
+        val options = railPanelOptions(showGateway = true, showDashboard = true)
 
         assertEquals(false, options.any { it.name == "Sessions" })
     }
@@ -117,21 +127,24 @@ class LayoutEditorTest {
 
     @Test
     fun `the drawer drops panels this gateway cannot serve`() {
-        // Projects need a dashboard, which the gateway cannot answer for.
-        assertEquals(listOf(Pane.Chat, Pane.Artifacts), drawerDestinations(showCron = false))
+        // Projects need a dashboard, which the gateway cannot answer for, so
+        // that row is the only one a bare setup loses.
+        assertEquals(
+            listOf(Pane.Chat, Pane.Artifacts, Pane.Cron),
+            drawerDestinations(showProjects = false),
+        )
     }
 
     @Test
     fun `chat survives a gateway that supports nothing else`() {
-        // With every capability absent the drawer must still lead somewhere.
-        assertEquals(listOf(Pane.Chat, Pane.Artifacts), drawerDestinations(showCron = false))
+        assertEquals(Pane.Chat, drawerDestinations().first())
     }
 
     @Test
     fun `panels needing no capability are unaffected`() {
         assertEquals(
             RailPanel.Activity,
-            effectiveRailPanel(RailPanel.Activity, showCron = false, showGateway = false),
+            effectiveRailPanel(RailPanel.Activity, showGateway = false),
         )
     }
 }

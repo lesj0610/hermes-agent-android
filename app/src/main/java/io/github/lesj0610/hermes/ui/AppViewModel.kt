@@ -312,9 +312,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // catalogues and fails on gateways this one probe still answers on.
         caps?.model?.takeIf { it.isNotBlank() }?.let { _serverModel.value = it }
 
-        if (caps?.jobsAdmin != false) {
-            runCatching { graph.api.jobs() }.onSuccess { _jobs.value = it }
-        }
+        // Not gated on a capability: the gateway reports jobs_admin=false
+        // unconditionally while serving every /api/jobs route, so trusting it
+        // meant never asking for the jobs at all.
+        runCatching { graph.api.jobs() }.onSuccess { _jobs.value = it }
         if (caps?.healthDetailed != false) {
             runCatching { graph.api.healthDetailed() }.onSuccess { _health.value = it }
         }

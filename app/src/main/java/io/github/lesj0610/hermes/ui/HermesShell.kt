@@ -133,12 +133,11 @@ fun HermesShell(
 
     // Absence of a capability report is not a denial: an older gateway that
     // does not answer /v1/capabilities still serves these routes.
-    val showCron = capabilities?.jobsAdmin != false
     val showGateway = capabilities?.healthDetailed != false
 
     val showDashboard = settings.dashboardConfigured
-    val railOptions = railPanelOptions(showCron, showGateway, showDashboard)
-    val railPanel = effectiveRailPanel(settings.railPanel, showCron, showGateway, showDashboard)
+    val railOptions = railPanelOptions(showGateway, showDashboard)
+    val railPanel = effectiveRailPanel(settings.railPanel, showGateway, showDashboard)
 
     // Edit mode is transient on purpose: it is a mode you enter, change
     // something in, and leave. Persisting it would greet the next launch with
@@ -265,7 +264,7 @@ fun HermesShell(
         // conversation is still there and one tap away.
         val sheetWidth = (maxWidth * 0.82f).coerceAtMost(340.dp)
 
-        val destinations = drawerDestinations(showCron, showDashboard)
+        val destinations = drawerDestinations(showDashboard)
         val (connColor, connLabel) = connectionStatus(connection)
 
         // What the next turn will actually run on: the override if one is set,

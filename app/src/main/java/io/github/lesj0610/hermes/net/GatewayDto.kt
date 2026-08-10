@@ -48,7 +48,9 @@ data class Capabilities(
         feature(name) ?: default
 
     val approvalEvents: Boolean get() = featureOrDefault("approval_events")
-    val jobsAdmin: Boolean get() = featureOrDefault("jobs_admin")
+    // `jobs_admin` is deliberately not exposed. The gateway hardcodes it to
+    // false while registering every /api/jobs route, so reading it as "can
+    // this server manage jobs" hid a working screen.
     val healthDetailed: Boolean get() = featureOrDefault("health_detailed")
 }
 

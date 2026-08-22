@@ -207,11 +207,11 @@ fun ChatPane(
 }
 
 /**
- * The level with its wire value in parentheses — `보통 (medium)`.
+ * The level, named the way the agent names it.
  *
- * The parenthesised half is not decoration: it is the string sent as
- * `model_options.reasoning.effort`, so a level picked here can be matched
- * against the gateway's own logs without a translation table.
+ * One label for both the chip and the menu. Two spellings of one setting —
+ * "Min" on the chip, "Minimal" in the list — read as two different things, and
+ * neither gains anything over the value the gateway itself logs.
  */
 @Composable
 private fun effortLabel(effort: ReasoningEffort): String = when (effort) {
@@ -225,23 +225,6 @@ private fun effortLabel(effort: ReasoningEffort): String = when (effort) {
     ReasoningEffort.Ultra -> stringResource(R.string.effort_ultra)
 }
 
-/**
- * The bare level, for the chip.
- *
- * The chip carries the model name as well and has one line on a phone, so the
- * wire value is dropped there and kept in the menu, where there is room.
- */
-@Composable
-private fun effortShortLabel(effort: ReasoningEffort): String = when (effort) {
-    ReasoningEffort.Off -> stringResource(R.string.effort_short_off)
-    ReasoningEffort.Minimal -> stringResource(R.string.effort_short_minimal)
-    ReasoningEffort.Low -> stringResource(R.string.effort_short_low)
-    ReasoningEffort.Medium -> stringResource(R.string.effort_short_medium)
-    ReasoningEffort.High -> stringResource(R.string.effort_short_high)
-    ReasoningEffort.XHigh -> stringResource(R.string.effort_short_xhigh)
-    ReasoningEffort.Max -> stringResource(R.string.effort_short_max)
-    ReasoningEffort.Ultra -> stringResource(R.string.effort_short_ultra)
-}
 
 @Composable
 private fun RuntimeChip(label: String, enabled: Boolean, onClick: () -> Unit) {
@@ -637,7 +620,7 @@ private fun Composer(
                     // "model · Med", the desktop's own status format. The
                     // separator matters at a glance: two words with a space
                     // between them read as one long model name.
-                    label = listOf(modelLabel, effortShortLabel(effort))
+                    label = listOf(modelLabel, effortLabel(effort))
                         .filter { it.isNotBlank() }
                         .joinToString(" · "),
                     enabled = true,

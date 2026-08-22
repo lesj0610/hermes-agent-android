@@ -162,19 +162,13 @@
       here can be matched against the gateway's own logs.
     -->
     <string name="effort_off">Off</string>
-    <string name="effort_minimal">Minimal</string>
+    <string name="effort_minimal">Min</string>
     <string name="effort_low">Low</string>
-    <string name="effort_medium">Medium</string>
+    <string name="effort_medium">Med</string>
     <string name="effort_high">High</string>
-    <string name="effort_xhigh">Extra high</string>
+    <string name="effort_xhigh">XHigh</string>
     <!-- The chip is narrow and sits beside the model name, so it carries the
          bare level; the parenthesised wire value lives in the menu. -->
-    <string name="effort_short_off">Off</string>
-    <string name="effort_short_minimal">Min</string>
-    <string name="effort_short_low">Low</string>
-    <string name="effort_short_medium">Med</string>
-    <string name="effort_short_high">High</string>
-    <string name="effort_short_xhigh">XHigh</string>
     <string name="model_title">모델</string>
     <string name="settings_group_connection">연결</string>
     <string name="settings_group_app">앱</string>
@@ -258,6 +252,4 @@
     <string name="commands_run_confirm">에이전트 머신에서 실행됩니다 — 모델 호출과 부수 효과가 있을 수 있습니다.</string>
     <string name="effort_max">Max</string>
     <string name="effort_ultra">Ultra</string>
-    <string name="effort_short_max">Max</string>
-    <string name="effort_short_ultra">Ultra</string>
 </resources>

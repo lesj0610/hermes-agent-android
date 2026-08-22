@@ -166,7 +166,7 @@
     <string name="effort_low">낮음 (low)</string>
     <string name="effort_medium">보통 (medium)</string>
     <string name="effort_high">높음 (high)</string>
-    <string name="effort_xhigh">최대 (xhigh)</string>
+    <string name="effort_xhigh">매우 높음 (xhigh)</string>
     <!-- The chip is narrow and sits beside the model name, so it carries the
          bare level; the parenthesised wire value lives in the menu. -->
     <string name="effort_short_off">끔</string>
@@ -174,7 +174,7 @@
     <string name="effort_short_low">낮음</string>
     <string name="effort_short_medium">보통</string>
     <string name="effort_short_high">높음</string>
-    <string name="effort_short_xhigh">최대</string>
+    <string name="effort_short_xhigh">매우높음</string>
     <string name="model_title">모델</string>
     <string name="settings_group_connection">연결</string>
     <string name="settings_group_app">앱</string>
@@ -256,4 +256,8 @@
     <string name="commands_use_chip">모델과 추론 단계는 입력창 옆 칩에 있습니다.</string>
     <string name="commands_run">실행</string>
     <string name="commands_run_confirm">에이전트 머신에서 실행됩니다 — 모델 호출과 부수 효과가 있을 수 있습니다.</string>
+    <string name="effort_max">최대 (max)</string>
+    <string name="effort_ultra">울트라 (ultra)</string>
+    <string name="effort_short_max">최대</string>
+    <string name="effort_short_ultra">울트라</string>
 </resources>

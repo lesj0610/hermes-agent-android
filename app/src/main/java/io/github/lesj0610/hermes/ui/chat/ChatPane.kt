@@ -221,6 +221,8 @@ private fun effortLabel(effort: ReasoningEffort): String = when (effort) {
     ReasoningEffort.Medium -> stringResource(R.string.effort_medium)
     ReasoningEffort.High -> stringResource(R.string.effort_high)
     ReasoningEffort.XHigh -> stringResource(R.string.effort_xhigh)
+    ReasoningEffort.Max -> stringResource(R.string.effort_max)
+    ReasoningEffort.Ultra -> stringResource(R.string.effort_ultra)
 }
 
 /**
@@ -237,6 +239,8 @@ private fun effortShortLabel(effort: ReasoningEffort): String = when (effort) {
     ReasoningEffort.Medium -> stringResource(R.string.effort_short_medium)
     ReasoningEffort.High -> stringResource(R.string.effort_short_high)
     ReasoningEffort.XHigh -> stringResource(R.string.effort_short_xhigh)
+    ReasoningEffort.Max -> stringResource(R.string.effort_short_max)
+    ReasoningEffort.Ultra -> stringResource(R.string.effort_short_ultra)
 }
 
 @Composable

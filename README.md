@@ -55,10 +55,11 @@ setting baked into the build.
 
 These are properties of the surfaces the app is built on, not oversights:
 
-- **Reasoning levels stop at `xhigh`.** The agent defines `max` and `ultra` too,
-  but the HTTP route validates against a set that predates them and silently
-  drops what it does not recognise, so a run would quietly use the default.
-  Offering a control that does nothing is worse than not offering it.
+- **`max` and `ultra` need a gateway from 2026-08-19 or later.** Older API
+  servers validate reasoning efforts against a set that predates those two and
+  drop what they do not recognise, so the run quietly uses the default instead.
+  There is no capability flag for it, so the app cannot detect it and does not
+  pretend to.
 - **Artifacts that live on the agent's host cannot be opened here.** A path in a
   transcript names a file on that machine, and the gateway serves no file route.
   Those are shown with their path and copy on tap; links and remote images open.
@@ -127,7 +128,7 @@ Hermes Agent source; the client was written against its HTTP surface.
 
 ## Status
 
-Version 1.2. Compiles, unit tests pass, lint clean, release AAB builds, and the
+Version 1.3. Compiles, unit tests pass, lint clean, release AAB builds, and the
 app runs against a live gateway.
 
 Not yet exercised on hardware: the camera and file attachment round trip, the

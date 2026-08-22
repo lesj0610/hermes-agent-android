@@ -55,6 +55,8 @@ enum class ReasoningEffort(val wire: String) {
     Medium("medium"),
     High("high"),
     XHigh("xhigh"),
+    Max("max"),
+    Ultra("ultra"),
     ;
 
     companion object {
@@ -76,11 +78,16 @@ const val REASONING_OFF = "none"
  * reasoning as little as possible. The desktop client draws the same line — a
  * Thinking switch beside the scale rather than an entry inside it.
  *
- * The agent itself defines two levels above these, `max` and `ultra`. They are
- * absent because the HTTP surface does not carry them: the API server validates
- * against a set that predates them, and an effort it does not recognise is
- * dropped while reasoning stays on — so the request runs at the agent's own
- * level. A control that silently does nothing is worse than one that is missing.
+ * The full ladder, `minimal` through `ultra`, matching the agent's own
+ * VALID_REASONING_EFFORTS.
+ *
+ * `max` and `ultra` were held back while the API server validated against a
+ * set that predated them and dropped what it did not recognise, which would
+ * have made two of these controls do nothing. Upstream fixed that on
+ * 2026-08-19 (`fix(api-server): 'max' and 'ultra' reasoning efforts are no
+ * longer silently ignored`), so they are offered now. A gateway older than
+ * that still ignores them, and there is no capability flag to detect it —
+ * the app cannot tell, and says so in its documentation rather than guessing.
  */
 val REASONING_SCALE: List<ReasoningEffort> =
     ReasoningEffort.entries.filter { it != ReasoningEffort.Off }

@@ -178,13 +178,13 @@
     <string name="effort_low">Low</string>
     <string name="effort_medium">Medium</string>
     <string name="effort_high">High</string>
-    <string name="effort_xhigh">Max (xhigh)</string>
+    <string name="effort_xhigh">Extra high (xhigh)</string>
     <string name="effort_short_off">Off</string>
     <string name="effort_short_minimal">Minimal</string>
     <string name="effort_short_low">Low</string>
     <string name="effort_short_medium">Medium</string>
     <string name="effort_short_high">High</string>
-    <string name="effort_short_xhigh">Max</string>
+    <string name="effort_short_xhigh">XHigh</string>
     <string name="model_title">Model</string>
     <string name="settings_group_connection">Connection</string>
     <string name="settings_group_app">App</string>
@@ -268,4 +268,8 @@
     <string name="commands_use_chip">Model and reasoning are on the chip beside the message box.</string>
     <string name="commands_run">Run</string>
     <string name="commands_run_confirm">This runs on the agent’s machine — it may call a model and have side effects.</string>
+    <string name="effort_max">Max (max)</string>
+    <string name="effort_ultra">Ultra (ultra)</string>
+    <string name="effort_short_max">Max</string>
+    <string name="effort_short_ultra">Ultra</string>
 </resources>

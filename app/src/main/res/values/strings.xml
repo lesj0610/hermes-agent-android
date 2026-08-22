@@ -173,16 +173,16 @@
     <string name="notif_failed_title">Run failed</string>
     <!-- Parenthesised value is the wire value sent as
          model_options.reasoning.effort. -->
-    <string name="effort_off">Off (none)</string>
+    <string name="effort_off">Off</string>
     <string name="effort_minimal">Minimal</string>
     <string name="effort_low">Low</string>
     <string name="effort_medium">Medium</string>
     <string name="effort_high">High</string>
-    <string name="effort_xhigh">Extra high (xhigh)</string>
+    <string name="effort_xhigh">Extra high</string>
     <string name="effort_short_off">Off</string>
-    <string name="effort_short_minimal">Minimal</string>
+    <string name="effort_short_minimal">Min</string>
     <string name="effort_short_low">Low</string>
-    <string name="effort_short_medium">Medium</string>
+    <string name="effort_short_medium">Med</string>
     <string name="effort_short_high">High</string>
     <string name="effort_short_xhigh">XHigh</string>
     <string name="model_title">Model</string>
@@ -268,8 +268,8 @@
     <string name="commands_use_chip">Model and reasoning are on the chip beside the message box.</string>
     <string name="commands_run">Run</string>
     <string name="commands_run_confirm">This runs on the agent’s machine — it may call a model and have side effects.</string>
-    <string name="effort_max">Max (max)</string>
-    <string name="effort_ultra">Ultra (ultra)</string>
+    <string name="effort_max">Max</string>
+    <string name="effort_ultra">Ultra</string>
     <string name="effort_short_max">Max</string>
     <string name="effort_short_ultra">Ultra</string>
 </resources>

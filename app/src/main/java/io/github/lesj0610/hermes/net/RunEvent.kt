@@ -42,6 +42,17 @@ sealed interface RunEvent {
         val delta: String,
     ) : RunEvent
 
+    /**
+     * A slice of the model's actual reasoning, streamed.
+     *
+     * Only the socket sends this. It arrives before the tool calls it leads to,
+     * which is what puts the transcript in the order the desktop shows.
+     */
+    data class ReasoningDelta(val text: String) : RunEvent {
+        override val runId: String? get() = null
+        override val timestamp: Double? get() = null
+    }
+
     data class ReasoningAvailable(
         override val runId: String?,
         override val timestamp: Double?,

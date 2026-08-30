@@ -348,6 +348,74 @@ class DashboardApi(
             )
         }
 
+    /**
+     * Starts a turn on the gateway's event socket and hands back the live run.
+     *
+     * The socket stays open for the turn: this is the one call that holds it
+     * rather than opening it per batch, because the events *are* the turn.
+     *
+     * A stored session must be resumed into a live one first, and resume
+     * answers with a different id than it was given — passing the stored id
+     * onward is how `session.compress` earned a "session not found".
+     */
+    suspend fun startSocketRun(storedSessionId: String?, text: String): SocketRun {
+        val ticket = wsTicket()
+        val target = buildString {
+            append(url("/api/ws").replaceFirst("http", "ws"))
+            ticket?.let { append("?ticket=").append(it) }
+        }
+        val ws = try {
+            client.webSocketSession(target)
+        } catch (cause: Exception) {
+            if (ticket == null) {
+                throw DashboardAuthException(
+                    "The dashboard did not issue a WebSocket ticket, so the conversation " +
+                        "cannot run over it.",
+                )
+            }
+            throw cause
+        }
+
+        val rpc = RpcSession(ws, json)
+        val live = if (storedSessionId.isNullOrBlank()) {
+            rpc.call<JsonObject>("session.create", buildJsonObject { })
+                .let { (it["session_id"] as? JsonPrimitive)?.content }
+        } else {
+            rpc.call<ResumedSession>(
+                "session.resume",
+                buildJsonObject { put("session_id", storedSessionId) },
+            ).liveId
+        }
+        if (live.isNullOrBlank()) {
+            runCatching { ws.close() }
+            throw GatewayRpcException(-1, "The gateway did not return a live session")
+        }
+
+        val run = SocketRun(ws, json, live)
+        // Fire and forget: the answer to prompt.submit is the event stream, not
+        // its return value, and waiting for the reply would block the reader.
+        ws.send(
+            Frame.Text(
+                json.encodeToString(
+                    JsonObject.serializer(),
+                    buildJsonObject {
+                        put("jsonrpc", "2.0")
+                        put("id", 1)
+                        put("method", "prompt.submit")
+                        put(
+                            "params",
+                            buildJsonObject {
+                                put("session_id", live)
+                                put("text", text)
+                            },
+                        )
+                    },
+                ),
+            ),
+        )
+        return run
+    }
+
     /** Reads a config key — `reasoning` answers with the level in force. */
     suspend fun configGet(key: String): JsonElement =
         rpcSession { it.callRaw("config.get", buildJsonObject { put("key", key) }) }

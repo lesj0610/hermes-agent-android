@@ -41,7 +41,14 @@ class Graph(context: Context) {
         },
     )
 
-    val runEngine = RunEngine(api, scope)
+    val runEngine = RunEngine(
+        api,
+        scope,
+        dashboard = dashboard,
+        // Only where a dashboard is actually configured; the socket lives on
+        // that server, not on the gateway.
+        socketEnabled = { settings.current().dashboardConfigured },
+    )
 
     companion object {
         @Volatile

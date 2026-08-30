@@ -14,7 +14,7 @@ from the machine.
 
 | | |
 |---|---|
-| Chat | Live transcript over SSE, tool cards, approval sheet. The send button becomes Stop while a run is in flight, and Send again the moment you type |
+| Chat | Live transcript with streamed reasoning, tool cards and results, approval sheet. The send button becomes Stop while a run is in flight, and Send again the moment you type |
 | Composer | Camera, photo and text-file attachments; model and reasoning level; dictation; spoken conversation |
 | Commands | Typing `/` opens the gateway's own registry: skills and quick commands run on the agent, read-only queries answer inline, `/compress` compacts the conversation. What has no server-side action is listed and marked, not hidden |
 | Sessions | Drawer list with search, and a per-session menu: rename, pin, copy ID, branch, export, archive, delete |
@@ -29,8 +29,8 @@ from the machine.
 
 | Server | Used for | Auth |
 |---|---|---|
-| Gateway `api_server` (default 8642) | Everything above except projects | Bearer token over HTTP + SSE |
-| Dashboard (optional, default 9119) | Projects, and browsing the agent host's folders | Password login, then a one-shot ticket for the projects socket |
+| Gateway `api_server` (default 8642) | Sessions, artifacts, and turns when no dashboard is configured | Bearer token over HTTP + SSE |
+| Dashboard (optional, default 9119) | Turns with reasoning, projects, slash commands, browsing the agent host's folders | Password login, then a one-shot ticket per socket |
 
 No patches to the agent and no companion server: the app is written against
 what these two already expose.
@@ -72,12 +72,12 @@ These are properties of the surfaces the app is built on, not oversights:
   quick/plugin/bundle/skill command" because there is nothing on the server to
   run. Skills, quick commands and plugin commands do run, and so does
   `/compress`.
-- **No reasoning is shown over HTTP.** `/v1/runs` has no thinking channel: its
-  only reasoning-shaped event repeats the assistant message that already
-  streamed, truncated to 500 characters. The app drops it rather than printing a
-  shortened copy of the reply beneath the reply. Real thinking —
-  `thinking.delta` and `reasoning.delta` — exists only on the gateway's
-  WebSocket surface; see [docs/ws-transcript-contract.md](docs/ws-transcript-contract.md).
+- **Reasoning needs the dashboard.** A turn runs over the gateway's event
+  socket when one is configured, which is where streamed thinking and tool
+  results live. Without it the app falls back to `/v1/runs`, which has no
+  thinking channel at all — that is a property of the route, not a setting. An
+  attachment also keeps the turn on HTTP, since the socket's submit takes text.
+  See [docs/ws-transcript-contract.md](docs/ws-transcript-contract.md).
 - **Deleting a session is permanent.** It is the same call the desktop's Delete
   makes: the row, its messages and the transcript files on the agent's host all
   go. Archive is the reversible one.
@@ -135,8 +135,9 @@ Hermes Agent source; the client was written against its HTTP surface.
 
 ## Status
 
-Version 1.5.3. Compiles, unit tests pass, lint clean, release AAB builds, and the
+Version 1.6. Compiles, unit tests pass, lint clean, release AAB builds, and the
 app runs against a live gateway.
 
 Not yet exercised on hardware: the camera and file attachment round trip, the
-voice controls, and the projects socket.
+voice controls, and the socket transport — its event mapping was built against
+a captured live run, but the app has not yet driven one.

@@ -11,7 +11,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import io.github.lesj0610.hermes.net.DashboardApi
 import io.github.lesj0610.hermes.net.HermesApi
+import io.github.lesj0610.hermes.net.SocketRun
 import io.github.lesj0610.hermes.net.HermesUnauthorizedException
 import io.github.lesj0610.hermes.net.RunEvent
 import io.github.lesj0610.hermes.net.StoredMessage
@@ -28,6 +30,15 @@ import java.util.concurrent.atomic.AtomicLong
 class RunEngine(
     private val api: HermesApi,
     private val scope: CoroutineScope,
+    /**
+     * The socket transport, used when a dashboard is configured.
+     *
+     * The HTTP route cannot show reasoning — it has no thinking channel — so a
+     * turn runs over the socket wherever one is reachable, and falls back
+     * otherwise rather than refusing to talk.
+     */
+    private val dashboard: DashboardApi? = null,
+    private val socketEnabled: suspend () -> Boolean = { false },
 ) {
     private val _state = MutableStateFlow(ChatState())
     val state: StateFlow<ChatState> = _state.asStateFlow()
@@ -38,6 +49,9 @@ class RunEngine(
 
     private val keySeq = AtomicLong(0)
     private var streamJob: Job? = null
+
+    /** Set while a turn is running over the socket, so approvals go back the same way. */
+    private var socketRun: SocketRun? = null
 
     private fun nextKey(prefix: String): String = "$prefix-${keySeq.incrementAndGet()}"
 
@@ -90,6 +104,16 @@ class RunEngine(
         }
 
         streamJob = scope.launch {
+            // Images and per-turn model overrides ride on the HTTP request
+            // body; the socket's prompt.submit takes text. Anything carrying
+            // them stays on the route that can express it.
+            val viaSocket = dashboard != null && images.isEmpty() &&
+                runCatching { socketEnabled() }.getOrDefault(false)
+            if (viaSocket) {
+                runSocket(prompt)
+                return@launch
+            }
+
             val started = runCatching { api.startRun(prompt, _state.value.sessionId, model, provider, effort, images) }
                 .getOrElse { cause ->
                     _state.update { it.copy(phase = RunPhase.Idle, error = cause.toUiError()) }
@@ -104,6 +128,46 @@ class RunEngine(
             }
             _signals.tryEmit(RunSignal.Started(started.runId))
             consume(started.runId)
+        }
+    }
+
+    /**
+     * Drives a turn over the event socket.
+     *
+     * The live session is closed in a finally: it belongs to the gateway, and
+     * one left open per turn accumulates there.
+     */
+    private suspend fun runSocket(prompt: String) {
+        val api = dashboard ?: return
+        val run = runCatching { api.startSocketRun(_state.value.sessionId, prompt) }
+            .getOrElse { cause ->
+                _state.update { it.copy(phase = RunPhase.Idle, error = cause.toUiError()) }
+                return
+            }
+        socketRun = run
+        _state.update {
+            it.copy(
+                phase = RunPhase.Running(run.liveSessionId),
+                runStartedAtMillis = System.currentTimeMillis(),
+            )
+        }
+        _signals.tryEmit(RunSignal.Started(run.liveSessionId))
+        try {
+            runCatching { run.events().collect(::apply) }
+                .onFailure { cause ->
+                    if (cause is kotlinx.coroutines.CancellationException) throw cause
+                    _state.update {
+                        it.copy(
+                            phase = RunPhase.Idle,
+                            items = it.items.finishStreaming() +
+                                TranscriptItem.Failure(nextKey("e"), cause.toUiError()),
+                        )
+                    }
+                    _signals.tryEmit(RunSignal.Finished(run.liveSessionId, ok = false))
+                }
+        } finally {
+            socketRun = null
+            runCatching { run.close() }
         }
     }
 
@@ -128,6 +192,19 @@ class RunEngine(
     private fun apply(event: RunEvent) {
         when (event) {
             is RunEvent.MessageDelta -> appendDelta(event.delta)
+
+            // Real reasoning, streamed. Appended into one block the way prose
+            // is, so a long thought does not become a hundred cards.
+            is RunEvent.ReasoningDelta -> _state.update { current ->
+                val last = current.items.lastOrNull()
+                val items = if (last is TranscriptItem.Reasoning) {
+                    current.items.dropLast(1) + last.copy(text = last.text + event.text)
+                } else {
+                    current.items.finishStreaming() +
+                        TranscriptItem.Reasoning(nextKey("r"), event.text)
+                }
+                current.copy(items = items)
+            }
 
             // `reasoning.available` is dropped on this route, always.
             //
@@ -260,8 +337,13 @@ class RunEngine(
         _state.update { it.copy(phase = RunPhase.Running(phase.runId)) }
         _signals.tryEmit(RunSignal.ApprovalCleared)
         scope.launch {
-            runCatching { api.respondToApproval(phase.runId, choice) }
-                .onFailure { cause -> _state.update { it.copy(error = cause.toUiError()) } }
+            // Back down the transport that asked. An approval answered on the
+            // other one targets a session that never requested it.
+            val run = socketRun
+            runCatching {
+                if (run != null) run.respondToApproval(choice)
+                else api.respondToApproval(phase.runId, choice)
+            }.onFailure { cause -> _state.update { it.copy(error = cause.toUiError()) } }
         }
     }
 

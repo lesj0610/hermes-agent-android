@@ -129,29 +129,21 @@ class RunEngine(
         when (event) {
             is RunEvent.MessageDelta -> appendDelta(event.delta)
 
-            is RunEvent.ReasoningAvailable -> if (event.text.isNotBlank()) {
-                _state.update { current ->
-                    // `reasoning.available` is not a thinking stream on this
-                    // route. The agent emits it once an assistant message is
-                    // complete, carrying that message's own text truncated to
-                    // 500 characters (agent/conversation_loop.py) — it exists to
-                    // relay a subagent's progress to a parent display.
-                    //
-                    // On an intermediate step that text is the narration before
-                    // a tool call, which is worth showing. On the final step it
-                    // is the answer that was just streamed, and rendering it
-                    // again put a truncated copy of the reply underneath the
-                    // reply. So it is dropped when it merely repeats what is
-                    // already on screen.
-                    if (current.items.echoesReasoning(event.text)) {
-                        current
-                    } else {
-                        current.copy(
-                            items = current.items + TranscriptItem.Reasoning(nextKey("r"), event.text),
-                        )
-                    }
-                }
-            }
+            // `reasoning.available` is dropped on this route, always.
+            //
+            // It is not a thinking stream here: the agent raises it once an
+            // assistant message is complete, carrying that message's own text
+            // truncated to 500 characters, and the same text has already
+            // arrived as deltas. Rendering it put a shortened copy of the reply
+            // underneath the reply.
+            //
+            // Three attempts to tell the copy apart from real narration all
+            // failed — the relay strips reasoning tags the streamed copy keeps,
+            // so the two are not comparable as text. The gateway's WebSocket
+            // surface carries `thinking.delta` and `reasoning.delta`, which are
+            // the real thing; that is where reasoning will come from. Guessing
+            // here was the mistake.
+            is RunEvent.ReasoningAvailable -> Unit
 
             is RunEvent.ToolStarted -> _state.update {
                 it.copy(

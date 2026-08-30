@@ -72,12 +72,12 @@ These are properties of the surfaces the app is built on, not oversights:
   quick/plugin/bundle/skill command" because there is nothing on the server to
   run. Skills, quick commands and plugin commands do run, and so does
   `/compress`.
-- **The reasoning shown is the agent's own relay, truncated to 500 characters.**
-  There is no separate thinking stream on this route: the agent emits an
-  assistant message's text under `reasoning.available` once that message is
-  complete, which is the narration before a tool call on intermediate steps.
-  When it merely repeats the answer just streamed, the app drops it rather than
-  printing a shortened copy of the reply beneath the reply.
+- **No reasoning is shown over HTTP.** `/v1/runs` has no thinking channel: its
+  only reasoning-shaped event repeats the assistant message that already
+  streamed, truncated to 500 characters. The app drops it rather than printing a
+  shortened copy of the reply beneath the reply. Real thinking —
+  `thinking.delta` and `reasoning.delta` — exists only on the gateway's
+  WebSocket surface; see [docs/ws-transcript-contract.md](docs/ws-transcript-contract.md).
 - **Deleting a session is permanent.** It is the same call the desktop's Delete
   makes: the row, its messages and the transcript files on the agent's host all
   go. Archive is the reversible one.
@@ -118,6 +118,7 @@ must not be — the release build simply goes unsigned without it.
 |---|---|
 | [DESIGN.md](DESIGN.md) | Backend contract, event mapping, architecture, the constraints this project refuses to break |
 | [design/mockup.html](design/mockup.html) | Screen mockups |
+| [docs/ws-transcript-contract.md](docs/ws-transcript-contract.md) | The socket event contract, and why reasoning needs it |
 
 ## License
 
@@ -134,7 +135,7 @@ Hermes Agent source; the client was written against its HTTP surface.
 
 ## Status
 
-Version 1.5.2. Compiles, unit tests pass, lint clean, release AAB builds, and the
+Version 1.5.3. Compiles, unit tests pass, lint clean, release AAB builds, and the
 app runs against a live gateway.
 
 Not yet exercised on hardware: the camera and file attachment round trip, the

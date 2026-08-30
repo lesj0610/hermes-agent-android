@@ -18,6 +18,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,12 +74,18 @@ fun ToolCard(item: TranscriptItem.ToolCall, modifier: Modifier = Modifier) {
         ToolState.Failed -> stringResource(R.string.tool_failed)
     }
 
+    // Output collapses like the reasoning block: a command that prints a
+    // hundred lines otherwise buries every card around it, and the header line
+    // already says which tool ran and how it ended.
+    var expanded by rememberSaveable(item.key) { mutableStateOf(false) }
+
     Column(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(colors.panel)
-            .border(1.dp, colors.line, RoundedCornerShape(8.dp)),
+            .border(1.dp, colors.line, RoundedCornerShape(8.dp))
+            .clickable { expanded = !expanded },
     ) {
         // Stripe + body. The stripe is a filled box rather than a border side so
         // it hugs the card edge exactly; IntrinsicSize.Min makes it match the
@@ -111,6 +123,11 @@ fun ToolCard(item: TranscriptItem.ToolCall, modifier: Modifier = Modifier) {
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         color = colors.muted,
+                        // Two lines closed: enough to see the command and the
+                        // first line it printed, which is what tells you
+                        // whether opening it is worth it.
+                        maxLines = if (expanded) Int.MAX_VALUE else 2,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 3.dp),
                     )
                 }

@@ -27,10 +27,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -81,6 +83,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import io.github.lesj0610.hermes.core.Attachments
 import io.github.lesj0610.hermes.ui.components.CameraIcon
+import io.github.lesj0610.hermes.ui.components.ChevronIcon
 import io.github.lesj0610.hermes.ui.components.PaperclipIcon
 import io.github.lesj0610.hermes.ui.components.PhotoIcon
 import io.github.lesj0610.hermes.ui.commands.SlashCommand
@@ -272,24 +275,46 @@ private fun TranscriptRow(item: TranscriptItem) {
             color = MaterialTheme.colorScheme.onSurface,
         )
 
-        is TranscriptItem.Reasoning -> Column(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(colors.panel)
-                .padding(10.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.chat_reasoning),
-                style = MaterialTheme.typography.labelSmall,
-                color = colors.muted,
-            )
-            Text(
-                text = item.text,
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.muted,
-                modifier = Modifier.padding(top = 4.dp),
-            )
+        is TranscriptItem.Reasoning -> {
+            // Collapsed by default, the way the desktop treats
+            // display.sections.thinking. Reasoning is how the answer was
+            // reached, not the answer, and left open it pushes the reply off
+            // the screen — on a phone that is the whole screen.
+            var expanded by rememberSaveable(item.key) { mutableStateOf(false) }
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.panel)
+                    .clickable { expanded = !expanded }
+                    .padding(10.dp),
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ChevronIcon(
+                        modifier = Modifier
+                            .size(13.dp)
+                            .rotate(if (expanded) 90f else 0f),
+                    )
+                    Text(
+                        text = stringResource(R.string.chat_reasoning),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.muted,
+                    )
+                }
+                Text(
+                    text = item.text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.muted,
+                    // One line closed, so the row says what the block is about
+                    // rather than being a bare disclosure triangle.
+                    maxLines = if (expanded) Int.MAX_VALUE else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
         }
 
         is TranscriptItem.ToolCall -> ToolCard(item)

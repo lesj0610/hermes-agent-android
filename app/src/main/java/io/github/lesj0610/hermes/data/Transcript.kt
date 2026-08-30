@@ -80,3 +80,28 @@ data class ChatState(
     val pendingApproval: PendingApproval?
         get() = (phase as? RunPhase.AwaitingApproval)?.approval
 }
+
+/**
+ * True when [text] only repeats assistant prose already in the transcript.
+ *
+ * The server truncates its reasoning relay to 500 characters, so the repeat is
+ * a prefix rather than an exact match — comparing for equality would never
+ * catch it. Whitespace is normalised because the relay strips reasoning tags
+ * before sending, which collapses lines the streamed copy still has.
+ *
+ * Only the last assistant message is considered: an earlier one repeating
+ * itself is not what this guards against, and scanning the whole transcript
+ * would suppress a genuine restatement.
+ */
+fun List<TranscriptItem>.echoesReasoning(text: String): Boolean {
+    val candidate = text.normalizedForEcho()
+    if (candidate.isEmpty()) return false
+    val lastAssistant = lastOrNull { it is TranscriptItem.AssistantText }
+        as? TranscriptItem.AssistantText ?: return false
+    val spoken = lastAssistant.text.normalizedForEcho()
+    if (spoken.isEmpty()) return false
+    return spoken.startsWith(candidate) || candidate.startsWith(spoken)
+}
+
+private fun String.normalizedForEcho(): String =
+    trim().replace(Regex("\\s+"), " ")

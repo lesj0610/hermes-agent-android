@@ -130,8 +130,26 @@ class RunEngine(
             is RunEvent.MessageDelta -> appendDelta(event.delta)
 
             is RunEvent.ReasoningAvailable -> if (event.text.isNotBlank()) {
-                _state.update {
-                    it.copy(items = it.items + TranscriptItem.Reasoning(nextKey("r"), event.text))
+                _state.update { current ->
+                    // `reasoning.available` is not a thinking stream on this
+                    // route. The agent emits it once an assistant message is
+                    // complete, carrying that message's own text truncated to
+                    // 500 characters (agent/conversation_loop.py) — it exists to
+                    // relay a subagent's progress to a parent display.
+                    //
+                    // On an intermediate step that text is the narration before
+                    // a tool call, which is worth showing. On the final step it
+                    // is the answer that was just streamed, and rendering it
+                    // again put a truncated copy of the reply underneath the
+                    // reply. So it is dropped when it merely repeats what is
+                    // already on screen.
+                    if (current.items.echoesReasoning(event.text)) {
+                        current
+                    } else {
+                        current.copy(
+                            items = current.items + TranscriptItem.Reasoning(nextKey("r"), event.text),
+                        )
+                    }
                 }
             }
 

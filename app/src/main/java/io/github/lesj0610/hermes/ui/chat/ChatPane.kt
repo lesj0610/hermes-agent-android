@@ -42,6 +42,7 @@ import io.github.lesj0610.hermes.data.ChatState
 import io.github.lesj0610.hermes.data.RunPhase
 import io.github.lesj0610.hermes.data.TranscriptItem
 import io.github.lesj0610.hermes.ui.components.ToolCard
+import io.github.lesj0610.hermes.ui.markdown.MarkdownText
 import io.github.lesj0610.hermes.ui.components.uiErrorText
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
 import androidx.compose.foundation.clickable
@@ -293,12 +294,16 @@ private fun TranscriptRow(item: TranscriptItem) {
             )
         }
 
-        is TranscriptItem.AssistantText -> Text(
-            // A trailing block while streaming stands in for a caret; Compose
-            // has no cursor primitive for non-editable text.
+        // Markdown, because that is what the agent writes. Drawn flat, a reply
+        // showed its punctuation instead of its structure.
+        //
+        // The caret still rides on the text rather than being a sibling: it has
+        // to sit after the last character, wherever the last block put it.
+        is TranscriptItem.AssistantText -> MarkdownText(
             text = if (item.streaming) item.text + " ▉" else item.text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
         )
 
         is TranscriptItem.Reasoning -> {

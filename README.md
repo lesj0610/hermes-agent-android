@@ -14,7 +14,7 @@ from the machine.
 
 | | |
 |---|---|
-| Chat | Live transcript with streamed reasoning, tool cards and results, approval sheet. The send button becomes Stop while a run is in flight, and Send again the moment you type |
+| Chat | Markdown replies, streamed reasoning, tool cards and results, approval sheet. The send button becomes Stop while a run is in flight, and Send again the moment you type |
 | Composer | Camera, photo and text-file attachments; model and reasoning level; dictation; spoken conversation |
 | Commands | Typing `/` opens the gateway's own registry: skills and quick commands run on the agent, read-only queries answer inline, `/compress` compacts the conversation. What has no server-side action is listed and marked, not hidden |
 | Sessions | Drawer list with search, and a per-session menu: rename, pin, copy ID, branch, export, archive, delete |
@@ -78,6 +78,10 @@ These are properties of the surfaces the app is built on, not oversights:
   thinking channel at all — that is a property of the route, not a setting. An
   attachment also keeps the turn on HTTP, since the socket's submit takes text.
   See [docs/ws-transcript-contract.md](docs/ws-transcript-contract.md).
+- **Markdown covers what an agent writes, not the whole spec.** Bold, italic,
+  strikethrough, inline code, fenced code, headings, lists, quotes, rules and
+  links. Tables are left as text on purpose: they need column measurement, and
+  half-right tables read worse than none. No LaTeX yet.
 - **Deleting a session is permanent.** It is the same call the desktop's Delete
   makes: the row, its messages and the transcript files on the agent's host all
   go. Archive is the reversible one.
@@ -135,7 +139,7 @@ Hermes Agent source; the client was written against its HTTP surface.
 
 ## Status
 
-Version 1.6. Compiles, unit tests pass, lint clean, release AAB builds, and the
+Version 1.7. Compiles, unit tests pass, lint clean, release AAB builds, and the
 app runs against a live gateway.
 
 Not yet exercised on hardware: the camera and file attachment round trip, the

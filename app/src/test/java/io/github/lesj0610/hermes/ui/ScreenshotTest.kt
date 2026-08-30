@@ -475,6 +475,42 @@ class ScreenshotTest {
         }
     }
 
+    /** Markdown as the agent writes it: bold, bullets, a fence, a link. */
+    @Test
+    fun chatMarkdown() {
+        capture("chat-markdown", 411, 891) {
+            ChatPane(
+                state = ChatState(
+                    sessionId = "s1",
+                    items = listOf(
+                        TranscriptItem.UserText("u1", "서울 날씨 알려줘"),
+                        TranscriptItem.AssistantText(
+                            "a1",
+                            """
+                            ## 서울 현재 날씨
+
+                            - 기온: **23.8°C** (체감 24.8°C)
+                            - 습도: 100%
+                            - 바람: `1.54 m/s` 남동쪽
+
+                            확인은 이렇게 합니다:
+
+                            ```bash
+                            curl -s "https://api.example.test/weather?q=seoul"
+                            ```
+
+                            자세한 건 [문서](https://example.test/docs)를 보세요.
+                            """.trimIndent(),
+                            streaming = false,
+                        ),
+                    ),
+                ),
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+
     @Test
     fun approvalPending() {
         capture("chat-approval", 411, 891) {

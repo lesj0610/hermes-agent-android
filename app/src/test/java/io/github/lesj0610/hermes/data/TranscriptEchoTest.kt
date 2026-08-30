@@ -45,11 +45,19 @@ class TranscriptEchoTest {
         // An older message repeating itself is not the duplication this guards
         // against, and scanning everything would swallow a real restatement.
         val items = listOf(
-            assistant("Seoul is 24°C."),
+            assistant("Seoul is 24°C and clear all afternoon."),
             TranscriptItem.ToolCall("t1", "weather", null, ToolState.Completed, 0.2),
-            assistant("Busan is 26°C."),
+            assistant("Busan is 26°C with a light sea breeze."),
         )
-        assertEquals(false, items.echoesReasoning("Seoul is 24°C."))
-        assertEquals(true, items.echoesReasoning("Busan is 26°C."))
+        assertEquals(false, items.echoesReasoning("Seoul is 24°C and clear all afternoon."))
+        assertEquals(true, items.echoesReasoning("Busan is 26°C with a light sea breeze."))
+    }
+
+    @Test
+    fun `a short agreement is never treated as a repeat`() {
+        // "네" begins countless sentences. Matching on a few characters would
+        // silence real reasoning, which is how the blocks vanished entirely.
+        val items = listOf(assistant("네, 서울은 24도이고 맑습니다."))
+        assertEquals(false, items.echoesReasoning("네,"))
     }
 }

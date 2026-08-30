@@ -100,8 +100,22 @@ fun List<TranscriptItem>.echoesReasoning(text: String): Boolean {
         as? TranscriptItem.AssistantText ?: return false
     val spoken = lastAssistant.text.normalizedForEcho()
     if (spoken.isEmpty()) return false
-    return spoken.startsWith(candidate) || candidate.startsWith(spoken)
+
+    // Only one direction. The relay truncates at 500 characters, so a repeat is
+    // always a prefix OF the reply — never the other way round.
+    //
+    // Testing the reverse as well was wrong and silenced reasoning entirely:
+    // while a reply is still short, almost any text "starts with" it, so every
+    // intermediate narration matched something and was dropped.
+    if (!spoken.startsWith(candidate)) return false
+
+    // A handful of characters matching proves nothing — "네" is the start of
+    // countless sentences. Below that, keep the block.
+    return candidate.length >= ECHO_MIN_CHARS
 }
+
+/** Short agreements collide by chance; a real repeat is far longer. */
+private const val ECHO_MIN_CHARS = 24
 
 private fun String.normalizedForEcho(): String =
     trim().replace(Regex("\\s+"), " ")

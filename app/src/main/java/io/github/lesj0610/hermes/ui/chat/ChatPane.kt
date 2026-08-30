@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -135,10 +136,35 @@ fun ChatPane(
     val colors = LocalRunColors.current
     val listState = rememberLazyListState()
 
-    // Follow the tail while the agent is talking. Only when new items land, so
-    // it never fights a user who has scrolled up to read something.
-    LaunchedEffect(state.items.size) {
-        if (state.items.isNotEmpty()) listState.animateScrollToItem(state.items.lastIndex)
+    // Follow the tail while the agent is talking.
+    //
+    // Keyed on the last item's length as well as the count: a streaming reply
+    // grows inside one item, so watching the count alone meant the view sat
+    // still through the entire answer and only jumped when a tool card or the
+    // next message arrived.
+    val tailSize = state.items.lastOrNull().let { last ->
+        when (last) {
+            is TranscriptItem.AssistantText -> last.text.length
+            is TranscriptItem.Reasoning -> last.text.length
+            is TranscriptItem.ToolCall -> (last.preview?.length ?: 0) + last.state.ordinal
+            else -> 0
+        }
+    }
+    // Only when the tail is already in view. Someone who scrolled up to read an
+    // earlier tool result should not be dragged back down every time a token
+    // lands.
+    val following by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()
+            last == null || last.index >= listState.layoutInfo.totalItemsCount - 2
+        }
+    }
+    LaunchedEffect(state.items.size, tailSize) {
+        if (state.items.isEmpty() || !following) return@LaunchedEffect
+        // Not animated: deltas land faster than an animation completes, and
+        // each new one cancelled the last, which stalled the scroll mid-way.
+        listState.scrollToItem(state.items.lastIndex)
     }
 
     Column(modifier.fillMaxSize()) {

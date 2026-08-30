@@ -24,6 +24,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,17 +89,24 @@ fun ToolCard(item: TranscriptItem.ToolCall, modifier: Modifier = Modifier) {
             .border(1.dp, colors.line, RoundedCornerShape(8.dp))
             .clickable { expanded = !expanded },
     ) {
-        // Stripe + body. The stripe is a filled box rather than a border side so
-        // it hugs the card edge exactly; IntrinsicSize.Min makes it match the
-        // body's height whatever the preview text does.
-        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            Box(
-                Modifier
-                    .width(2.dp)
-                    .fillMaxHeight()
-                    .background(accent),
-            )
-            Column(Modifier.padding(start = 9.dp, top = 7.dp, end = 9.dp, bottom = 8.dp)) {
+        // The stripe is painted behind the body rather than laid out beside it.
+        //
+        // It used to be a Box sized by IntrinsicSize.Min, and intrinsic height
+        // measures text unclamped — so once the output was capped at two lines
+        // the row still reserved room for every line, leaving a large blank
+        // area between the card and whatever followed.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .drawBehind {
+                    drawRect(
+                        color = accent,
+                        size = Size(2.dp.toPx(), size.height),
+                    )
+                }
+                .padding(start = 11.dp, top = 7.dp, end = 9.dp, bottom = 8.dp),
+        ) {
+            run {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

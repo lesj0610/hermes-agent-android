@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.serialization.json.Json
+import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.JsonObject
 
 /** Thrown for any non-2xx response, carrying the server's own error text when it sent one. */
@@ -66,6 +67,24 @@ class HermesApi(
             requestTimeoutMillis = null
             connectTimeoutMillis = 15_000
             socketTimeoutMillis = null
+        }
+        engine {
+            config {
+                // Nulls above disable Ktor's own timers but leave OkHttp's, and
+                // OkHttp reads with a ten-second default. An agent thinking
+                // before its first token is silent for longer than that —
+                // routinely so at the higher reasoning levels — and the stream
+                // died mid-run with "Socket timeout has expired".
+                //
+                // Zero means no read timeout, which is the right setting for a
+                // stream whose quiet periods are the work happening. A genuinely
+                // dead connection is caught by the keepalive below rather than
+                // by cutting off a live one.
+                readTimeout(0, TimeUnit.MILLISECONDS)
+                // TCP keepalive so a silent-but-dead peer is still noticed,
+                // which is what the read timeout used to do by accident.
+                pingInterval(30, TimeUnit.SECONDS)
+            }
         }
     }
 

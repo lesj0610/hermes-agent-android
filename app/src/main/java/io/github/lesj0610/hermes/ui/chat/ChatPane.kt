@@ -62,6 +62,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.ui.graphics.Color
 import io.github.lesj0610.hermes.ui.components.SendIcon
+import io.github.lesj0610.hermes.ui.components.StopIcon
 import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -173,17 +174,14 @@ fun ChatPane(
             }
         }
 
-        if (state.isBusy) {
-            StopBar(
-                stopping = state.phase is RunPhase.Stopping,
-                onStop = onStop,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp),
-            )
-        }
-
         HorizontalDivider(color = colors.line)
         Composer(
-            enabled = !state.isBusy,
+            // Typing stays available during a run: that is what turns the
+            // action button back into Send, and a disabled box could not.
+            enabled = true,
+            busy = state.isBusy,
+            stopping = state.phase is RunPhase.Stopping,
+            onStop = onStop,
             onSend = onSend,
             commands = commands,
             commandsLoading = commandsLoading,
@@ -330,21 +328,11 @@ private fun EmptyTranscript(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun StopBar(stopping: Boolean, onStop: () -> Unit, modifier: Modifier = Modifier) {
-    val colors = LocalRunColors.current
-    OutlinedButton(
-        onClick = onStop,
-        enabled = !stopping,
-        modifier = modifier.fillMaxWidth(),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.failed),
-    ) {
-        Text(stringResource(if (stopping) R.string.chat_stopping else R.string.chat_stop))
-    }
-}
-
-@Composable
 private fun Composer(
     enabled: Boolean,
+    busy: Boolean,
+    stopping: Boolean,
+    onStop: () -> Unit,
     onSend: (String, List<String>) -> Unit,
     commands: List<SlashCommand>,
     commandsLoading: Boolean,
@@ -437,6 +425,7 @@ private fun Composer(
     val dictateLabel = stringResource(R.string.voice_dictate)
     val conversationLabel = stringResource(R.string.voice_conversation)
     val sendLabel = stringResource(R.string.chat_send)
+    val stopLabel = stringResource(R.string.chat_stop)
 
     // Dictation lands in the box rather than being sent, so a misheard word can
     // be fixed before it costs a turn. Appended, so it adds to whatever was
@@ -749,46 +738,61 @@ private fun Composer(
                 }
             }
 
-            // One circular button, showing whichever action the draft implies:
-            // an empty box means the next thing you do is talk, a filled one
-            // means send. Two permanent buttons made the emptier of them look
-            // disabled half the time.
+            // One circular button carrying whichever action is actually next.
+            //
+            // A draft always wins: typing during a run is how you say "not
+            // that, this", so the button becomes Send the moment there is
+            // something to send and returns to Stop when the box is emptied
+            // again. With nothing typed and nothing running, the next thing
+            // you do is talk.
+            //
+            // Stop used to be a bar of its own above the composer, which sat
+            // on top of the conversation for the whole run — the reply was
+            // covered by the control for interrupting it.
             val hasDraft = draft.isNotBlank() || attachments.isNotEmpty()
+            val filled = hasDraft || busy || conversing
             FilledIconButton(
                 onClick = {
-                    if (hasDraft) {
-                        onSend(
-                            composeMessage(draft, attachments),
-                            attachments.filterIsInstance<Attachment.Image>().map { it.dataUrl },
-                        )
-                        draft = ""
-                        attachments = emptyList()
-                        notice = null
-                    } else {
-                        onToggleConversation()
+                    when {
+                        hasDraft -> {
+                            onSend(
+                                composeMessage(draft, attachments),
+                                attachments.filterIsInstance<Attachment.Image>().map { it.dataUrl },
+                            )
+                            draft = ""
+                            attachments = emptyList()
+                            notice = null
+                        }
+                        busy -> onStop()
+                        else -> onToggleConversation()
                     }
                 },
-                enabled = enabled || !hasDraft,
+                // Only a stop already in flight is inert; everything else is
+                // actionable.
+                enabled = !(busy && !hasDraft && stopping),
                 colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = if (hasDraft || conversing) {
+                    containerColor = if (filled) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         colors.panelRaised
                     },
                 ),
             ) {
-                val tint = if (hasDraft || conversing) {
+                val tint = if (filled) {
                     MaterialTheme.colorScheme.onPrimary
                 } else {
                     colors.muted
                 }
-                if (hasDraft) {
-                    SendIcon(
+                when {
+                    hasDraft -> SendIcon(
                         tint = tint,
                         modifier = Modifier.semantics { contentDescription = sendLabel },
                     )
-                } else {
-                    WaveformIcon(
+                    busy -> StopIcon(
+                        tint = tint,
+                        modifier = Modifier.semantics { contentDescription = stopLabel },
+                    )
+                    else -> WaveformIcon(
                         tint = tint,
                         modifier = Modifier.semantics { contentDescription = conversationLabel },
                     )

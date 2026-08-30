@@ -452,6 +452,29 @@ class ScreenshotTest {
         }
     }
 
+    /**
+     * Mid-run with nothing typed: the action button is Stop, and no bar sits
+     * over the transcript. That bar was the whole reason for this change — it
+     * covered the reply while the reply was being written.
+     */
+    @Test
+    fun chatBusy() {
+        capture("chat-busy", 411, 891) {
+            ChatPane(
+                state = ChatState(
+                    sessionId = "s1",
+                    items = transcript,
+                    phase = RunPhase.Running("r1"),
+                ),
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
+                modifier = Modifier.fillMaxSize(),
+                modelLabel = "opus-5",
+                effort = ReasoningEffort.High,
+                voiceAvailable = true,
+            )
+        }
+    }
+
     @Test
     fun approvalPending() {
         capture("chat-approval", 411, 891) {

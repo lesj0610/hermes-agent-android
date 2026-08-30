@@ -14,7 +14,7 @@ from the machine.
 
 | | |
 |---|---|
-| Chat | Live transcript over SSE, tool cards, approval sheet, stop |
+| Chat | Live transcript over SSE, tool cards, approval sheet. The send button becomes Stop while a run is in flight, and Send again the moment you type |
 | Composer | Camera, photo and text-file attachments; model and reasoning level; dictation; spoken conversation |
 | Commands | Typing `/` opens the gateway's own registry: skills and quick commands run on the agent, read-only queries answer inline, `/compress` compacts the conversation. What has no server-side action is listed and marked, not hidden |
 | Sessions | Drawer list with search, and a per-session menu: rename, pin, copy ID, branch, export, archive, delete |
@@ -128,7 +128,7 @@ Hermes Agent source; the client was written against its HTTP surface.
 
 ## Status
 
-Version 1.3.1. Compiles, unit tests pass, lint clean, release AAB builds, and the
+Version 1.4. Compiles, unit tests pass, lint clean, release AAB builds, and the
 app runs against a live gateway.
 
 Not yet exercised on hardware: the camera and file attachment round trip, the

@@ -960,3 +960,26 @@ fun RefreshIcon(modifier: Modifier = Modifier, tint: Color? = null) {
         )
     }
 }
+
+/**
+ * A filled square: interrupt the run.
+ *
+ * Solid rather than outlined, and square rather than an X. It sits in the same
+ * circle the send arrow uses, so the shape has to carry the difference on its
+ * own — an outline at this size reads as another glyph in the set, and an X
+ * reads as dismiss.
+ */
+@Composable
+fun StopIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val side = bounds.width * 0.46f
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(bounds.center.x - side / 2f, bounds.center.y - side / 2f),
+            size = Size(side, side),
+            cornerRadius = CornerRadius(2.dp.toPx()),
+        )
+    }
+}

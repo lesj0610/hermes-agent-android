@@ -53,7 +53,41 @@ class RunEventTest {
 
         assertEquals("bash", parsed.tool)
         assertEquals(2.5, parsed.duration!!, 0.001)
-        assertNull(parsed.error)
+        assertEquals(false, parsed.failed)
+        assertNull(parsed.errorMessage)
+    }
+
+    @Test
+    fun `a successful tool is not a failure carrying the word false`() {
+        // This route sends the tool's own is_error flag as a JSON boolean.
+        // Reading it as text yielded "false", which is not blank — so every
+        // successful call was drawn as failed with "false" for a result.
+        val parsed = event(
+            """{"event":"tool.completed","tool":"weather","preview":"24C","error":false}""",
+        ) as RunEvent.ToolCompleted
+
+        assertEquals(false, parsed.failed)
+        assertNull(parsed.errorMessage)
+    }
+
+    @Test
+    fun `a boolean true marks the call failed without inventing a message`() {
+        val parsed = event(
+            """{"event":"tool.completed","tool":"bash","error":true}""",
+        ) as RunEvent.ToolCompleted
+
+        assertEquals(true, parsed.failed)
+        assertNull(parsed.errorMessage)
+    }
+
+    @Test
+    fun `a sentence is kept, since other surfaces send one`() {
+        val parsed = event(
+            """{"event":"tool.completed","tool":"bash","error":"exit status 1"}""",
+        ) as RunEvent.ToolCompleted
+
+        assertEquals(true, parsed.failed)
+        assertEquals("exit status 1", parsed.errorMessage)
     }
 
     @Test

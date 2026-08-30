@@ -2,6 +2,7 @@ package io.github.lesj0610.hermes.net
 
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -55,13 +56,23 @@ sealed interface RunEvent {
         val preview: String?,
     ) : RunEvent
 
+    /**
+     * [failed] is a flag, not a message.
+     *
+     * The runs stream sends `"error": true|false` — the tool's own `is_error`.
+     * Reading it as text produced the string "false" on every successful call,
+     * which then read as non-empty and marked the card failed, with "false" as
+     * its body. Other surfaces do send a sentence there, so [errorMessage]
+     * keeps it when one arrives.
+     */
     data class ToolCompleted(
         override val runId: String?,
         override val timestamp: Double?,
         val tool: String,
         val preview: String?,
         val duration: Double?,
-        val error: String?,
+        val failed: Boolean,
+        val errorMessage: String?,
     ) : RunEvent
 
     /**
@@ -123,13 +134,21 @@ fun parseRunEvent(obj: JsonObject): RunEvent? {
         "tool.started" -> RunEvent.ToolStarted(
             runId, ts, obj.str("tool").orEmpty(), obj.str("preview"),
         )
-        "tool.completed" -> RunEvent.ToolCompleted(
-            runId, ts,
-            obj.str("tool").orEmpty(),
-            obj.str("preview"),
-            obj["duration"]?.let { runCatching { it.jsonPrimitive.content.toDouble() }.getOrNull() },
-            obj.str("error"),
-        )
+        "tool.completed" -> {
+            // Boolean on this route, a sentence on others. Both shapes are
+            // accepted rather than assuming either.
+            val raw = obj["error"] as? JsonPrimitive
+            val flag = raw?.booleanOrNull
+            val message = raw?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
+            RunEvent.ToolCompleted(
+                runId, ts,
+                obj.str("tool").orEmpty(),
+                obj.str("preview"),
+                obj["duration"]?.let { runCatching { it.jsonPrimitive.content.toDouble() }.getOrNull() },
+                failed = flag ?: (message != null),
+                errorMessage = message,
+            )
+        }
         "approval.request" -> RunEvent.ApprovalRequest(
             runId, ts,
             obj.str("command"),

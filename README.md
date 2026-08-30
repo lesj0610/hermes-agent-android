@@ -134,7 +134,7 @@ Hermes Agent source; the client was written against its HTTP surface.
 
 ## Status
 
-Version 1.5. Compiles, unit tests pass, lint clean, release AAB builds, and the
+Version 1.5.1. Compiles, unit tests pass, lint clean, release AAB builds, and the
 app runs against a live gateway.
 
 Not yet exercised on hardware: the camera and file attachment round trip, the

@@ -168,9 +168,12 @@ class RunEngine(
                 current.copy(items = current.items.updateLastTool(event.tool) { card ->
                     card.copy(
                         preview = event.preview ?: card.preview,
-                        state = if (event.error.isNullOrBlank()) ToolState.Completed else ToolState.Failed,
+                        state = if (event.failed) ToolState.Failed else ToolState.Completed,
                         durationSeconds = event.duration,
-                        error = event.error,
+                        // Only a real sentence, never the flag: the card shows
+                        // this instead of the preview, and "false" is not a
+                        // tool result.
+                        error = event.errorMessage,
                     )
                 })
             }

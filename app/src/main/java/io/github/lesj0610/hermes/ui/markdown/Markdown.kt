@@ -15,9 +15,6 @@ package io.github.lesj0610.hermes.ui.markdown
  *  - **Safe mid-stream.** Replies are parsed on every delta, so a fence that
  *    has opened but not closed is a code block in progress rather than a
  *    paragraph full of backticks that will reflow a moment later.
- *
- * Tables are deliberately absent — they need column measurement, and getting
- * them half right is worse than leaving them as text.
  */
 
 sealed interface Block {
@@ -29,8 +26,24 @@ sealed interface Block {
 
     /** [language] is whatever followed the fence, unvalidated — it is a label. */
     data class Code(val language: String?, val code: String) : Block
+
+    /**
+     * [align] has one entry per column and is the authority on width: a ragged
+     * row is padded or truncated to it rather than shifting the grid.
+     */
+    data class Table(
+        val header: List<List<Span>>,
+        val rows: List<List<List<Span>>>,
+        val align: List<Align>,
+    ) : Block
+
+    /** Display maths — `$$…$$` or `\[…\]` — laid out rather than flattened. */
+    data class Math(val latex: String) : Block
+
     data object Rule : Block
 }
+
+enum class Align { Start, Center, End }
 
 /** One run of text with the marks that apply to it. */
 data class Span(
@@ -40,6 +53,10 @@ data class Span(
     val code: Boolean = false,
     val strike: Boolean = false,
     val link: String? = null,
+    /** Set in the maths face: upright digits, italic letters. */
+    val math: Boolean = false,
+    val superscript: Boolean = false,
+    val subscript: Boolean = false,
 )
 
 private val HEADING = Regex("""^(#{1,6})\s+(.*)$""")
@@ -48,6 +65,11 @@ private val NUMBERED = Regex("""^(\s*)(\d{1,3}[.)])\s+(.*)$""")
 private val QUOTE = Regex("""^>\s?(.*)$""")
 private val RULE = Regex("""^\s*([-*_])\s*(\1\s*){2,}$""")
 private val FENCE = Regex("""^\s*```+\s*(\S+)?\s*$""")
+
+/** `|---|:--:|---:|` — the row that turns the line above it into a header. */
+private val ALIGN_ROW = Regex("""^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$""")
+
+private val DISPLAY_MATH_OPEN = Regex("""^\s*(\$\$|\\\[)\s*(.*)$""")
 
 /** Splits [text] into blocks. Total: every line lands somewhere. */
 fun parseMarkdown(text: String): List<Block> {
@@ -64,8 +86,8 @@ fun parseMarkdown(text: String): List<Block> {
     var i = 0
     while (i < lines.size) {
         val line = lines[i]
-        val fence = FENCE.matchEntire(line)
 
+        val fence = FENCE.matchEntire(line)
         if (fence != null) {
             flushParagraph()
             val language = fence.groupValues[1].takeIf { it.isNotBlank() }
@@ -80,6 +102,67 @@ fun parseMarkdown(text: String): List<Block> {
             if (i < lines.size) i++ // consume the closing fence
             blocks += Block.Code(language, body.joinToString("\n"))
             continue
+        }
+
+        val mathOpen = DISPLAY_MATH_OPEN.matchEntire(line)
+        if (mathOpen != null) {
+            flushParagraph()
+            val closer = if (mathOpen.groupValues[1] == "$$") "$$" else """\]"""
+            val first = mathOpen.groupValues[2]
+            // `$$ x = 1 $$` on one line, or opened here and closed further down.
+            val inlineClose = first.indexOf(closer)
+            if (inlineClose >= 0) {
+                blocks += Block.Math(first.substring(0, inlineClose).trim())
+                i++
+                continue
+            }
+            val body = mutableListOf<String>()
+            if (first.isNotBlank()) body += first
+            i++
+            while (i < lines.size && !lines[i].contains(closer)) {
+                body += lines[i]
+                i++
+            }
+            if (i < lines.size) {
+                val tail = lines[i].substringBefore(closer)
+                if (tail.isNotBlank()) body += tail
+                i++
+            }
+            blocks += Block.Math(body.joinToString(" ").trim())
+            continue
+        }
+
+        // A table declares itself on its second line, so the header is only a
+        // header once the alignment row has arrived — mid-stream it stays a
+        // paragraph until then, and settles when the next delta lands.
+        if (line.contains('|') && i + 1 < lines.size && ALIGN_ROW.matchEntire(lines[i + 1]) != null) {
+            val header = splitRow(line)
+            val alignments = splitRow(lines[i + 1]).map { spec ->
+                when {
+                    spec.startsWith(':') && spec.endsWith(':') -> Align.Center
+                    spec.endsWith(':') -> Align.End
+                    else -> Align.Start
+                }
+            }
+            if (alignments.size == header.size) {
+                flushParagraph()
+                i += 2
+                val rows = mutableListOf<List<String>>()
+                while (i < lines.size && lines[i].contains('|') && lines[i].isNotBlank()) {
+                    rows += splitRow(lines[i])
+                    i++
+                }
+                blocks += Block.Table(
+                    header = header.map { parseInline(it) },
+                    rows = rows.map { row ->
+                        // Squared off against the header: a ragged row would
+                        // otherwise slide every cell after it into the wrong column.
+                        List(header.size) { column -> parseInline(row.getOrElse(column) { "" }) }
+                    },
+                    align = alignments,
+                )
+                continue
+            }
         }
 
         when {
@@ -125,6 +208,10 @@ fun parseMarkdown(text: String): List<Block> {
     return blocks
 }
 
+/** Cells, with the outer pipes dropped and each one trimmed. */
+private fun splitRow(line: String): List<String> =
+    line.trim().removePrefix("|").removeSuffix("|").split('|').map { it.trim() }
+
 private val LINK = Regex("""\[([^\]\n]*)\]\(([^)\s]+)\)""")
 
 /**
@@ -141,20 +228,83 @@ fun parseInline(text: String): List<Span> {
     while (index < text.length) {
         val tick = text.indexOf('`', index)
         if (tick < 0) {
-            spans += parseEmphasis(text.substring(index))
+            spans += parseMathAndEmphasis(text.substring(index))
             break
         }
         val close = text.indexOf('`', tick + 1)
         if (close < 0) {
             // Unmatched: literal, as written.
-            spans += parseEmphasis(text.substring(index))
+            spans += parseMathAndEmphasis(text.substring(index))
             break
         }
-        if (tick > index) spans += parseEmphasis(text.substring(index, tick))
+        if (tick > index) spans += parseMathAndEmphasis(text.substring(index, tick))
         spans += Span(text.substring(tick + 1, close), code = true)
         index = close + 1
     }
     return spans.filter { it.text.isNotEmpty() }
+}
+
+/**
+ * Pulls inline maths out before emphasis runs, so `$a * b$` is a product and
+ * not italics.
+ */
+private fun parseMathAndEmphasis(text: String): List<Span> {
+    val out = mutableListOf<Span>()
+    var index = 0
+
+    while (index < text.length) {
+        val math = findInlineMath(text, index)
+        if (math == null) {
+            out += parseEmphasis(text.substring(index))
+            break
+        }
+        val (start, end, latex) = math
+        if (start > index) out += parseEmphasis(text.substring(index, start))
+        out += inlineMathSpans(latex)
+        index = end
+    }
+    return out
+}
+
+private data class MathSpan(val start: Int, val end: Int, val latex: String)
+
+/**
+ * The next `$…$` or `\(…\)` at or after [from].
+ *
+ * `$` is also a currency sign, and "$100 to $200" must not become maths. Two
+ * rules settle it: a digit may not follow the opening `$`, and the closing one
+ * may not follow a space. Prices fail both; `$x^2$` fails neither.
+ */
+private fun findInlineMath(text: String, from: Int): MathSpan? {
+    var index = from
+    while (index < text.length) {
+        when {
+            text.startsWith("""\(""", index) -> {
+                val close = text.indexOf("""\)""", index + 2)
+                if (close < 0) return null
+                return MathSpan(index, close + 2, text.substring(index + 2, close))
+            }
+            text[index] == '$' -> {
+                val next = text.getOrNull(index + 1)
+                if (next == null || next.isDigit() || next.isWhitespace()) {
+                    index++
+                    continue
+                }
+                val close = text.indexOf('$', index + 1)
+                if (close < 0) return null
+                val body = text.substring(index + 1, close)
+                // Empty is `$$` mid-paragraph, which is a delimiter and not an
+                // expression; the closing `$` becomes the next candidate.
+                if (body.isEmpty() || body.last().isWhitespace() || body.contains('\n')) {
+                    index = close
+                    continue
+                }
+                return MathSpan(index, close + 1, body)
+            }
+            else -> index++
+        }
+    }
+    return null
 }
 
 private fun parseEmphasis(text: String): List<Span> {

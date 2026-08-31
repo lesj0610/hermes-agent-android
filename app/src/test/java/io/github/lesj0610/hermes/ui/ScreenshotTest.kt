@@ -511,6 +511,42 @@ class ScreenshotTest {
         }
     }
 
+    /** A table and an equation, the two shapes 1.7 left as text. */
+    @Test
+    fun chatTableMath() {
+        capture("chat-table-math", 411, 891) {
+            ChatPane(
+                state = ChatState(
+                    sessionId = "s1",
+                    items = listOf(
+                        TranscriptItem.UserText("u1", "커널별 처리량 비교해줘"),
+                        TranscriptItem.AssistantText(
+                            "a1",
+                            """
+                            | 커널 | 처리량 | 비고 |
+                            |------|-------:|:----:|
+                            | FP16 | 1.00x | 기준 |
+                            | FP8 | 0.98x | 동등 |
+                            | FP4 | 0.71x | 명령 인출 |
+
+                            상대 처리량 ${'$'}T_{rel}${'$'} 은 이렇게 정의했습니다:
+
+                            ${'$'}${'$'}
+                            T_{rel} = \frac{t_{FP16}}{t_{k}} \leq \alpha
+                            ${'$'}${'$'}
+
+                            오차는 ${'$'}\alpha = 0.05${'$'} 안입니다.
+                            """.trimIndent(),
+                            streaming = false,
+                        ),
+                    ),
+                ),
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+
     @Test
     fun approvalPending() {
         capture("chat-approval", 411, 891) {

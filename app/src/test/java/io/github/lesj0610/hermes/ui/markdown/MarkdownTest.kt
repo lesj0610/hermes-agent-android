@@ -20,6 +20,9 @@ class MarkdownTest {
             is Block.Numbered -> block.spans.joinToString("") { it.text }
             is Block.Quote -> block.spans.joinToString("") { it.text }
             is Block.Code -> block.code
+            is Block.Table -> (listOf(block.header) + block.rows)
+                .joinToString("") { row -> row.joinToString("") { cell -> cell.joinToString("") { it.text } } }
+            is Block.Math -> block.latex
             Block.Rule -> ""
         }
     }
@@ -86,6 +89,38 @@ class MarkdownTest {
         val blocks = parseMarkdown("1. first\n2. second")
         assertEquals("1.", (blocks[0] as Block.Numbered).marker)
         assertEquals("2.", (blocks[1] as Block.Numbered).marker)
+    }
+
+    @Test
+    fun `a table needs its alignment row to become one`() {
+        val blocks = parseMarkdown(
+            """
+            | 항목 | 값 |
+            |------|---:|
+            | 기온 | 23.8 |
+            | 습도 | 100 |
+            """.trimIndent(),
+        )
+        val table = blocks.single() as Block.Table
+        assertEquals(listOf("항목", "값"), table.header.map { row -> row.joinToString("") { it.text } })
+        assertEquals(2, table.rows.size)
+        assertEquals(Align.End, table.align[1])
+    }
+
+    @Test
+    fun `a header without its alignment row stays text while streaming`() {
+        // The second line decides. Until it arrives the pipes are prose, and
+        // the next delta settles it.
+        val blocks = parseMarkdown("| 항목 | 값 |")
+        assertTrue(blocks.single() is Block.Paragraph)
+    }
+
+    @Test
+    fun `a ragged row is squared off against the header`() {
+        // A short row would otherwise slide every later cell one column left.
+        val rows = (parseMarkdown("|a|b|c|\n|-|-|-|\n|1|2|").single() as Block.Table).rows
+        assertEquals(3, rows[0].size)
+        assertEquals("", rows[0][2].joinToString("") { it.text })
     }
 
     @Test

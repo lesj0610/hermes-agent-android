@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -26,12 +27,17 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withLink
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.BaselineShift
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
@@ -123,11 +129,91 @@ fun MarkdownText(
                     )
                 }
 
+                is Block.Table -> MarkdownTable(block, style)
+
+                is Block.Math -> MathBlock(block.latex, style)
+
                 Block.Rule -> HorizontalDivider(color = colors.line)
             }
         }
     }
 }
+
+/**
+ * A table, measured before it is drawn.
+ *
+ * Column width is the widest cell in that column, found with a text measurer
+ * rather than guessed from character counts — the alternative is columns that
+ * fit Latin text and burst on Korean. Past a cap the cell wraps instead of
+ * growing, and the whole grid scrolls sideways rather than squeezing.
+ */
+@Composable
+private fun MarkdownTable(table: Block.Table, style: TextStyle) {
+    val colors = LocalRunColors.current
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+
+    val widths = remember(table, style, density) {
+        val cap = with(density) { TABLE_COLUMN_CAP.toPx() }
+        val padding = with(density) { (TABLE_CELL_PADDING * 2).toPx() }
+        table.align.indices.map { column ->
+            val cells = listOf(table.header) + table.rows
+            val widest = cells.maxOf { row ->
+                val text = row.getOrNull(column)?.joinToString("") { it.text }.orEmpty()
+                if (text.isEmpty()) 0f else measurer.measure(AnnotatedString(text), style).size.width.toFloat()
+            }
+            with(density) { (widest.coerceAtMost(cap) + padding).toDp() }
+        }
+    }
+
+    Column(
+        Modifier
+            .horizontalScroll(rememberScrollState())
+            .clip(RoundedCornerShape(6.dp))
+            .background(colors.panelRaised),
+    ) {
+        Row {
+            table.header.forEachIndexed { column, cell ->
+                TableCell(cell, widths[column], table.align[column], style, header = true)
+            }
+        }
+        HorizontalDivider(color = colors.line)
+        table.rows.forEachIndexed { index, row ->
+            if (index > 0) HorizontalDivider(color = colors.line.copy(alpha = 0.4f))
+            Row {
+                row.forEachIndexed { column, cell ->
+                    TableCell(cell, widths[column], table.align[column], style, header = false)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TableCell(
+    spans: List<Span>,
+    width: Dp,
+    align: Align,
+    style: TextStyle,
+    header: Boolean,
+) {
+    Text(
+        text = spans.annotated(),
+        style = if (header) style.copy(fontWeight = FontWeight.SemiBold) else style,
+        textAlign = when (align) {
+            Align.Start -> TextAlign.Start
+            Align.Center -> TextAlign.Center
+            Align.End -> TextAlign.End
+        },
+        modifier = Modifier
+            .width(width)
+            .padding(horizontal = TABLE_CELL_PADDING, vertical = 5.dp),
+    )
+}
+
+/** Past this a cell wraps; a single long cell must not set the table's width. */
+private val TABLE_COLUMN_CAP = 200.dp
+private val TABLE_CELL_PADDING = 8.dp
 
 @Composable
 private fun MarkdownRow(marker: String, depth: Int, spans: List<Span>, style: TextStyle) {
@@ -154,10 +240,32 @@ private fun List<Span>.annotated(): AnnotatedString {
         forEach { span ->
             val spanStyle = SpanStyle(
                 fontWeight = if (span.bold) FontWeight.SemiBold else null,
-                fontStyle = if (span.italic) FontStyle.Italic else null,
-                fontFamily = if (span.code) FontFamily.Monospace else null,
+                // Maths sets variables in an italic serif, the convention every
+                // reader already knows, so x in prose and x in an equation look
+                // like the same x.
+                // Same rule the laid-out renderer uses, so T_rel reads the same
+                // in a sentence as it does in a display equation: single
+                // variables lean, multi-letter names stay upright.
+                fontStyle = if (span.italic || (span.math && span.text.length <= 2 && span.text.any { it.isLetter() })) {
+                    FontStyle.Italic
+                } else {
+                    null
+                },
+                fontFamily = when {
+                    span.code -> FontFamily.Monospace
+                    span.math -> FontFamily.Serif
+                    else -> null
+                },
                 background = if (span.code) colors.panelRaised else androidx.compose.ui.graphics.Color.Unspecified,
                 textDecoration = if (span.strike) TextDecoration.LineThrough else null,
+                // Scripts are shifted rather than swapped for Unicode
+                // superscripts, which only exist for a handful of characters.
+                baselineShift = when {
+                    span.superscript -> BaselineShift.Superscript
+                    span.subscript -> BaselineShift.Subscript
+                    else -> null
+                },
+                fontSize = if (span.superscript || span.subscript) 10.sp else TextUnit.Unspecified,
             )
             if (span.link != null) {
                 withLink(

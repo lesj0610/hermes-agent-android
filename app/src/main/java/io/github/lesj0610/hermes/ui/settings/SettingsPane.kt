@@ -7,20 +7,21 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -41,19 +42,20 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
+import io.github.lesj0610.hermes.BuildConfig
 import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.core.DASHBOARD_DEFAULT_PORT
 import io.github.lesj0610.hermes.core.GATEWAY_DEFAULT_PORT
 import io.github.lesj0610.hermes.core.HermesSettings
-import io.github.lesj0610.hermes.core.coercePort
-import io.github.lesj0610.hermes.core.defaultDashboardHost
-import io.github.lesj0610.hermes.core.parseEndpoint
 import io.github.lesj0610.hermes.core.Language
 import io.github.lesj0610.hermes.core.LayoutMode
 import io.github.lesj0610.hermes.core.UI_SCALE_MAX
 import io.github.lesj0610.hermes.core.UI_SCALE_MIN
 import io.github.lesj0610.hermes.core.UI_SCALE_STEP
+import io.github.lesj0610.hermes.core.coercePort
+import io.github.lesj0610.hermes.core.defaultDashboardHost
+import io.github.lesj0610.hermes.core.parseEndpoint
+import io.github.lesj0610.hermes.data.UpdateState
 import io.github.lesj0610.hermes.net.ActiveProfile
 import io.github.lesj0610.hermes.net.DashboardSkill
 import io.github.lesj0610.hermes.net.DetailedHealth
@@ -72,6 +74,7 @@ import io.github.lesj0610.hermes.ui.gateway.AgentSkillsCard
 import io.github.lesj0610.hermes.ui.gateway.GatewayStateCard
 import io.github.lesj0610.hermes.ui.gateway.ToolsetsCard
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
+import kotlin.math.roundToInt
 
 /** Live grant state, re-read whenever the screen resumes. */
 data class PermissionState(
@@ -91,7 +94,7 @@ data class PermissionState(
  */
 private enum class SettingsSection {
     Gateway, Dashboard, Model, Profiles, Skills, Toolsets, ServerState,
-    Display, Language, Notifications, Permissions,
+    Display, Language, Notifications, Permissions, Update,
 }
 
 @Composable
@@ -112,6 +115,12 @@ fun SettingsPane(
     onRequestNotifications: () -> Unit,
     onRequestBackground: () -> Unit,
     modifier: Modifier = Modifier,
+    /** App updates. Defaulted so previews render without an update check. */
+    updateState: UpdateState = UpdateState.Idle,
+    onCheckUpdate: () -> Unit = {},
+    onDownloadUpdate: () -> Unit = {},
+    onGrantInstall: () -> Unit = {},
+    onToggleUpdateChecks: (Boolean) -> Unit = {},
     /** The model in effect, resolved the same way the composer's chip resolves it. */
     activeModel: String = "",
     health: DetailedHealth? = null,
@@ -142,6 +151,7 @@ fun SettingsPane(
             toolsets = toolsets,
             dashboardSkills = dashboardSkills,
             activeProfile = activeProfile,
+            updateState = updateState,
             onOpen = { section = it },
             modifier = modifier,
         )
@@ -177,6 +187,14 @@ fun SettingsPane(
             SettingsSection.Notifications -> NotificationsSection(
                 settings, onToggleApprovals, onToggleCompletion,
             )
+            SettingsSection.Update -> UpdateSection(
+                settings = settings,
+                state = updateState,
+                onCheck = onCheckUpdate,
+                onDownload = onDownloadUpdate,
+                onGrant = onGrantInstall,
+                onToggleChecks = onToggleUpdateChecks,
+            )
             SettingsSection.Permissions -> PermissionsSection(
                 permissions, onRequestNotifications, onRequestBackground,
             )
@@ -197,6 +215,7 @@ private fun sectionTitle(section: SettingsSection): String = when (section) {
     SettingsSection.Language -> stringResource(R.string.settings_group_language)
     SettingsSection.Notifications -> stringResource(R.string.settings_group_notifications)
     SettingsSection.Permissions -> stringResource(R.string.settings_group_permissions)
+    SettingsSection.Update -> stringResource(R.string.update_section)
 }
 
 // ── hub ───────────────────────────────────────────────────────────────────
@@ -212,6 +231,7 @@ private fun SettingsHub(
     toolsets: List<Toolset>,
     dashboardSkills: List<DashboardSkill>,
     activeProfile: ActiveProfile?,
+    updateState: UpdateState,
     onOpen: (SettingsSection) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -336,7 +356,151 @@ private fun SettingsHub(
                 warn = missing > 0,
                 onClick = { onOpen(SettingsSection.Permissions) },
             )
+            HorizontalDivider(color = LocalRunColors.current.line)
+            NavRow(
+                label = stringResource(R.string.update_section),
+                // The row carries the news, so a new release is visible here
+                // even after the banner has been dismissed.
+                value = (updateState as? UpdateState.Available)
+                    ?.let { stringResource(R.string.update_available, it.release.version) }
+                    ?: stringResource(R.string.update_current, BuildConfig.VERSION_NAME),
+                onClick = { onOpen(SettingsSection.Update) },
+            )
         }
+    }
+}
+
+/**
+ * App updates.
+ *
+ * The app downloads a release and asks Android to install it; Android decides.
+ * There is no silent update and no path that skips the system's confirmation —
+ * the button below raises the same installer a file manager would.
+ */
+@Composable
+private fun UpdateSection(
+    settings: HermesSettings,
+    state: UpdateState,
+    onCheck: () -> Unit,
+    onDownload: () -> Unit,
+    onGrant: () -> Unit,
+    onToggleChecks: (Boolean) -> Unit,
+) {
+    val colors = LocalRunColors.current
+
+    Group(stringResource(R.string.update_section)) {
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.update_current, BuildConfig.VERSION_NAME),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            when (state) {
+                is UpdateState.Checking -> Text(
+                    text = stringResource(R.string.update_checking),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.muted,
+                )
+
+                is UpdateState.Downloading -> Text(
+                    text = stringResource(
+                        R.string.update_downloading,
+                        (state.fraction * 100).toInt(),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.muted,
+                )
+
+                is UpdateState.Available -> Button(onClick = onDownload) {
+                    Text(stringResource(R.string.update_download))
+                }
+
+                is UpdateState.Failed ->
+                    if (state.reason == UpdateState.Reason.Permission) {
+                        Button(onClick = onGrant) { Text(stringResource(R.string.update_grant)) }
+                    } else {
+                        OutlinedButton(onClick = onCheck) {
+                            Text(stringResource(R.string.update_check))
+                        }
+                    }
+
+                else -> OutlinedButton(onClick = onCheck) {
+                    Text(stringResource(R.string.update_check))
+                }
+            }
+        }
+
+        if (state is UpdateState.Downloading) {
+            LinearProgressIndicator(
+                progress = { state.fraction },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            )
+        }
+
+        when (state) {
+            is UpdateState.Available -> {
+                Text(
+                    text = stringResource(R.string.update_available, state.release.version),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (state.release.notes.isNotBlank()) {
+                    // The release notes as published, not reformatted: this is
+                    // the only place the user reads what changed.
+                    Text(
+                        text = state.release.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.muted,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+            }
+
+            is UpdateState.Failed -> Text(
+                text = stringResource(
+                    when (state.reason) {
+                        UpdateState.Reason.Download -> R.string.update_failed_download
+                        UpdateState.Reason.Signature -> R.string.update_failed_signature
+                        UpdateState.Reason.Permission -> R.string.update_needs_permission
+                    },
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.muted,
+            )
+
+            else -> Unit
+        }
+    }
+
+    Group(stringResource(R.string.settings_group_app)) {
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.update_auto),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = stringResource(R.string.update_auto_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.muted,
+                )
+            }
+            Switch(checked = settings.updateChecks, onCheckedChange = onToggleChecks)
+        }
+        HorizontalDivider(color = colors.line)
+        Text(
+            text = stringResource(R.string.update_source),
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.muted,
+            modifier = Modifier.padding(top = 8.dp),
+        )
     }
 }
 

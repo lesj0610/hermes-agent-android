@@ -86,6 +86,11 @@ These are properties of the surfaces the app is built on, not oversights:
   `\[…\]`. Only replies that contain maths take that path; everything else
   stays on the native renderer. While a reply is still streaming it renders
   natively too, and is typeset once it completes.
+- **Updates are announced, not applied.** The app reads the project's GitHub
+  releases on launch, and an update downloads the APK and raises the system
+  installer — Android asks before it installs anything, and a build signed by
+  a different key is refused before you are asked. Switch the check off in
+  Settings → App updates.
 - **Deleting a session is permanent.** It is the same call the desktop's Delete
   makes: the row, its messages and the transcript files on the agent's host all
   go. Archive is the reversible one.
@@ -143,7 +148,7 @@ Hermes Agent source; the client was written against its HTTP surface.
 
 ## Status
 
-Version 1.9. Compiles, unit tests pass, lint clean, release AAB builds, and the
+Version 1.10. Compiles, unit tests pass, lint clean, release AAB builds, and the
 app runs against a live gateway.
 
 Not yet exercised on hardware: the camera and file attachment round trip, the

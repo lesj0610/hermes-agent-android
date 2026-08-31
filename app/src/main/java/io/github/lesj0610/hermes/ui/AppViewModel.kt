@@ -3,12 +3,8 @@ package io.github.lesj0610.hermes.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
+import io.github.lesj0610.hermes.BuildConfig
+import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.core.Graph
 import io.github.lesj0610.hermes.core.HermesSettings
 import io.github.lesj0610.hermes.core.LayoutMode
@@ -16,31 +12,41 @@ import io.github.lesj0610.hermes.core.RailPanel
 import io.github.lesj0610.hermes.core.ReasoningEffort
 import io.github.lesj0610.hermes.data.ChatState
 import io.github.lesj0610.hermes.data.UiError
+import io.github.lesj0610.hermes.data.UpdateState
+import io.github.lesj0610.hermes.data.Updater
 import io.github.lesj0610.hermes.net.ActiveProfile
 import io.github.lesj0610.hermes.net.Capabilities
 import io.github.lesj0610.hermes.net.DashboardSkill
 import io.github.lesj0610.hermes.net.DetailedHealth
 import io.github.lesj0610.hermes.net.FsEntry
-import io.github.lesj0610.hermes.net.ProjectsPayload
-import io.github.lesj0610.hermes.net.Profile
 import io.github.lesj0610.hermes.net.HermesUnauthorizedException
 import io.github.lesj0610.hermes.net.Job
 import io.github.lesj0610.hermes.net.ModelChoice
 import io.github.lesj0610.hermes.net.ModelEntry
+import io.github.lesj0610.hermes.net.Profile
+import io.github.lesj0610.hermes.net.ProjectsPayload
 import io.github.lesj0610.hermes.net.SessionSummary
 import io.github.lesj0610.hermes.net.Skill
 import io.github.lesj0610.hermes.net.Toolset
+import io.github.lesj0610.hermes.net.UpdateApi
+import io.github.lesj0610.hermes.net.isNewer
 import io.github.lesj0610.hermes.ui.artifacts.Artifact
 import io.github.lesj0610.hermes.ui.artifacts.collectArtifacts
 import io.github.lesj0610.hermes.ui.commands.SlashCommand
 import io.github.lesj0610.hermes.ui.commands.buildCommands
+import io.github.lesj0610.hermes.voice.VoiceController
+import io.github.lesj0610.hermes.voice.VoiceState
+import java.util.Locale
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import io.github.lesj0610.hermes.voice.VoiceController
-import io.github.lesj0610.hermes.voice.VoiceState
-import java.util.Locale
 
 /** How the gateway is currently reachable. Drives the banner in settings and the rail header. */
 sealed interface Connection {
@@ -201,6 +207,111 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _dashboard = MutableStateFlow<DashboardState>(DashboardState.Off)
     val dashboard: StateFlow<DashboardState> = _dashboard.asStateFlow()
+
+    // ── updates ───────────────────────────────────────────────────────────
+
+    private val updateApi = UpdateApi()
+    private val updater = Updater(app.applicationContext)
+
+    private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    val update: StateFlow<UpdateState> = _update.asStateFlow()
+
+    /**
+     * Whether a new release should be announced.
+     *
+     * False once the user has dismissed that version, so the banner appears
+     * once rather than on every launch. The update screen still shows it.
+     */
+    private val _updateAnnounced = MutableStateFlow(false)
+    val updateAnnounced: StateFlow<Boolean> = _updateAnnounced.asStateFlow()
+
+    /**
+     * Looks for a newer release.
+     *
+     * [manual] is a press of the check button, which reports "up to date" and
+     * announces a version the user previously dismissed. The launch check is
+     * silent unless there is something new to say.
+     */
+    fun checkForUpdate(manual: Boolean = false) {
+        if (_update.value is UpdateState.Downloading) return
+        viewModelScope.launch {
+            if (!manual && !graph.settings.current().updateChecks) return@launch
+            _update.value = UpdateState.Checking
+            val release = updateApi.latest()
+            val current = BuildConfig.VERSION_NAME
+            if (release == null || !isNewer(release.version, current)) {
+                _update.value = UpdateState.Idle
+                _updateAnnounced.value = false
+                if (manual) {
+                    _sessionNotice.value =
+                        getApplication<Application>().getString(R.string.update_none)
+                }
+                return@launch
+            }
+            _update.value = UpdateState.Available(release)
+            _updateAnnounced.value = manual || graph.settings.current().updateSkipped != release.version
+        }
+    }
+
+    /** Downloads the release and, if it verifies, asks the system to install it. */
+    fun downloadUpdate() {
+        // Retried from a failure as well as started from an announcement, so
+        // the release is carried on the failure state rather than lost with it.
+        val release = when (val state = _update.value) {
+            is UpdateState.Available -> state.release
+            is UpdateState.Failed -> state.release
+            else -> null
+        } ?: return
+
+        viewModelScope.launch {
+            _update.value = UpdateState.Downloading(release, 0f)
+            val result = updater.download(release) { fraction ->
+                _update.value = UpdateState.Downloading(release, fraction)
+            }
+            _update.value = when (result) {
+                is Updater.Result.Ok -> UpdateState.Ready(release, result.file)
+                Updater.Result.Failed -> UpdateState.Failed(release, UpdateState.Reason.Download)
+                Updater.Result.WrongSignature ->
+                    UpdateState.Failed(release, UpdateState.Reason.Signature)
+            }
+            if (result is Updater.Result.Ok) installUpdate()
+        }
+    }
+
+    /**
+     * Raises the system installer, or sends the user to grant the permission
+     * that lets the app raise it.
+     */
+    fun installUpdate() {
+        val ready = _update.value as? UpdateState.Ready ?: return
+        if (!updater.canInstall()) {
+            // The banner stays up: there is a verified download waiting and one
+            // permission between the user and it.
+            _update.value = UpdateState.Failed(ready.release, UpdateState.Reason.Permission)
+            return
+        }
+        updater.requestInstall(ready.file)
+        // Android has it from here, and does not tell this app how it went.
+        _updateAnnounced.value = false
+    }
+
+    fun grantInstallPermission() {
+        updater.requestInstallPermission()
+        // The state is left alone: coming back with the grant given, the
+        // download is still there and Install still means something.
+    }
+
+    /** Dismisses the banner for this version only. */
+    fun skipUpdate() {
+        val release = (_update.value as? UpdateState.Available)?.release
+        _updateAnnounced.value = false
+        release ?: return
+        viewModelScope.launch { graph.settings.skipUpdate(release.version) }
+    }
+
+    fun setUpdateChecks(enabled: Boolean) {
+        viewModelScope.launch { graph.settings.setUpdateChecks(enabled) }
+    }
 
     private val _profiles = MutableStateFlow<List<Profile>>(emptyList())
     val profiles: StateFlow<List<Profile>> = _profiles.asStateFlow()

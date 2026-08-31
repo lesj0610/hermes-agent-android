@@ -158,6 +158,13 @@ data class HermesSettings(
      * conversation works without it. Left blank, the dashboard panel stays
      * hidden rather than failing against a server that is not running.
      */
+    /**
+     * Whether the app looks for a new release on launch. The check is one
+     * unauthenticated request to GitHub and carries nothing about this device.
+     */
+    val updateChecks: Boolean = true,
+    /** A version the user dismissed; it is not announced again. */
+    val updateSkipped: String = "",
     val dashboardUrl: String = "",
     val dashboardUsername: String = "",
     val dashboardPassword: String = "",
@@ -189,6 +196,8 @@ class SettingsRepository(private val context: Context) {
         val RAIL_PANEL = stringPreferencesKey("rail_panel")
         val DRAWER_PINNED = booleanPreferencesKey("drawer_pinned")
         val SHOW_STATUS_BAR = booleanPreferencesKey("show_status_bar")
+        val UPDATE_CHECKS = booleanPreferencesKey("update_checks")
+        val UPDATE_SKIPPED = stringPreferencesKey("update_skipped")
         val DASHBOARD_URL = stringPreferencesKey("dashboard_url")
         val DASHBOARD_USER = stringPreferencesKey("dashboard_username")
         // Sealed with the same Keystore path as the gateway token: this grants
@@ -229,6 +238,8 @@ class SettingsRepository(private val context: Context) {
                 railPanel = rail(prefs[Keys.RAIL_PANEL], RailPanel.Activity),
                 drawerPinned = prefs[Keys.DRAWER_PINNED] ?: true,
                 showStatusBar = prefs[Keys.SHOW_STATUS_BAR] ?: true,
+                updateChecks = prefs[Keys.UPDATE_CHECKS] ?: true,
+                updateSkipped = prefs[Keys.UPDATE_SKIPPED].orEmpty(),
                 dashboardUrl = prefs[Keys.DASHBOARD_URL].orEmpty(),
                 dashboardUsername = prefs[Keys.DASHBOARD_USER].orEmpty(),
                 dashboardPassword = SecretStore.unseal(prefs[Keys.DASHBOARD_PASS_SEALED].orEmpty()),
@@ -279,6 +290,15 @@ class SettingsRepository(private val context: Context) {
             it[Keys.REASONING] = effort.name
             if (touched) it[Keys.REASONING_TOUCHED] = true
         }
+    }
+
+    suspend fun setUpdateChecks(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.UPDATE_CHECKS] = enabled }
+    }
+
+    /** Records that [version] was dismissed, so it is announced only once. */
+    suspend fun skipUpdate(version: String) {
+        context.dataStore.edit { it[Keys.UPDATE_SKIPPED] = version }
     }
 
     suspend fun setLanguage(tag: String) {

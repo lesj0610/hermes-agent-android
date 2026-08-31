@@ -252,4 +252,22 @@
     <string name="commands_run_confirm">에이전트 머신에서 실행됩니다 — 모델 호출과 부수 효과가 있을 수 있습니다.</string>
     <string name="effort_max">Max</string>
     <string name="effort_ultra">Ultra</string>
+    <string name="update_section">앱 업데이트</string>
+    <string name="update_current">버전 %1$s</string>
+    <string name="update_check">업데이트 확인</string>
+    <string name="update_checking">확인 중…</string>
+    <string name="update_none">최신 버전입니다.</string>
+    <string name="update_available">버전 %1$s 사용 가능</string>
+    <string name="update_download">업데이트</string>
+    <string name="update_downloading">내려받는 중… %1$d%%</string>
+    <string name="update_install">설치</string>
+    <string name="update_later">나중에</string>
+    <string name="update_ready">%1$s 설치 준비됨</string>
+    <string name="update_failed_download">내려받기가 끝나지 않았습니다. 다시 시도하세요.</string>
+    <string name="update_failed_signature">내려받은 파일의 서명이 이 앱과 다릅니다. 설치하지 않았습니다.</string>
+    <string name="update_needs_permission">설치하려면 안드로이드 권한이 필요합니다.</string>
+    <string name="update_grant">설정 열기</string>
+    <string name="update_auto">실행 시 확인</string>
+    <string name="update_auto_note">GitHub에 인증 없는 요청 한 번. 기기 정보는 전송하지 않습니다.</string>
+    <string name="update_source">프로젝트 GitHub 릴리즈에서 내려받고, 설치는 안드로이드가 확인을 거쳐 진행합니다.</string>
 </resources>

@@ -264,4 +264,22 @@
     <string name="commands_run_confirm">This runs on the agent’s machine — it may call a model and have side effects.</string>
     <string name="effort_max">Max</string>
     <string name="effort_ultra">Ultra</string>
+    <string name="update_section">App updates</string>
+    <string name="update_current">Version %1$s</string>
+    <string name="update_check">Check for updates</string>
+    <string name="update_checking">Checking…</string>
+    <string name="update_none">Up to date.</string>
+    <string name="update_available">Version %1$s is available</string>
+    <string name="update_download">Update</string>
+    <string name="update_downloading">Downloading… %1$d%%</string>
+    <string name="update_install">Install</string>
+    <string name="update_later">Later</string>
+    <string name="update_ready">Ready to install %1$s</string>
+    <string name="update_failed_download">The download did not finish. Try again.</string>
+    <string name="update_failed_signature">The downloaded file is not signed by the same key as this app. It was not installed.</string>
+    <string name="update_needs_permission">Android needs your permission to install from this app.</string>
+    <string name="update_grant">Open settings</string>
+    <string name="update_auto">Check on launch</string>
+    <string name="update_auto_note">One unauthenticated request to GitHub. Nothing about this device is sent.</string>
+    <string name="update_source">Downloaded from the project’s GitHub releases and installed by Android, which asks before it installs.</string>
 </resources>

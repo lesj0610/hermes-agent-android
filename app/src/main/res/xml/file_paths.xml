@@ -7,4 +7,10 @@
 -->
 <paths>
     <cache-path name="captures" path="captures/" />
+    <!--
+      The downloaded release, readable by the system installer for as long as
+      the install intent lives. Scoped to its own directory for the same reason
+      as the captures above.
+    -->
+    <cache-path name="updates" path="updates/" />
 </paths>

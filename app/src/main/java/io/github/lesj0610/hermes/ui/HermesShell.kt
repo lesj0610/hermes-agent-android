@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,80 +26,79 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.core.HermesSettings
 import io.github.lesj0610.hermes.core.LayoutMode
 import io.github.lesj0610.hermes.core.RAIL_WIDTH_MAX
 import io.github.lesj0610.hermes.core.RAIL_WIDTH_MIN
 import io.github.lesj0610.hermes.core.RailPanel
 import io.github.lesj0610.hermes.core.SystemPermissions
-import io.github.lesj0610.hermes.ui.components.PaneDivider
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
-import io.github.lesj0610.hermes.ui.components.ChatIcon
-import io.github.lesj0610.hermes.ui.components.ClockIcon
-import io.github.lesj0610.hermes.ui.components.DocumentIcon
-import io.github.lesj0610.hermes.ui.components.FolderIcon
-import io.github.lesj0610.hermes.ui.components.DrawerContent
-import io.github.lesj0610.hermes.ui.components.DrawerEntry
-import io.github.lesj0610.hermes.ui.components.SessionAction
-import io.github.lesj0610.hermes.ui.components.GridIcon
-import io.github.lesj0610.hermes.ui.components.ServerIcon
-import io.github.lesj0610.hermes.ui.components.SettingsIcon
-import io.github.lesj0610.hermes.ui.components.HamburgerIcon
-import io.github.lesj0610.hermes.ui.components.RailHost
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.data.RunPhase
 import io.github.lesj0610.hermes.data.TranscriptItem
 import io.github.lesj0610.hermes.net.ModelChoice
 import io.github.lesj0610.hermes.net.SessionSummary
-import io.github.lesj0610.hermes.ui.chat.ApprovalSheet
 import io.github.lesj0610.hermes.ui.artifacts.ArtifactsPane
-import io.github.lesj0610.hermes.ui.projects.ProjectsPane
+import io.github.lesj0610.hermes.ui.chat.ApprovalSheet
 import io.github.lesj0610.hermes.ui.chat.ChatPane
 import io.github.lesj0610.hermes.ui.commands.CommandAbility
 import io.github.lesj0610.hermes.ui.commands.CommandAction
 import io.github.lesj0610.hermes.ui.commands.SlashCommand
+import io.github.lesj0610.hermes.ui.components.ChatIcon
+import io.github.lesj0610.hermes.ui.components.ClockIcon
+import io.github.lesj0610.hermes.ui.components.DocumentIcon
+import io.github.lesj0610.hermes.ui.components.DrawerContent
+import io.github.lesj0610.hermes.ui.components.DrawerEntry
+import io.github.lesj0610.hermes.ui.components.FolderIcon
+import io.github.lesj0610.hermes.ui.components.GridIcon
+import io.github.lesj0610.hermes.ui.components.HamburgerIcon
+import io.github.lesj0610.hermes.ui.components.PaneDivider
+import io.github.lesj0610.hermes.ui.components.RailHost
+import io.github.lesj0610.hermes.ui.components.ServerIcon
+import io.github.lesj0610.hermes.ui.components.SessionAction
+import io.github.lesj0610.hermes.ui.components.SettingsIcon
+import io.github.lesj0610.hermes.ui.components.StatusBar
+import io.github.lesj0610.hermes.ui.components.ToolCard
+import io.github.lesj0610.hermes.ui.components.UpdateBanner
 import io.github.lesj0610.hermes.ui.cron.CronPane
 import io.github.lesj0610.hermes.ui.dashboard.DashboardPane
 import io.github.lesj0610.hermes.ui.gateway.GatewayPane
+import io.github.lesj0610.hermes.ui.projects.ProjectsPane
 import io.github.lesj0610.hermes.ui.search.SearchPane
-import io.github.lesj0610.hermes.ui.components.StatusBar
-import io.github.lesj0610.hermes.ui.components.ToolCard
 import io.github.lesj0610.hermes.ui.settings.PermissionState
 import io.github.lesj0610.hermes.ui.settings.SettingsPane
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,6 +121,12 @@ fun HermesShell(
     val projectsBusy by viewModel.projectsBusy.collectAsStateWithLifecycle()
     val projectsError by viewModel.projectsError.collectAsStateWithLifecycle()
     val sessionNotice by viewModel.sessionNotice.collectAsStateWithLifecycle()
+    val updateState by viewModel.update.collectAsStateWithLifecycle()
+    val updateAnnounced by viewModel.updateAnnounced.collectAsStateWithLifecycle()
+
+    // Once per launch, and only if the setting allows it. A newer release is
+    // worth knowing about; asking GitHub about it repeatedly is not.
+    LaunchedEffect(Unit) { viewModel.checkForUpdate() }
     val sessionsRefreshing by viewModel.sessionsRefreshing.collectAsStateWithLifecycle()
     val commands by viewModel.commands.collectAsStateWithLifecycle()
     val commandsLoading by viewModel.commandsLoading.collectAsStateWithLifecycle()
@@ -501,7 +508,19 @@ fun HermesShell(
                 )
             },
         ) { padding ->
-            val content = Modifier.fillMaxSize().padding(padding)
+            // The banner sits between the bar and the panes rather than over
+            // them: an update is worth a line, not a dialog across the thing
+            // you opened the app to read.
+            Column(Modifier.fillMaxSize().padding(padding)) {
+            if (updateAnnounced) {
+                UpdateBanner(
+                    state = updateState,
+                    onUpdate = viewModel::downloadUpdate,
+                    onLater = viewModel::skipUpdate,
+                    onGrant = viewModel::grantInstallPermission,
+                )
+            }
+            val content = Modifier.fillMaxSize()
 
             if (expanded) {
                 // The columns fill the height; the status strip pins to the
@@ -566,6 +585,11 @@ fun HermesShell(
                                     onSelectProfile = { viewModel.setActiveProfile(it.name) },
                                     onToggleSkill = viewModel::toggleSkill,
                                     onRetryDashboard = viewModel::refreshDashboard,
+                        updateState = updateState,
+                        onCheckUpdate = { viewModel.checkForUpdate(manual = true) },
+                        onDownloadUpdate = viewModel::downloadUpdate,
+                        onGrantInstall = viewModel::grantInstallPermission,
+                        onToggleUpdateChecks = viewModel::setUpdateChecks,
                                 )
                             } else {
                                 ChatPane(
@@ -728,8 +752,14 @@ fun HermesShell(
                         onSelectProfile = { viewModel.setActiveProfile(it.name) },
                         onToggleSkill = viewModel::toggleSkill,
                         onRetryDashboard = viewModel::refreshDashboard,
+                        updateState = updateState,
+                        onCheckUpdate = { viewModel.checkForUpdate(manual = true) },
+                        onDownloadUpdate = viewModel::downloadUpdate,
+                        onGrantInstall = viewModel::grantInstallPermission,
+                        onToggleUpdateChecks = viewModel::setUpdateChecks,
                     )
                 }
+            }
             }
         }
         }

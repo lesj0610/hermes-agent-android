@@ -2,9 +2,10 @@ package io.github.lesj0610.hermes.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
@@ -12,18 +13,19 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
+import io.github.lesj0610.hermes.core.HermesSettings
+import io.github.lesj0610.hermes.core.LayoutMode
+import io.github.lesj0610.hermes.core.ReasoningEffort
 import io.github.lesj0610.hermes.data.ChatState
 import io.github.lesj0610.hermes.data.PendingApproval
 import io.github.lesj0610.hermes.data.RunPhase
 import io.github.lesj0610.hermes.data.ToolState
 import io.github.lesj0610.hermes.data.TranscriptItem
-import io.github.lesj0610.hermes.core.HermesSettings
-import io.github.lesj0610.hermes.core.LayoutMode
-import io.github.lesj0610.hermes.core.ReasoningEffort
+import io.github.lesj0610.hermes.data.UpdateState
 import io.github.lesj0610.hermes.net.ActiveProfile
 import io.github.lesj0610.hermes.net.DashboardSkill
 import io.github.lesj0610.hermes.net.DetailedHealth
@@ -33,38 +35,40 @@ import io.github.lesj0610.hermes.net.Profile
 import io.github.lesj0610.hermes.net.Project
 import io.github.lesj0610.hermes.net.ProjectFolder
 import io.github.lesj0610.hermes.net.ProjectsPayload
+import io.github.lesj0610.hermes.net.Release
 import io.github.lesj0610.hermes.net.SessionSummary
 import io.github.lesj0610.hermes.net.Skill
 import io.github.lesj0610.hermes.net.Toolset
-import io.github.lesj0610.hermes.ui.settings.PermissionState
-import io.github.lesj0610.hermes.ui.settings.SettingsPane
 import io.github.lesj0610.hermes.ui.artifacts.Artifact
 import io.github.lesj0610.hermes.ui.artifacts.ArtifactKind
 import io.github.lesj0610.hermes.ui.artifacts.ArtifactsPane
 import io.github.lesj0610.hermes.ui.chat.ChatPane
-import io.github.lesj0610.hermes.ui.projects.ProjectsPane
 import io.github.lesj0610.hermes.ui.components.ArchiveIcon
 import io.github.lesj0610.hermes.ui.components.BranchIcon
 import io.github.lesj0610.hermes.ui.components.CameraIcon
 import io.github.lesj0610.hermes.ui.components.ChatIcon
 import io.github.lesj0610.hermes.ui.components.CheckIcon
+import io.github.lesj0610.hermes.ui.components.ClockIcon
 import io.github.lesj0610.hermes.ui.components.CopyIcon
+import io.github.lesj0610.hermes.ui.components.DocumentIcon
+import io.github.lesj0610.hermes.ui.components.DrawerContent
+import io.github.lesj0610.hermes.ui.components.DrawerEntry
 import io.github.lesj0610.hermes.ui.components.ExportIcon
+import io.github.lesj0610.hermes.ui.components.FolderIcon
 import io.github.lesj0610.hermes.ui.components.LinkIcon
 import io.github.lesj0610.hermes.ui.components.MoreIcon
+import io.github.lesj0610.hermes.ui.components.PaneDivider
 import io.github.lesj0610.hermes.ui.components.PaperclipIcon
 import io.github.lesj0610.hermes.ui.components.PencilIcon
 import io.github.lesj0610.hermes.ui.components.PhotoIcon
 import io.github.lesj0610.hermes.ui.components.PinIcon
 import io.github.lesj0610.hermes.ui.components.RefreshIcon
 import io.github.lesj0610.hermes.ui.components.TrashIcon
-import io.github.lesj0610.hermes.ui.components.ClockIcon
-import io.github.lesj0610.hermes.ui.components.DrawerContent
-import io.github.lesj0610.hermes.ui.components.DrawerEntry
-import io.github.lesj0610.hermes.ui.components.DocumentIcon
-import io.github.lesj0610.hermes.ui.components.FolderIcon
-import io.github.lesj0610.hermes.ui.components.PaneDivider
+import io.github.lesj0610.hermes.ui.components.UpdateBanner
+import io.github.lesj0610.hermes.ui.projects.ProjectsPane
 import io.github.lesj0610.hermes.ui.search.SearchPane
+import io.github.lesj0610.hermes.ui.settings.PermissionState
+import io.github.lesj0610.hermes.ui.settings.SettingsPane
 import io.github.lesj0610.hermes.ui.theme.HermesTheme
 import org.junit.Rule
 import org.junit.Test
@@ -549,6 +553,36 @@ class ScreenshotTest {
                 onSend = { _, _ -> }, onStop = {}, onDismissError = {},
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+    }
+
+    /** The banner, and the shape of the failure that needs an action. */
+    @Test
+    fun updateBanner() {
+        val release = Release(
+            version = "2.0",
+            tag = "v2.0",
+            notes = "Tables and maths.",
+            apkUrl = "https://github.com/example/example/releases/download/v2.0/app.apk",
+            apkBytes = 3_280_000,
+        )
+        capture("update-banner", 411, 320) {
+            Column {
+                UpdateBanner(
+                    state = UpdateState.Available(release),
+                    onUpdate = {}, onLater = {}, onGrant = {},
+                )
+                Spacer(Modifier.size(12.dp))
+                UpdateBanner(
+                    state = UpdateState.Downloading(release, 0.42f),
+                    onUpdate = {}, onLater = {}, onGrant = {},
+                )
+                Spacer(Modifier.size(12.dp))
+                UpdateBanner(
+                    state = UpdateState.Failed(release, UpdateState.Reason.Permission),
+                    onUpdate = {}, onLater = {}, onGrant = {},
+                )
+            }
         }
     }
 

@@ -11,6 +11,14 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!--
+      Lets the app raise the system installer for a release it downloaded. It
+      does not install anything: Android shows its own confirmation, and the
+      user grants this app the right to ask on the settings page the update
+      screen links to. Without it the intent is refused outright.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
       Package visibility for the speech and text-to-speech engines. Without
       these queries the recognizer reports itself unavailable on API 30+, since
       the app cannot see the package that implements it.

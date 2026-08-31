@@ -22,8 +22,8 @@ android {
         applicationId = "io.github.lesj0610.hermes"
         minSdk = 26
         targetSdk = 37
-        versionCode = 23
-        versionName = "1.9"
+        versionCode = 24
+        versionName = "1.10"
         // Product name, identical in every locale. Lives here rather than in
         // strings.xml so the debug variant can override it.
         resValue("string", "app_name", "Hermes Agent")
@@ -77,7 +77,9 @@ android {
     buildFeatures {
       compose = true
       aidl = false
-      buildConfig = false
+      // The update check compares a release tag against the running version,
+      // which is only available here.
+      buildConfig = true
       shaders = false
       // Needed for the app_name resValue that lets the debug build carry its
       // own label.

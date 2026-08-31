@@ -285,7 +285,7 @@ private fun TranscriptRow(item: TranscriptItem) {
         ) {
             Text(
                 text = item.text,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier
                     .widthIn(max = 480.dp)
                     .clip(RoundedCornerShape(14.dp, 14.dp, 4.dp, 14.dp))
@@ -301,7 +301,7 @@ private fun TranscriptRow(item: TranscriptItem) {
         // to sit after the last character, wherever the last block put it.
         is TranscriptItem.AssistantText -> RichText(
             text = if (item.streaming) item.text + " ▉" else item.text,
-            style = MaterialTheme.typography.bodyMedium.copy(
+            style = MaterialTheme.typography.bodyLarge.copy(
                 color = MaterialTheme.colorScheme.onSurface,
             ),
             // While the text is still arriving it stays on the native renderer;
@@ -340,7 +340,9 @@ private fun TranscriptRow(item: TranscriptItem) {
                 }
                 Text(
                     text = item.text,
-                    style = MaterialTheme.typography.bodySmall,
+                    // A step below the reply rather than two: it is secondary,
+                    // but it is still prose someone reads.
+                    style = MaterialTheme.typography.bodyMedium,
                     color = colors.muted,
                     // One line closed, so the row says what the block is about
                     // rather than being a bare disclosure triangle.

@@ -66,7 +66,18 @@ private val HermesColorScheme = darkColorScheme(
 val MonoStyle = TextStyle(fontFamily = FontFamily.Monospace)
 
 private val HermesTypography = Typography(
-    bodyLarge = TextStyle(fontSize = 15.sp, lineHeight = 22.sp),
+    /**
+     * The conversation: what the user typed, what the agent replied, and the
+     * composer they are typed into.
+     *
+     * 16sp is what the reading apps this one sits beside use, and what Material
+     * specifies for body text. The transcript had been set two steps down from
+     * that, at a size meant for captions — everything fitted and none of it was
+     * comfortable to read, which is the wrong trade for the one surface the
+     * whole app exists to show.
+     */
+    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
+    /** Everything around it: settings rows, list entries, secondary text. */
     bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
     bodySmall = TextStyle(fontSize = 12.sp, lineHeight = 17.sp),
     titleMedium = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),

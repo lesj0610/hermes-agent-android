@@ -63,10 +63,10 @@ fun MarkdownText(
     Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         blocks.forEach { block ->
             when (block) {
-                is Block.Paragraph -> Text(block.spans.annotated(), style = style)
+                is Block.Paragraph -> Text(block.spans.annotated(style), style = style)
 
                 is Block.Heading -> Text(
-                    text = block.spans.annotated(),
+                    text = block.spans.annotated(style),
                     style = style.copy(
                         // Only two steps: a phone column is too narrow for a
                         // six-level scale to read as a hierarchy.
@@ -97,7 +97,7 @@ fun MarkdownText(
                             .background(colors.line),
                     )
                     Text(
-                        text = block.spans.annotated(),
+                        text = block.spans.annotated(style),
                         style = style,
                         color = colors.muted,
                         modifier = Modifier.padding(start = 8.dp),
@@ -122,7 +122,13 @@ fun MarkdownText(
                     // command line is a different command line.
                     Text(
                         text = block.code,
-                        style = style.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+                        // Relative to the body, not a fixed size: code sits
+                        // slightly below prose and has to keep doing so when
+                        // the body changes.
+                        style = style.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = style.fontSize * 0.88f,
+                        ),
                         modifier = Modifier
                             .horizontalScroll(rememberScrollState())
                             .padding(horizontal = 9.dp, vertical = 7.dp),
@@ -198,7 +204,7 @@ private fun TableCell(
     header: Boolean,
 ) {
     Text(
-        text = spans.annotated(),
+        text = spans.annotated(style),
         style = if (header) style.copy(fontWeight = FontWeight.SemiBold) else style,
         textAlign = when (align) {
             Align.Start -> TextAlign.Start
@@ -225,13 +231,13 @@ private fun MarkdownRow(marker: String, depth: Int, spans: List<Span>, style: Te
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(text = marker, style = style, color = colors.muted)
-        Text(text = spans.annotated(), style = style, modifier = Modifier.weight(1f))
+        Text(text = spans.annotated(style), style = style, modifier = Modifier.weight(1f))
     }
 }
 
 /** The marks, applied. Links carry their own annotation so a tap opens them. */
 @Composable
-private fun List<Span>.annotated(): AnnotatedString {
+private fun List<Span>.annotated(style: TextStyle): AnnotatedString {
     val colors = LocalRunColors.current
     val uriHandler = LocalUriHandler.current
     val accent = MaterialTheme.colorScheme.primary
@@ -265,7 +271,11 @@ private fun List<Span>.annotated(): AnnotatedString {
                     span.subscript -> BaselineShift.Subscript
                     else -> null
                 },
-                fontSize = if (span.superscript || span.subscript) 10.sp else TextUnit.Unspecified,
+                fontSize = if (span.superscript || span.subscript) {
+                    style.fontSize * 0.7f
+                } else {
+                    TextUnit.Unspecified
+                },
             )
             if (span.link != null) {
                 withLink(

@@ -129,7 +129,7 @@ fun ToolCard(item: TranscriptItem.ToolCall, modifier: Modifier = Modifier) {
                 if (!body.isNullOrBlank()) {
                     Text(
                         text = body,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         fontFamily = FontFamily.Monospace,
                         color = colors.muted,
                         // Two lines closed: enough to see the command and the

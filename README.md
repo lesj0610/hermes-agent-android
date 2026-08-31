@@ -81,10 +81,11 @@ These are properties of the surfaces the app is built on, not oversights:
 - **Markdown covers what an agent writes, not the whole spec.** Bold, italic,
   strikethrough, inline code, fenced code, headings, lists, quotes, rules,
   links, and tables with per-column alignment.
-- **Maths is rendered natively, within limits.** Fractions, roots, sub- and
-  superscripts and the symbol vocabulary, in `$…$`, `$$…$$`, `\(…\)` and
-  `\[…\]`. Matrices, integral limits and auto-sized delimiters are not laid
-  out — their source shows through as text rather than disappearing.
+- **Maths is typeset by KaTeX**, bundled in the APK — matrices, integral
+  limits, auto-sized delimiters, the lot, in `$…$`, `$$…$$`, `\(…\)` and
+  `\[…\]`. Only replies that contain maths take that path; everything else
+  stays on the native renderer. While a reply is still streaming it renders
+  natively too, and is typeset once it completes.
 - **Deleting a session is permanent.** It is the same call the desktop's Delete
   makes: the row, its messages and the transcript files on the agent's host all
   go. Archive is the reversible one.
@@ -142,7 +143,7 @@ Hermes Agent source; the client was written against its HTTP surface.
 
 ## Status
 
-Version 1.8. Compiles, unit tests pass, lint clean, release AAB builds, and the
+Version 1.9. Compiles, unit tests pass, lint clean, release AAB builds, and the
 app runs against a live gateway.
 
 Not yet exercised on hardware: the camera and file attachment round trip, the

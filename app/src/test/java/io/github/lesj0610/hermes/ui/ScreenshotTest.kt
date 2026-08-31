@@ -511,7 +511,12 @@ class ScreenshotTest {
         }
     }
 
-    /** A table and an equation, the two shapes 1.7 left as text. */
+    /**
+     * The native renderer's table and maths.
+     *
+     * Marked streaming so it stays on this path: a finished reply with maths in
+     * it goes to KaTeX in a WebView, which Robolectric cannot draw.
+     */
     @Test
     fun chatTableMath() {
         capture("chat-table-math", 411, 891) {
@@ -537,7 +542,7 @@ class ScreenshotTest {
 
                             오차는 ${'$'}\alpha = 0.05${'$'} 안입니다.
                             """.trimIndent(),
-                            streaming = false,
+                            streaming = true,
                         ),
                     ),
                 ),

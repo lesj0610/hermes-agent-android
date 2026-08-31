@@ -55,6 +55,12 @@ data class Span(
     val link: String? = null,
     /** Set in the maths face: upright digits, italic letters. */
     val math: Boolean = false,
+    /**
+     * The expression this span came from, kept verbatim when the caller asked
+     * for it. The native renderer flattens maths and cannot put it back; the
+     * HTML renderer hands it to KaTeX and needs it exactly as written.
+     */
+    val mathLatex: String? = null,
     val superscript: Boolean = false,
     val subscript: Boolean = false,
 )
@@ -71,14 +77,19 @@ private val ALIGN_ROW = Regex("""^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$""")
 
 private val DISPLAY_MATH_OPEN = Regex("""^\s*(\$\$|\\\[)\s*(.*)$""")
 
-/** Splits [text] into blocks. Total: every line lands somewhere. */
-fun parseMarkdown(text: String): List<Block> {
+/**
+ * Splits [text] into blocks. Total: every line lands somewhere.
+ *
+ * [preserveMath] keeps each inline expression whole and unflattened, for the
+ * renderer that passes it to KaTeX rather than drawing it itself.
+ */
+fun parseMarkdown(text: String, preserveMath: Boolean = false): List<Block> {
     val blocks = mutableListOf<Block>()
     val paragraph = mutableListOf<String>()
 
     fun flushParagraph() {
         if (paragraph.isEmpty()) return
-        blocks += Block.Paragraph(parseInline(paragraph.joinToString("\n")))
+        blocks += Block.Paragraph(parseInline(paragraph.joinToString("\n"), preserveMath))
         paragraph.clear()
     }
 
@@ -153,11 +164,11 @@ fun parseMarkdown(text: String): List<Block> {
                     i++
                 }
                 blocks += Block.Table(
-                    header = header.map { parseInline(it) },
+                    header = header.map { parseInline(it, preserveMath) },
                     rows = rows.map { row ->
                         // Squared off against the header: a ragged row would
                         // otherwise slide every cell after it into the wrong column.
-                        List(header.size) { column -> parseInline(row.getOrElse(column) { "" }) }
+                        List(header.size) { column -> parseInline(row.getOrElse(column) { "" }, preserveMath) }
                     },
                     align = alignments,
                 )
@@ -176,13 +187,13 @@ fun parseMarkdown(text: String): List<Block> {
             HEADING.matchEntire(line) != null -> {
                 flushParagraph()
                 val m = HEADING.matchEntire(line)!!
-                blocks += Block.Heading(m.groupValues[1].length, parseInline(m.groupValues[2]))
+                blocks += Block.Heading(m.groupValues[1].length, parseInline(m.groupValues[2], preserveMath))
             }
 
             BULLET.matchEntire(line) != null -> {
                 flushParagraph()
                 val m = BULLET.matchEntire(line)!!
-                blocks += Block.Bullet(m.groupValues[1].length / 2, parseInline(m.groupValues[2]))
+                blocks += Block.Bullet(m.groupValues[1].length / 2, parseInline(m.groupValues[2], preserveMath))
             }
 
             NUMBERED.matchEntire(line) != null -> {
@@ -191,13 +202,13 @@ fun parseMarkdown(text: String): List<Block> {
                 blocks += Block.Numbered(
                     m.groupValues[2],
                     m.groupValues[1].length / 2,
-                    parseInline(m.groupValues[3]),
+                    parseInline(m.groupValues[3], preserveMath),
                 )
             }
 
             QUOTE.matchEntire(line) != null -> {
                 flushParagraph()
-                blocks += Block.Quote(parseInline(QUOTE.matchEntire(line)!!.groupValues[1]))
+                blocks += Block.Quote(parseInline(QUOTE.matchEntire(line)!!.groupValues[1], preserveMath))
             }
 
             else -> paragraph += line
@@ -220,7 +231,7 @@ private val LINK = Regex("""\[([^\]\n]*)\]\(([^)\s]+)\)""")
  * Code spans are found first and their contents are never re-examined: a
  * `**` inside backticks is two asterisks the model meant literally.
  */
-fun parseInline(text: String): List<Span> {
+fun parseInline(text: String, preserveMath: Boolean = false): List<Span> {
     if (text.isEmpty()) return emptyList()
     val spans = mutableListOf<Span>()
     var index = 0
@@ -228,16 +239,16 @@ fun parseInline(text: String): List<Span> {
     while (index < text.length) {
         val tick = text.indexOf('`', index)
         if (tick < 0) {
-            spans += parseMathAndEmphasis(text.substring(index))
+            spans += parseMathAndEmphasis(text.substring(index), preserveMath)
             break
         }
         val close = text.indexOf('`', tick + 1)
         if (close < 0) {
             // Unmatched: literal, as written.
-            spans += parseMathAndEmphasis(text.substring(index))
+            spans += parseMathAndEmphasis(text.substring(index), preserveMath)
             break
         }
-        if (tick > index) spans += parseMathAndEmphasis(text.substring(index, tick))
+        if (tick > index) spans += parseMathAndEmphasis(text.substring(index, tick), preserveMath)
         spans += Span(text.substring(tick + 1, close), code = true)
         index = close + 1
     }
@@ -248,7 +259,7 @@ fun parseInline(text: String): List<Span> {
  * Pulls inline maths out before emphasis runs, so `$a * b$` is a product and
  * not italics.
  */
-private fun parseMathAndEmphasis(text: String): List<Span> {
+private fun parseMathAndEmphasis(text: String, preserveMath: Boolean): List<Span> {
     val out = mutableListOf<Span>()
     var index = 0
 
@@ -260,7 +271,11 @@ private fun parseMathAndEmphasis(text: String): List<Span> {
         }
         val (start, end, latex) = math
         if (start > index) out += parseEmphasis(text.substring(index, start))
-        out += inlineMathSpans(latex)
+        out += if (preserveMath) {
+            listOf(Span(latex, math = true, mathLatex = latex))
+        } else {
+            inlineMathSpans(latex)
+        }
         index = end
     }
     return out

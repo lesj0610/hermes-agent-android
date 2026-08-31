@@ -42,7 +42,7 @@ import io.github.lesj0610.hermes.data.ChatState
 import io.github.lesj0610.hermes.data.RunPhase
 import io.github.lesj0610.hermes.data.TranscriptItem
 import io.github.lesj0610.hermes.ui.components.ToolCard
-import io.github.lesj0610.hermes.ui.markdown.MarkdownText
+import io.github.lesj0610.hermes.ui.markdown.RichText
 import io.github.lesj0610.hermes.ui.components.uiErrorText
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
 import androidx.compose.foundation.clickable
@@ -299,11 +299,14 @@ private fun TranscriptRow(item: TranscriptItem) {
         //
         // The caret still rides on the text rather than being a sibling: it has
         // to sit after the last character, wherever the last block put it.
-        is TranscriptItem.AssistantText -> MarkdownText(
+        is TranscriptItem.AssistantText -> RichText(
             text = if (item.streaming) item.text + " ▉" else item.text,
             style = MaterialTheme.typography.bodyMedium.copy(
                 color = MaterialTheme.colorScheme.onSurface,
             ),
+            // While the text is still arriving it stays on the native renderer;
+            // a finished reply with maths in it is typeset instead.
+            streaming = item.streaming,
         )
 
         is TranscriptItem.Reasoning -> {

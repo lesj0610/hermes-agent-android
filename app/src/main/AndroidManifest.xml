@@ -40,17 +40,6 @@
       settings list, which needs no permission — see SystemPermissions.
     -->
 
-    <!--
-      windowSoftInputMode is adjustNothing, not adjustResize. The activity is
-      edge-to-edge, and under that the two compete: adjustResize still shrinks
-      the window on some devices, so the keyboard's height arrives twice — once
-      in the smaller window the Scaffold measures against, and again in the
-      imePadding the shell applies. The composer then sat a whole keyboard
-      clear of the keyboard, on every open after the first.
-
-      The window stays put; the keyboard is an inset the app applies itself,
-      once, in HermesShell.
-    -->
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -59,12 +48,26 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:windowSoftInputMode="adjustNothing"
         android:theme="@style/Theme.Hermes">
 
+        <!--
+          windowSoftInputMode belongs here, on the activity. It sat on
+          <application> from the first release, where the runtime never reads
+          it — so the activity ran on the unspecified default and the system
+          chose adjustPan, sliding the whole window up to keep the focused
+          field in view. Every change made to its value was a change to an
+          attribute nothing consulted.
+
+          adjustResize is the documented pairing for an edge-to-edge activity
+          that applies the keyboard inset itself: the window is not actually
+          resized when it draws behind the system bars, the IME inset is
+          reported instead, and the Scaffold's safeDrawing insets pay for it
+          once. Pan and padding together were the doubled lift.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

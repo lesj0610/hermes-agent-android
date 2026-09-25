@@ -11,11 +11,12 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -509,25 +510,28 @@ fun HermesShell(
                     ),
                 )
             },
+            // safeDrawing, not the default systemBars: it includes the
+            // keyboard, so the Scaffold measures every inset once and hands
+            // down a single padding.
+            //
+            // The default plus a separate imePadding counted the navigation bar
+            // twice — once in the Scaffold's padding, again inside the IME
+            // inset, which is measured from the bottom of the screen and
+            // therefore contains it. The first keyboard of a session looked
+            // right because the IME inset was still zero when it was read.
+            contentWindowInsets = WindowInsets.safeDrawing,
         ) { padding ->
             // The banner sits between the bar and the panes rather than over
             // them: an update is worth a line, not a dialog across the thing
             // you opened the app to read.
             //
-            // imePadding, because edge-to-edge turns `adjustResize` into a
-            // report rather than a resize: the window keeps its full height and
-            // the keyboard is an inset somebody has to apply. Nobody did, so
-            // the composer sat under the keyboard with half of it showing.
-            //
-            // The Scaffold's own insets are consumed first — without that the
-            // system bars would be paid for twice, once by the padding above
-            // and again inside the keyboard's inset.
+            // Consumed, so no pane inside adds the same inset again — the
+            // whole point of doing this in one place.
             Column(
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .consumeWindowInsets(padding)
-                    .imePadding(),
+                    .consumeWindowInsets(padding),
             ) {
             if (updateAnnounced) {
                 UpdateBanner(

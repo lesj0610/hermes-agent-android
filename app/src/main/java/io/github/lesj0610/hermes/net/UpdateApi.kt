@@ -58,6 +58,11 @@ class UpdateApi(private val repository: String = REPOSITORY) {
             client.get("https://api.github.com/repos/$repository/releases/latest") {
                 header("Accept", "application/vnd.github+json")
                 header("X-GitHub-Api-Version", "2022-11-28")
+                // GitHub's CDN caches this route for a minute or so, and the
+                // app asked once at launch — so a release cut in between was
+                // reported as the latest long after it was not. The banner
+                // named 1.19 while 1.20 was already published.
+                header("Cache-Control", "no-cache")
             }
         }.getOrNull() ?: return null
 

@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -511,7 +513,22 @@ fun HermesShell(
             // The banner sits between the bar and the panes rather than over
             // them: an update is worth a line, not a dialog across the thing
             // you opened the app to read.
-            Column(Modifier.fillMaxSize().padding(padding)) {
+            //
+            // imePadding, because edge-to-edge turns `adjustResize` into a
+            // report rather than a resize: the window keeps its full height and
+            // the keyboard is an inset somebody has to apply. Nobody did, so
+            // the composer sat under the keyboard with half of it showing.
+            //
+            // The Scaffold's own insets are consumed first — without that the
+            // system bars would be paid for twice, once by the padding above
+            // and again inside the keyboard's inset.
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .consumeWindowInsets(padding)
+                    .imePadding(),
+            ) {
             if (updateAnnounced) {
                 UpdateBanner(
                     state = updateState,

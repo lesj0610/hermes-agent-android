@@ -572,6 +572,7 @@ fun HermesShell(
                                     onToggleCompletion = viewModel::setNotifyCompletion,
                                     onSelectLayoutMode = viewModel::setLayoutMode,
                                     onSetUiScale = viewModel::setUiScale,
+                        onToggleOpenAtLatest = viewModel::setOpenAtLatest,
                                     permissions = permissions,
                                     onRequestNotifications = onRequestNotifications,
                                     onRequestBackground = onRequestBackground,
@@ -593,6 +594,7 @@ fun HermesShell(
                                 )
                             } else {
                                 ChatPane(
+                                    openAtLatest = settings.openAtLatest,
                                     state = chat,
                                     onSend = viewModel::send,
                                     onStop = viewModel::stop,
@@ -658,6 +660,7 @@ fun HermesShell(
             } else {
                 when (pane) {
                     Pane.Chat -> ChatPane(
+                        openAtLatest = settings.openAtLatest,
                         state = chat,
                         onSend = viewModel::send,
                         onStop = viewModel::stop,
@@ -738,6 +741,7 @@ fun HermesShell(
                         onToggleCompletion = viewModel::setNotifyCompletion,
                         onSelectLayoutMode = viewModel::setLayoutMode,
                         onSetUiScale = viewModel::setUiScale,
+                        onToggleOpenAtLatest = viewModel::setOpenAtLatest,
                         permissions = permissions,
                         onRequestNotifications = onRequestNotifications,
                         onRequestBackground = onRequestBackground,

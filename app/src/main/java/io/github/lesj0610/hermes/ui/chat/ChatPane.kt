@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -132,9 +133,14 @@ fun ChatPane(
     commandsError: String? = null,
     onSlashOpened: () -> Unit = {},
     onCommand: (SlashCommand) -> Unit = {},
+    /** Whether opening a conversation lands on its newest message. */
+    openAtLatest: Boolean = true,
+    /** Hoisted so a test can place the transcript before it is drawn. */
+    listState: LazyListState = rememberLazyListState(),
 ) {
     val colors = LocalRunColors.current
-    val listState = rememberLazyListState()
+    // Drives the jump-to-latest button; the composer holds its own scope.
+    val transcriptScope = rememberCoroutineScope()
 
     // Follow the tail while the agent is talking.
     //
@@ -157,9 +163,24 @@ fun ChatPane(
         derivedStateOf {
             val info = listState.layoutInfo
             val last = info.visibleItemsInfo.lastOrNull()
-            last == null || last.index >= listState.layoutInfo.totalItemsCount - 2
+            // An unmeasured list is not "at the bottom". Treating it as such
+            // meant the first frame of every conversation scrolled to the end
+            // whatever the setting said, because the follow effect ran before
+            // the layout it was asking about existed.
+            last != null && last.index >= info.totalItemsCount - 2
         }
     }
+    // Opening a conversation lands on its newest message. Keyed on the session
+    // so it fires once per open and not on every delta, and guarded by a flag
+    // because the history arrives a moment after the session id does — the
+    // first composition has nothing to scroll to yet.
+    var landed by remember(state.sessionId) { mutableStateOf(false) }
+    LaunchedEffect(state.sessionId, state.items.isNotEmpty(), openAtLatest) {
+        if (landed || !openAtLatest || state.items.isEmpty()) return@LaunchedEffect
+        listState.scrollToItem(state.items.lastIndex)
+        landed = true
+    }
+
     LaunchedEffect(state.items.size, tailSize) {
         if (state.items.isEmpty() || !following) return@LaunchedEffect
         // Not animated: deltas land faster than an animation completes, and
@@ -193,13 +214,41 @@ fun ChatPane(
         if (state.items.isEmpty()) {
             EmptyTranscript(Modifier.weight(1f))
         } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp),
-                verticalArrangement = Arrangement.spacedBy(11.dp),
-            ) {
-                items(state.items, key = { it.key }) { item -> TranscriptRow(item) }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(11.dp),
+                ) {
+                    items(state.items, key = { it.key }) { item -> TranscriptRow(item) }
+                }
+
+                // Only while the tail is out of view: a button that jumps to
+                // where you already are is noise, and it would sit on top of
+                // the reply for the whole run.
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = !following,
+                    enter = androidx.compose.animation.fadeIn(),
+                    exit = androidx.compose.animation.fadeOut(),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(14.dp),
+                ) {
+                    val jumpLabel = stringResource(R.string.chat_jump_latest)
+                    FilledIconButton(
+                        onClick = {
+                            transcriptScope.launch { listState.animateScrollToItem(state.items.lastIndex) }
+                        },
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = colors.panelRaised,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        modifier = Modifier.semantics { contentDescription = jumpLabel },
+                    ) {
+                        // The chevron points down at a quarter turn, the same
+                        // glyph the reasoning block rotates to open.
+                        ChevronIcon(modifier = Modifier.size(16.dp).rotate(90f))
+                    }
+                }
             }
         }
 

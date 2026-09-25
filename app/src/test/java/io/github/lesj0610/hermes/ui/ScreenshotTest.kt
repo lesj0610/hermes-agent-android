@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -315,6 +316,7 @@ class ScreenshotTest {
                 onToggleCompletion = {},
                 onSelectLayoutMode = {},
                 onSetUiScale = {},
+                onToggleOpenAtLatest = {},
                 onRequestNotifications = {},
                 onRequestBackground = {},
                 activeModel = "opus-5",
@@ -604,6 +606,30 @@ class ScreenshotTest {
                 ),
                 onSend = { _, _ -> }, onStop = {}, onDismissError = {},
                 modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+
+    /**
+     * The jump-to-latest button, which only appears once the tail is out of
+     * view. Captured with openAtLatest off so the list stays at the top.
+     */
+    @Test
+    fun chatJumpToLatest() {
+        capture("chat-jump-latest", 411, 560) {
+            ChatPane(
+                state = ChatState(
+                    sessionId = "s1",
+                    items = (1..40).map { n ->
+                        TranscriptItem.AssistantText("a$n", "이것은 $n 번째 단락입니다.", streaming = false)
+                    },
+                ),
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
+                modifier = Modifier.fillMaxSize(),
+                openAtLatest = false,
+                // Parked near the top, which is the only state the button
+                // appears in: scrolled away from the tail.
+                listState = rememberLazyListState(initialFirstVisibleItemIndex = 0),
             )
         }
     }

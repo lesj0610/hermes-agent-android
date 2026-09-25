@@ -270,4 +270,7 @@
     <string name="update_auto">실행 시 확인</string>
     <string name="update_auto_note">GitHub에 인증 없는 요청 한 번. 기기 정보는 전송하지 않습니다.</string>
     <string name="update_source">프로젝트 GitHub 릴리즈에서 내려받고, 설치는 안드로이드가 확인을 거쳐 진행합니다.</string>
+    <string name="chat_jump_latest">최신 대화로 이동</string>
+    <string name="settings_open_at_latest">대화를 열 때 최신 위치로</string>
+    <string name="settings_open_at_latest_note">끄면 마지막으로 보던 위치에서 열립니다.</string>
 </resources>

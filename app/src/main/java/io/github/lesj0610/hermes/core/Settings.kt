@@ -151,6 +151,14 @@ data class HermesSettings(
      * still remembered in that case rather than being rewritten, since the same
      * device may be a foldable that unfolds back into three.
      */
+    /**
+     * Whether opening a conversation lands on its newest message.
+     *
+     * On by default: a conversation is something you come back to, and the
+     * part you have not read is at the bottom. Off restores the list's own
+     * position, for reading a long session from where you left off.
+     */
+    val openAtLatest: Boolean = true,
     val drawerPinned: Boolean = true,
     val showStatusBar: Boolean = true,
     /**
@@ -194,6 +202,7 @@ class SettingsRepository(private val context: Context) {
         val DRAWER_WIDTH = floatPreferencesKey("drawer_width")
         val RAIL_WIDTH = floatPreferencesKey("rail_width")
         val RAIL_PANEL = stringPreferencesKey("rail_panel")
+        val OPEN_AT_LATEST = booleanPreferencesKey("open_at_latest")
         val DRAWER_PINNED = booleanPreferencesKey("drawer_pinned")
         val SHOW_STATUS_BAR = booleanPreferencesKey("show_status_bar")
         val UPDATE_CHECKS = booleanPreferencesKey("update_checks")
@@ -236,6 +245,7 @@ class SettingsRepository(private val context: Context) {
                 railWidth = (prefs[Keys.RAIL_WIDTH] ?: RAIL_WIDTH_DEFAULT)
                     .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX),
                 railPanel = rail(prefs[Keys.RAIL_PANEL], RailPanel.Activity),
+                openAtLatest = prefs[Keys.OPEN_AT_LATEST] ?: true,
                 drawerPinned = prefs[Keys.DRAWER_PINNED] ?: true,
                 showStatusBar = prefs[Keys.SHOW_STATUS_BAR] ?: true,
                 updateChecks = prefs[Keys.UPDATE_CHECKS] ?: true,
@@ -333,6 +343,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setRailPanel(panel: RailPanel) {
         context.dataStore.edit { it[Keys.RAIL_PANEL] = panel.name }
+    }
+
+    suspend fun setOpenAtLatest(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.OPEN_AT_LATEST] = enabled }
     }
 
     suspend fun setDrawerPinned(pinned: Boolean) {

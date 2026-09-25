@@ -309,6 +309,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { graph.settings.skipUpdate(release.version) }
     }
 
+    fun setOpenAtLatest(enabled: Boolean) {
+        viewModelScope.launch { graph.settings.setOpenAtLatest(enabled) }
+    }
+
     fun setUpdateChecks(enabled: Boolean) {
         viewModelScope.launch { graph.settings.setUpdateChecks(enabled) }
     }

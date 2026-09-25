@@ -196,6 +196,7 @@ private fun PreviewSettings() = Frame {
         onSelectModel = {}, onSelectLanguage = {},
         onToggleApprovals = {}, onToggleCompletion = {},
         onSelectLayoutMode = {}, onSetUiScale = {},
+        onToggleOpenAtLatest = {},
         onRequestNotifications = {}, onRequestBackground = {},
     )
 }

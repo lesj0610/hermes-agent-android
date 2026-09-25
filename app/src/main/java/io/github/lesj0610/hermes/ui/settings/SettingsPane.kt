@@ -112,6 +112,7 @@ fun SettingsPane(
     onToggleCompletion: (Boolean) -> Unit,
     onSelectLayoutMode: (LayoutMode) -> Unit,
     onSetUiScale: (Float) -> Unit,
+    onToggleOpenAtLatest: (Boolean) -> Unit,
     onRequestNotifications: () -> Unit,
     onRequestBackground: () -> Unit,
     modifier: Modifier = Modifier,
@@ -182,7 +183,9 @@ fun SettingsPane(
                 GatewayStateCard(health)
                 AgentSkillsCard(agentSkills)
             }
-            SettingsSection.Display -> DisplaySection(settings, onSelectLayoutMode, onSetUiScale)
+            SettingsSection.Display -> DisplaySection(
+                settings, onSelectLayoutMode, onSetUiScale, onToggleOpenAtLatest,
+            )
             SettingsSection.Language -> LanguageSection(settings, onSelectLanguage)
             SettingsSection.Notifications -> NotificationsSection(
                 settings, onToggleApprovals, onToggleCompletion,
@@ -800,6 +803,7 @@ private fun DisplaySection(
     settings: HermesSettings,
     onSelectLayoutMode: (LayoutMode) -> Unit,
     onSetUiScale: (Float) -> Unit,
+    onToggleOpenAtLatest: (Boolean) -> Unit,
 ) {
     val colors = LocalRunColors.current
     Group(stringResource(R.string.settings_layout)) {
@@ -818,6 +822,27 @@ private fun DisplaySection(
             selected = settings.layoutMode == LayoutMode.Tablet,
             onClick = { onSelectLayoutMode(LayoutMode.Tablet) },
         )
+
+        HorizontalDivider(color = colors.line)
+
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_open_at_latest),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = stringResource(R.string.settings_open_at_latest_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.muted,
+                )
+            }
+            Switch(checked = settings.openAtLatest, onCheckedChange = onToggleOpenAtLatest)
+        }
 
         HorizontalDivider(color = colors.line)
 

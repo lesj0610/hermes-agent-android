@@ -282,4 +282,7 @@
     <string name="update_auto">Check on launch</string>
     <string name="update_auto_note">One unauthenticated request to GitHub. Nothing about this device is sent.</string>
     <string name="update_source">Downloaded from the project’s GitHub releases and installed by Android, which asks before it installs.</string>
+    <string name="chat_jump_latest">Jump to the latest message</string>
+    <string name="settings_open_at_latest">Open at the latest message</string>
+    <string name="settings_open_at_latest_note">Otherwise a conversation opens where you left it.</string>
 </resources>

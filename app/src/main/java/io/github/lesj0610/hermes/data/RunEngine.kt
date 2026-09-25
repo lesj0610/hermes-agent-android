@@ -98,7 +98,7 @@ class RunEngine(
 
         _state.update {
             it.copy(
-                items = it.items + TranscriptItem.UserText(nextKey("u"), prompt),
+                items = it.items + TranscriptItem.UserText(nextKey("u"), prompt, images),
                 error = null,
             )
         }

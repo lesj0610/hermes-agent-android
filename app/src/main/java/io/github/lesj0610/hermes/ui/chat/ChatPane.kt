@@ -1,97 +1,96 @@
 package io.github.lesj0610.hermes.ui.chat
 
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.unit.dp
-import io.github.lesj0610.hermes.R
-import io.github.lesj0610.hermes.data.ChatState
-import io.github.lesj0610.hermes.data.RunPhase
-import io.github.lesj0610.hermes.data.TranscriptItem
-import io.github.lesj0610.hermes.ui.components.ToolCard
-import io.github.lesj0610.hermes.ui.markdown.RichText
-import io.github.lesj0610.hermes.ui.components.uiErrorText
-import io.github.lesj0610.hermes.ui.theme.LocalRunColors
-import androidx.compose.foundation.clickable
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.material3.Switch
-import io.github.lesj0610.hermes.core.REASONING_SCALE
-import io.github.lesj0610.hermes.core.ReasoningEffort
-import io.github.lesj0610.hermes.net.ModelChoice
-import androidx.compose.material3.IconButton
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import io.github.lesj0610.hermes.ui.components.MicIcon
-import io.github.lesj0610.hermes.ui.components.WaveformIcon
-import io.github.lesj0610.hermes.voice.VoiceState
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.ui.graphics.Color
-import io.github.lesj0610.hermes.ui.components.SendIcon
-import io.github.lesj0610.hermes.ui.components.StopIcon
-import android.content.pm.PackageManager
-import android.graphics.BitmapFactory
-import android.net.Uri
-import android.util.Base64
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import io.github.lesj0610.hermes.R
 import io.github.lesj0610.hermes.core.Attachments
-import io.github.lesj0610.hermes.ui.components.CameraIcon
-import io.github.lesj0610.hermes.ui.components.ChevronIcon
-import io.github.lesj0610.hermes.ui.components.PaperclipIcon
-import io.github.lesj0610.hermes.ui.components.PhotoIcon
+import io.github.lesj0610.hermes.core.REASONING_SCALE
+import io.github.lesj0610.hermes.core.ReasoningEffort
+import io.github.lesj0610.hermes.data.ChatState
+import io.github.lesj0610.hermes.data.RunPhase
+import io.github.lesj0610.hermes.data.TranscriptItem
+import io.github.lesj0610.hermes.net.ModelChoice
 import io.github.lesj0610.hermes.ui.commands.SlashCommand
 import io.github.lesj0610.hermes.ui.commands.SlashPalette
 import io.github.lesj0610.hermes.ui.commands.filterCommands
+import io.github.lesj0610.hermes.ui.components.CameraIcon
+import io.github.lesj0610.hermes.ui.components.ChevronIcon
+import io.github.lesj0610.hermes.ui.components.MicIcon
+import io.github.lesj0610.hermes.ui.components.PaperclipIcon
+import io.github.lesj0610.hermes.ui.components.PhotoIcon
 import io.github.lesj0610.hermes.ui.components.PlusIcon
+import io.github.lesj0610.hermes.ui.components.SendIcon
+import io.github.lesj0610.hermes.ui.components.StopIcon
+import io.github.lesj0610.hermes.ui.components.ToolCard
+import io.github.lesj0610.hermes.ui.components.WaveformIcon
+import io.github.lesj0610.hermes.ui.components.uiErrorText
+import io.github.lesj0610.hermes.ui.markdown.RichText
+import io.github.lesj0610.hermes.ui.theme.LocalRunColors
+import io.github.lesj0610.hermes.voice.VoiceState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -279,19 +278,29 @@ private fun RuntimeChip(label: String, enabled: Boolean, onClick: () -> Unit) {
 private fun TranscriptRow(item: TranscriptItem) {
     val colors = LocalRunColors.current
     when (item) {
-        is TranscriptItem.UserText -> Row(
+        is TranscriptItem.UserText -> Column(
             Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(
-                text = item.text,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier
-                    .widthIn(max = 480.dp)
-                    .clip(RoundedCornerShape(14.dp, 14.dp, 4.dp, 14.dp))
-                    .background(colors.panelRaised)
-                    .padding(horizontal = 11.dp, vertical = 8.dp),
-            )
+            // The pictures that went with the message, above it. Without these
+            // a sent attachment left no trace at all: the thumbnail cleared
+            // with the composer and the bubble showed only the text, so there
+            // was no way to tell whether the image had gone.
+            item.images.forEach { dataUrl ->
+                SentImage(dataUrl)
+            }
+            if (item.text.isNotBlank()) {
+                Text(
+                    text = item.text,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .widthIn(max = 480.dp)
+                        .clip(RoundedCornerShape(14.dp, 14.dp, 4.dp, 14.dp))
+                        .background(colors.panelRaised)
+                        .padding(horizontal = 11.dp, vertical = 8.dp),
+                )
+            }
         }
 
         // Markdown, because that is what the agent writes. Drawn flat, a reply
@@ -907,6 +916,34 @@ private fun composeMessage(draft: String, attachments: List<Attachment>): String
     }
 }
 
+/**
+ * A picture that was sent, drawn at the width the bubble would take.
+ *
+ * Decoded to the size it is drawn at rather than full size: the transcript is
+ * a LazyColumn, so this runs again every time the row is recycled.
+ */
+@Composable
+private fun SentImage(dataUrl: String) {
+    val density = LocalDensity.current
+    val bitmap = remember(dataUrl, density) {
+        Attachments.decodeDataUrl(dataUrl, with(density) { SENT_IMAGE_MAX.roundToPx() })
+            ?.asImageBitmap()
+    } ?: return
+
+    Image(
+        bitmap = bitmap,
+        contentDescription = null,
+        // Fit, not crop: a screenshot cropped to a square is unreadable, and
+        // this is the record of what the agent was actually given.
+        contentScale = ContentScale.Fit,
+        modifier = Modifier
+            .widthIn(max = SENT_IMAGE_MAX)
+            .clip(RoundedCornerShape(14.dp, 14.dp, 4.dp, 14.dp)),
+    )
+}
+
+private val SENT_IMAGE_MAX = 240.dp
+
 /** One staged attachment, with the control that removes it. */
 @Composable
 private fun AttachmentChip(
@@ -918,13 +955,11 @@ private fun AttachmentChip(
     // Decoded from the data URL rather than from the original Uri: that is what
     // will actually be sent, so the thumbnail shows the downscaling that
     // happened rather than the picture as it sits on disk.
-    val bitmap = remember(attachment) {
+    val density = LocalDensity.current
+    val bitmap = remember(attachment, density) {
         val image = attachment as? Attachment.Image ?: return@remember null
-        runCatching {
-            val encoded = image.dataUrl.substringAfter("base64,", "")
-            val bytes = Base64.decode(encoded, Base64.NO_WRAP)
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-        }.getOrNull()
+        val edge = with(density) { 56.dp.roundToPx() }
+        Attachments.decodeDataUrl(image.dataUrl, edge)?.asImageBitmap()
     }
 
     Box(Modifier.size(56.dp)) {

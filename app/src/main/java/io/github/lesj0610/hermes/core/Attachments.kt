@@ -121,6 +121,40 @@ object Attachments {
         return scaled
     }
 
+    /**
+     * Decode a `data:` URL back to a bitmap, no larger than [maxEdgePx].
+     *
+     * Both the staged chip and the sent bubble draw the same attachment at
+     * very different sizes, and the stored string is a full 1568px image —
+     * decoding that to fill a 56dp square allocates about forty times the
+     * pixels it draws, on every recycle as the transcript scrolls.
+     *
+     * Returns null on anything malformed rather than raising: this runs inside
+     * composition, where an exception takes the screen with it.
+     */
+    fun decodeDataUrl(dataUrl: String, maxEdgePx: Int): android.graphics.Bitmap? = runCatching {
+        val encoded = dataUrl.substringAfter("base64,", "")
+        if (encoded.isEmpty()) return null
+        val bytes = Base64.decode(encoded, Base64.NO_WRAP)
+        if (bytes.isEmpty()) return null
+
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        val longest = maxOf(bounds.outWidth, bounds.outHeight)
+        val options = BitmapFactory.Options().apply {
+            if (longest > 0 && maxEdgePx > 0) {
+                var sample = 1
+                var edge = longest
+                while (edge / 2 >= maxEdgePx) {
+                    edge /= 2
+                    sample *= 2
+                }
+                inSampleSize = sample
+            }
+        }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+    }.getOrNull()
+
     /** The largest power-of-two reduction that stays at or above [MAX_EDGE]. */
     internal fun sampleSize(width: Int, height: Int): Int {
         var sample = 1

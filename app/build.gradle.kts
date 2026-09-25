@@ -22,8 +22,8 @@ android {
         applicationId = "io.github.lesj0610.hermes"
         minSdk = 26
         targetSdk = 37
-        versionCode = 26
-        versionName = "1.12"
+        versionCode = 27
+        versionName = "1.13"
         // Product name, identical in every locale. Lives here rather than in
         // strings.xml so the debug variant can override it.
         resValue("string", "app_name", "Hermes Agent")

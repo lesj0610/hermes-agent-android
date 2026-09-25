@@ -4,7 +4,16 @@ package io.github.lesj0610.hermes.data
 sealed interface TranscriptItem {
     val key: String
 
-    data class UserText(override val key: String, val text: String) : TranscriptItem
+    /**
+     * What the user sent. [images] are the `data:` URLs that went with it, kept
+     * so the turn reads back the way it was written — a message whose picture
+     * vanished the moment it was sent gives no sign the picture went at all.
+     */
+    data class UserText(
+        override val key: String,
+        val text: String,
+        val images: List<String> = emptyList(),
+    ) : TranscriptItem
 
     /**
      * Assistant prose. [streaming] stays true while `message.delta` frames are

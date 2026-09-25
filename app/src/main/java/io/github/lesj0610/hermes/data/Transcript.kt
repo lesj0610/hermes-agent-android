@@ -89,3 +89,21 @@ data class ChatState(
     val pendingApproval: PendingApproval?
         get() = (phase as? RunPhase.AwaitingApproval)?.approval
 }
+
+/**
+ * Place a whole-thought reasoning block, as the HTTP route delivers it.
+ *
+ * That route sends the thought once, after the answer has already streamed, so
+ * appending it puts the thinking below its own conclusion. It goes above the
+ * last answer instead, which is the order the desktop shows and the order the
+ * socket route produces naturally.
+ *
+ * A transcript that already has reasoning keeps it: on the socket the thought
+ * streams as deltas and this event is the echo that follows, and drawing both
+ * would say the same thing twice.
+ */
+fun List<TranscriptItem>.withReasoning(block: TranscriptItem.Reasoning): List<TranscriptItem> {
+    if (any { it is TranscriptItem.Reasoning }) return this
+    val answer = indexOfLast { it is TranscriptItem.AssistantText }
+    return if (answer >= 0) toMutableList().apply { add(answer, block) } else this + block
+}

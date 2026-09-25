@@ -358,7 +358,11 @@ class DashboardApi(
      * answers with a different id than it was given — passing the stored id
      * onward is how `session.compress` earned a "session not found".
      */
-    suspend fun startSocketRun(storedSessionId: String?, text: String): SocketRun {
+    suspend fun startSocketRun(
+        storedSessionId: String?,
+        text: String,
+        images: List<String> = emptyList(),
+    ): SocketRun {
         val ticket = wsTicket()
         val target = buildString {
             append(url("/api/ws").replaceFirst("http", "ws"))
@@ -389,6 +393,27 @@ class DashboardApi(
         if (live.isNullOrBlank()) {
             runCatching { ws.close() }
             throw GatewayRpcException(-1, "The gateway did not return a live session")
+        }
+
+        // Attachments go first, and each one is awaited: `image.attach_bytes`
+        // stages the picture on the session, and `prompt.submit` sends whatever
+        // is staged when it arrives. Submitting first would send the turn
+        // without them.
+        //
+        // This is the RPC the gateway documents for remote clients, which is
+        // what makes a picture usable here at all: the HTTP route carries
+        // images but emits no reasoning stream and no tool events, so a turn
+        // with an attachment used to arrive as a bare answer.
+        images.forEachIndexed { index, dataUrl ->
+            rpc.call<JsonObject>(
+                "image.attach_bytes",
+                buildJsonObject {
+                    put("session_id", live)
+                    // The data URL whole: the server reads the mime prefix off it.
+                    put("content_base64", dataUrl)
+                    put("filename", "attachment-${index + 1}.jpg")
+                },
+            )
         }
 
         val run = SocketRun(ws, json, live)

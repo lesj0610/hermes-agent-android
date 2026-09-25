@@ -33,9 +33,10 @@ class RunEngine(
     /**
      * The socket transport, used when a dashboard is configured.
      *
-     * The HTTP route cannot show reasoning — it has no thinking channel — so a
-     * turn runs over the socket wherever one is reachable, and falls back
-     * otherwise rather than refusing to talk.
+     * Preferred wherever one is reachable, and not only for reasoning: the
+     * HTTP route emits no tool events at all, and delivers thinking as a
+     * single block after the answer rather than as a stream. A turn falls back
+     * to HTTP rather than refusing to talk.
      */
     private val dashboard: DashboardApi? = null,
     private val socketEnabled: suspend () -> Boolean = { false },
@@ -104,13 +105,14 @@ class RunEngine(
         }
 
         streamJob = scope.launch {
-            // Images and per-turn model overrides ride on the HTTP request
-            // body; the socket's prompt.submit takes text. Anything carrying
-            // them stays on the route that can express it.
-            val viaSocket = dashboard != null && images.isEmpty() &&
+            // The socket carries pictures too, through `image.attach_bytes`.
+            // It has to: the HTTP route accepts an image and answers, but emits
+            // no reasoning stream and no tool events at all, so an attached
+            // photo turned the transcript into a bare answer.
+            val viaSocket = dashboard != null &&
                 runCatching { socketEnabled() }.getOrDefault(false)
             if (viaSocket) {
-                runSocket(prompt)
+                runSocket(prompt, images)
                 return@launch
             }
 
@@ -137,9 +139,9 @@ class RunEngine(
      * The live session is closed in a finally: it belongs to the gateway, and
      * one left open per turn accumulates there.
      */
-    private suspend fun runSocket(prompt: String) {
+    private suspend fun runSocket(prompt: String, images: List<String>) {
         val api = dashboard ?: return
-        val run = runCatching { api.startSocketRun(_state.value.sessionId, prompt) }
+        val run = runCatching { api.startSocketRun(_state.value.sessionId, prompt, images) }
             .getOrElse { cause ->
                 _state.update { it.copy(phase = RunPhase.Idle, error = cause.toUiError()) }
                 return
@@ -206,21 +208,34 @@ class RunEngine(
                 current.copy(items = items)
             }
 
-            // `reasoning.available` is dropped on this route, always.
+            // `reasoning.available` is the whole thought, delivered at the end.
             //
-            // It is not a thinking stream here: the agent raises it once an
-            // assistant message is complete, carrying that message's own text
-            // truncated to 500 characters, and the same text has already
-            // arrived as deltas. Rendering it put a shortened copy of the reply
-            // underneath the reply.
+            // This was dropped on the grounds that it echoed the answer. That
+            // held on the socket, where `reasoning.delta` streams the real
+            // thing and this arrives afterwards as a copy — and `SocketRun`
+            // filters it there, so nothing on that route reaches this branch.
             //
-            // Three attempts to tell the copy apart from real narration all
-            // failed — the relay strips reasoning tags the streamed copy keeps,
-            // so the two are not comparable as text. The gateway's WebSocket
-            // surface carries `thinking.delta` and `reasoning.delta`, which are
-            // the real thing; that is where reasoning will come from. Guessing
-            // here was the mistake.
-            is RunEvent.ReasoningAvailable -> Unit
+            // On HTTP it is the only reasoning there is. Measured against the
+            // live gateway, a run emits `message.delta`, exactly one
+            // `reasoning.available` carrying genuine narration, and
+            // `run.completed`. Dropping it left the whole route with no
+            // reasoning at all.
+            //
+            // It lands after the answer, so it is inserted *above* the reply
+            // rather than appended: thinking that reads below its own
+            // conclusion is the bug this once shipped as.
+            is RunEvent.ReasoningAvailable -> _state.update { current ->
+                val text = event.text.trim()
+                if (text.isEmpty()) {
+                    current
+                } else {
+                    current.copy(
+                        items = current.items.withReasoning(
+                            TranscriptItem.Reasoning(nextKey("r"), text),
+                        ),
+                    )
+                }
+            }
 
             is RunEvent.ToolStarted -> _state.update {
                 it.copy(

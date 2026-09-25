@@ -257,13 +257,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun downloadUpdate() {
         // Retried from a failure as well as started from an announcement, so
         // the release is carried on the failure state rather than lost with it.
-        val release = when (val state = _update.value) {
+        val announced = when (val state = _update.value) {
             is UpdateState.Available -> state.release
             is UpdateState.Failed -> state.release
             else -> null
         } ?: return
 
         viewModelScope.launch {
+            // Asked again, now. What the banner names was read when the app
+            // started, and a release published since then would be skipped
+            // silently — the older APK downloads, installs, and the thing it
+            // was meant to fix is still broken. That happened between 1.19 and
+            // 1.20, thirty minutes apart.
+            //
+            // A failed re-check keeps the announced release: being unable to
+            // reach GitHub is not a reason to refuse an update already found.
+            val release = updateApi.latest()
+                ?.takeIf { isNewer(it.version, BuildConfig.VERSION_NAME) }
+                ?: announced
             _update.value = UpdateState.Downloading(release, 0f)
             val result = updater.download(release) { fraction ->
                 _update.value = UpdateState.Downloading(release, fraction)

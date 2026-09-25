@@ -3,9 +3,12 @@ package io.github.lesj0610.hermes.core
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.net.Uri
+import android.os.Build
 import android.provider.OpenableColumns
 import android.util.Base64
+import androidx.annotation.RequiresApi
 import androidx.core.content.FileProvider
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -33,16 +36,71 @@ object Attachments {
 
     /**
      * Read [uri] and return it as a `data:image/jpeg;base64,…` URL, or null if
-     * it could not be decoded.
+     * it could not be read or decoded.
+     *
+     * Two decoders, because the pictures a phone actually holds are not all
+     * JPEG any more. Since API 28 the platform camera writes HEIC by default
+     * and screenshots can arrive as WebP or AVIF; `BitmapFactory` returns null
+     * on formats it does not know rather than raising, which is how a picked
+     * photo used to disappear without a word. `ImageDecoder` reads everything
+     * the platform supports and does the downscale during decode, so the full
+     * bitmap is never allocated.
+     *
+     * Nothing here is allowed to throw: `openInputStream` raises on a revoked
+     * grant or a provider that has gone away, and the picker's grant is not
+     * guaranteed to outlive the pick.
+     *
+     * Blocking. Call it off the main thread.
+     */
+    fun toDataUrl(context: Context, uri: Uri): String? = runCatching {
+        val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            decodeWithImageDecoder(context, uri)
+        } else {
+            decodeWithBitmapFactory(context, uri)
+        } ?: return null
+
+        val bytes = ByteArrayOutputStream().also { out ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+        }.toByteArray()
+        bitmap.recycle()
+        if (bytes.isEmpty()) return null
+
+        "data:image/jpeg;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
+    }.getOrNull()
+
+    /**
+     * The modern path. The target size is set from the header, so the decoder
+     * scales as it reads instead of allocating the full image first.
+     *
+     * The allocator is forced to software: a hardware bitmap has no pixels this
+     * process can read, and `compress` on one fails.
+     */
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun decodeWithImageDecoder(context: Context, uri: Uri): Bitmap? {
+        val source = ImageDecoder.createSource(context.contentResolver, uri)
+        return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            decoder.isMutableRequired = false
+            val longest = maxOf(info.size.width, info.size.height)
+            if (longest > MAX_EDGE) {
+                val ratio = MAX_EDGE.toFloat() / longest
+                decoder.setTargetSize(
+                    (info.size.width * ratio).toInt().coerceAtLeast(1),
+                    (info.size.height * ratio).toInt().coerceAtLeast(1),
+                )
+            }
+        }
+    }
+
+    /**
+     * API 26 and 27, which have no `ImageDecoder`.
      *
      * Decoded twice on purpose: the first pass reads only the bounds, so the
      * sample size is chosen before any pixels are allocated. Loading a large
      * photo at full size to measure it is how an image picker turns into an
      * OutOfMemoryError on the device that took the picture.
-     *
-     * Blocking. Call it off the main thread.
      */
-    fun toDataUrl(context: Context, uri: Uri): String? {
+    private fun decodeWithBitmapFactory(context: Context, uri: Uri): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use {
             BitmapFactory.decodeStream(it, null, bounds)
@@ -59,14 +117,8 @@ object Attachments {
         // inSampleSize only halves, so the result can still be up to twice the
         // target on its longest edge; this brings it the rest of the way.
         val scaled = scaleToFit(decoded)
-        val bytes = ByteArrayOutputStream().also { out ->
-            scaled.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
-        }.toByteArray()
-        if (scaled !== decoded) scaled.recycle()
-        decoded.recycle()
-
-        val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
-        return "data:image/jpeg;base64,$encoded"
+        if (scaled !== decoded) decoded.recycle()
+        return scaled
     }
 
     /** The largest power-of-two reduction that stays at or above [MAX_EDGE]. */

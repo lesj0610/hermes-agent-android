@@ -445,6 +445,11 @@ private fun Composer(
                 uris.mapNotNull { Attachments.toDataUrl(context, it) }
             }
             attachments = attachments + encoded.map { Attachment.Image(it) }
+            // A picture that could not be read used to vanish here: the failed
+            // ones were dropped and nothing was said, so picking a photo and
+            // picking nothing looked identical. The camera path beside this one
+            // always said so; this one now does too.
+            if (encoded.size < uris.size) notice = failedNotice
         }
     }
 

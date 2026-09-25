@@ -193,6 +193,21 @@ class DashboardApi(
     suspend fun fsList(path: String): FsListResponse =
         authed({ client.get(url("/api/fs/list")) { parameter("path", path) } }) { body() }
 
+    /**
+     * Read a file back as a `data:` URL, for a picture a past turn attached.
+     *
+     * The gateway stores an attachment on its own filesystem and leaves an
+     * `@image:<path>` directive in the message, so reopening a conversation has
+     * a path and no pixels. This is the route that turns one back into the
+     * other; the dashboard caps the size and answers 413 above it, which is
+     * treated the same as any other miss.
+     */
+    suspend fun readDataUrl(path: String): String? = runCatching {
+        authed({ client.get(url("/api/fs/read-data-url")) { parameter("path", path) } }) {
+            (body<JsonObject>()["dataUrl"] as? JsonPrimitive)?.content
+        }
+    }.getOrNull()
+
     suspend fun fsWriteText(path: String, content: String) {
         authed({
             client.post(url("/api/fs/write-text")) {

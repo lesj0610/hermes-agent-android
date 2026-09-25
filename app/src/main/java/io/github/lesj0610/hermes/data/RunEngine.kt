@@ -68,12 +68,63 @@ class RunEngine(
         runCatching { api.messages(sessionId) }
             .onSuccess { stored -> _state.update { it.copy(items = stored.toTranscript()) } }
             .onFailure { cause -> _state.update { it.copy(error = cause.toUiError()) } }
+
+        // Pictures come back in a second pass, so the conversation is readable
+        // immediately and the images fill in behind it. A session can hold
+        // dozens, and each is a separate request.
+        restoreAttachedImages()
+    }
+
+    /**
+     * Fetch the pictures a reopened conversation refers to.
+     *
+     * The gateway keeps an attachment on its own disk and persists an
+     * `@image:` path in the message, so a reopened session has paths and no
+     * pixels. Without the dashboard there is no route to the file and the turn
+     * stays text — which is what it did for every session before this.
+     */
+    private suspend fun restoreAttachedImages() {
+        val dashboard = dashboard ?: return
+        val pending = _state.value.items
+            .filterIsInstance<TranscriptItem.UserText>()
+            .filter { it.imagePaths.isNotEmpty() }
+            .take(IMAGE_RESTORE_LIMIT)
+        if (pending.isEmpty()) return
+
+        pending.forEach { item ->
+            val loaded = item.imagePaths.mapNotNull { dashboard.readDataUrl(it) }
+            if (loaded.isEmpty()) return@forEach
+            _state.update { current ->
+                current.copy(
+                    items = current.items.map { existing ->
+                        if (existing.key == item.key && existing is TranscriptItem.UserText) {
+                            existing.copy(images = loaded)
+                        } else {
+                            existing
+                        }
+                    },
+                )
+            }
+        }
     }
 
     private fun List<StoredMessage>.toTranscript(): List<TranscriptItem> = mapNotNull { message ->
         val body = message.text
         when (message.role) {
-            "user" -> if (body.isBlank()) null else TranscriptItem.UserText(nextKey("u"), body)
+            // `@image:` directives are attachments, not prose: they are lifted
+            // out here so the bubble shows a caption, and the paths are kept
+            // for the pass that turns them back into pictures.
+            "user" -> parseStoredUserTurn(body).let { turn ->
+                if (turn.text.isBlank() && turn.imagePaths.isEmpty()) {
+                    null
+                } else {
+                    TranscriptItem.UserText(
+                        key = nextKey("u"),
+                        text = turn.text,
+                        imagePaths = turn.imagePaths,
+                    )
+                }
+            }
             "assistant" -> if (body.isBlank()) null else
                 TranscriptItem.AssistantText(nextKey("a"), body, streaming = false)
             "tool" -> TranscriptItem.ToolCall(
@@ -419,3 +470,11 @@ internal fun Throwable.toUiError(): UiError = when (this) {
     else -> message?.takeIf { it.isNotBlank() }?.let(UiError::Raw)
         ?: UiError.Raw(this::class.simpleName.orEmpty())
 }
+
+/**
+ * How many past turns get their pictures fetched when a session opens.
+ *
+ * Each one is a separate request for a file that can be megabytes, and a long
+ * session holds dozens. The recent ones are the ones being looked at.
+ */
+private const val IMAGE_RESTORE_LIMIT = 12

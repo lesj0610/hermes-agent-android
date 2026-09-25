@@ -273,4 +273,5 @@
     <string name="chat_jump_latest">최신 대화로 이동</string>
     <string name="settings_open_at_latest">대화를 열 때 최신 위치로</string>
     <string name="settings_open_at_latest_note">끄면 마지막으로 보던 위치에서 열립니다.</string>
+    <string name="image_close">이미지 닫기</string>
 </resources>

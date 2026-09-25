@@ -285,4 +285,5 @@
     <string name="chat_jump_latest">Jump to the latest message</string>
     <string name="settings_open_at_latest">Open at the latest message</string>
     <string name="settings_open_at_latest_note">Otherwise a conversation opens where you left it.</string>
+    <string name="image_close">Close the picture</string>
 </resources>

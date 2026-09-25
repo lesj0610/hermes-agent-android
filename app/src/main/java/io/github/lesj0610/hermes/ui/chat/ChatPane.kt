@@ -80,6 +80,7 @@ import io.github.lesj0610.hermes.ui.commands.SlashPalette
 import io.github.lesj0610.hermes.ui.commands.filterCommands
 import io.github.lesj0610.hermes.ui.components.CameraIcon
 import io.github.lesj0610.hermes.ui.components.ChevronIcon
+import io.github.lesj0610.hermes.ui.components.ImageLightbox
 import io.github.lesj0610.hermes.ui.components.MicIcon
 import io.github.lesj0610.hermes.ui.components.PaperclipIcon
 import io.github.lesj0610.hermes.ui.components.PhotoIcon
@@ -141,6 +142,12 @@ fun ChatPane(
     val colors = LocalRunColors.current
     // Drives the jump-to-latest button; the composer holds its own scope.
     val transcriptScope = rememberCoroutineScope()
+
+    /** The picture being viewed full screen, if any. */
+    var lightbox by remember { mutableStateOf<String?>(null) }
+    lightbox?.let { dataUrl ->
+        ImageLightbox(dataUrl = dataUrl, onDismiss = { lightbox = null })
+    }
 
     // Follow the tail while the agent is talking.
     //
@@ -221,7 +228,9 @@ fun ChatPane(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp),
                     verticalArrangement = Arrangement.spacedBy(11.dp),
                 ) {
-                    items(state.items, key = { it.key }) { item -> TranscriptRow(item) }
+                    items(state.items, key = { it.key }) { item ->
+                        TranscriptRow(item, onOpenImage = { lightbox = it })
+                    }
                 }
 
                 // Only while the tail is out of view: a button that jumps to
@@ -324,7 +333,7 @@ private fun RuntimeChip(label: String, enabled: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun TranscriptRow(item: TranscriptItem) {
+private fun TranscriptRow(item: TranscriptItem, onOpenImage: (String) -> Unit = {}) {
     val colors = LocalRunColors.current
     when (item) {
         is TranscriptItem.UserText -> Column(
@@ -337,7 +346,7 @@ private fun TranscriptRow(item: TranscriptItem) {
             // with the composer and the bubble showed only the text, so there
             // was no way to tell whether the image had gone.
             item.images.forEach { dataUrl ->
-                SentImage(dataUrl)
+                SentImage(dataUrl, onOpen = { onOpenImage(dataUrl) })
             }
             if (item.text.isNotBlank()) {
                 Text(
@@ -371,7 +380,9 @@ private fun TranscriptRow(item: TranscriptItem) {
             )
             // What the agent produced, drawn rather than named: a reply used to
             // end in a bare server path where the desktop showed the picture.
-            item.images.forEach { dataUrl -> SentImage(dataUrl) }
+            item.images.forEach { dataUrl ->
+                SentImage(dataUrl, onOpen = { onOpenImage(dataUrl) })
+            }
         }
 
         is TranscriptItem.Reasoning -> {
@@ -979,7 +990,7 @@ private fun composeMessage(draft: String, attachments: List<Attachment>): String
  * a LazyColumn, so this runs again every time the row is recycled.
  */
 @Composable
-private fun SentImage(dataUrl: String) {
+private fun SentImage(dataUrl: String, onOpen: () -> Unit) {
     val density = LocalDensity.current
     val bitmap = remember(dataUrl, density) {
         Attachments.decodeDataUrl(dataUrl, with(density) { SENT_IMAGE_MAX.roundToPx() })
@@ -994,7 +1005,11 @@ private fun SentImage(dataUrl: String) {
         contentScale = ContentScale.Fit,
         modifier = Modifier
             .widthIn(max = SENT_IMAGE_MAX)
-            .clip(RoundedCornerShape(14.dp, 14.dp, 4.dp, 14.dp)),
+            .clip(RoundedCornerShape(14.dp, 14.dp, 4.dp, 14.dp))
+            // Tapping opens it full screen: the transcript draws a picture
+            // small enough to read around, which is the wrong size for the
+            // thing itself.
+            .clickable(onClick = onOpen),
     )
 }
 

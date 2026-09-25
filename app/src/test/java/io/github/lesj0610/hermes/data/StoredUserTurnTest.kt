@@ -73,6 +73,33 @@ class StoredUserTurnTest {
     }
 
     @Test
+    fun `a produced image is lifted out of the reply`() {
+        // The agent answers with MEDIA: on its own line. The desktop draws it;
+        // the app used to print the server path.
+        val turn = parseAttachmentRefs(
+            "완성했습니다.\n" +
+                "MEDIA:/home/u/Pictures/hermes-outputs/group80s_retro.png\n" +
+                "Qwen-Image 2.1로 변환했습니다.",
+            ASSISTANT_MEDIA_DIRECTIVE,
+        )
+        assertEquals("완성했습니다.\nQwen-Image 2.1로 변환했습니다.", turn.text)
+        assertEquals(
+            listOf("/home/u/Pictures/hermes-outputs/group80s_retro.png"),
+            turn.imagePaths,
+        )
+    }
+
+    @Test
+    fun `the two directives do not catch each other`() {
+        val reply = "MEDIA:/a/out.png"
+        assertTrue(parseStoredUserTurn(reply).imagePaths.isEmpty())
+        assertEquals(reply, parseStoredUserTurn(reply).text)
+
+        val ask = "@image:/a/in.jpg"
+        assertTrue(parseAttachmentRefs(ask, ASSISTANT_MEDIA_DIRECTIVE).imagePaths.isEmpty())
+    }
+
+    @Test
     fun `an empty message stays empty`() {
         val turn = parseStoredUserTurn("")
         assertEquals("", turn.text)

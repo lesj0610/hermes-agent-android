@@ -86,21 +86,30 @@ class RunEngine(
     private suspend fun restoreAttachedImages() {
         val dashboard = dashboard ?: return
         val pending = _state.value.items
-            .filterIsInstance<TranscriptItem.UserText>()
-            .filter { it.imagePaths.isNotEmpty() }
-            .take(IMAGE_RESTORE_LIMIT)
+            .mapNotNull { item ->
+                when {
+                    item is TranscriptItem.UserText && item.imagePaths.isNotEmpty() ->
+                        item.key to item.imagePaths
+                    item is TranscriptItem.AssistantText && item.imagePaths.isNotEmpty() ->
+                        item.key to item.imagePaths
+                    else -> null
+                }
+            }
+            // The most recent, because those are the ones being looked at.
+            .takeLast(IMAGE_RESTORE_LIMIT)
         if (pending.isEmpty()) return
 
-        pending.forEach { item ->
-            val loaded = item.imagePaths.mapNotNull { dashboard.readDataUrl(it) }
+        pending.forEach { (key, paths) ->
+            val loaded = paths.mapNotNull { dashboard.readDataUrl(it) }
             if (loaded.isEmpty()) return@forEach
             _state.update { current ->
                 current.copy(
                     items = current.items.map { existing ->
-                        if (existing.key == item.key && existing is TranscriptItem.UserText) {
-                            existing.copy(images = loaded)
-                        } else {
-                            existing
+                        when {
+                            existing.key != key -> existing
+                            existing is TranscriptItem.UserText -> existing.copy(images = loaded)
+                            existing is TranscriptItem.AssistantText -> existing.copy(images = loaded)
+                            else -> existing
                         }
                     },
                 )
@@ -125,8 +134,22 @@ class RunEngine(
                     )
                 }
             }
-            "assistant" -> if (body.isBlank()) null else
-                TranscriptItem.AssistantText(nextKey("a"), body, streaming = false)
+            // `MEDIA:` is a produced image, not prose. The HTTP route rewrites
+            // these into data URLs on the way out; the socket and stored
+            // history leave them as paths, so they are resolved here and the
+            // picture looks the same on every route.
+            "assistant" -> parseAttachmentRefs(body, ASSISTANT_MEDIA_DIRECTIVE).let { turn ->
+                if (turn.text.isBlank() && turn.imagePaths.isEmpty()) {
+                    null
+                } else {
+                    TranscriptItem.AssistantText(
+                        key = nextKey("a"),
+                        text = turn.text,
+                        streaming = false,
+                        imagePaths = turn.imagePaths,
+                    )
+                }
+            }
             "tool" -> TranscriptItem.ToolCall(
                 key = nextKey("t"),
                 tool = message.toolName ?: "tool",
@@ -339,15 +362,36 @@ class RunEngine(
             }
 
             is RunEvent.Completed -> {
-                _state.update {
-                    it.copy(
-                        items = it.items.finishStreaming(),
+                _state.update { current ->
+                    current.copy(
+                        // Only now: a `MEDIA:` line arrives a character at a
+                        // time, and a path half-written is not a path.
+                        items = current.items.finishStreaming().map { item ->
+                            if (item is TranscriptItem.AssistantText && item.imagePaths.isEmpty()) {
+                                parseAttachmentRefs(item.text, ASSISTANT_MEDIA_DIRECTIVE)
+                                    .let { turn ->
+                                        if (turn.imagePaths.isEmpty()) {
+                                            item
+                                        } else {
+                                            item.copy(
+                                                text = turn.text,
+                                                imagePaths = turn.imagePaths,
+                                            )
+                                        }
+                                    }
+                            } else {
+                                item
+                            }
+                        },
                         phase = RunPhase.Idle,
                         runStartedAtMillis = null,
-                        lastUsage = event.usage ?: it.lastUsage,
+                        lastUsage = event.usage ?: current.lastUsage,
                     )
                 }
                 _signals.tryEmit(RunSignal.Finished(event.runId.orEmpty(), ok = true))
+                // Fetch whatever that turn produced, the same pass a reopened
+                // session uses.
+                scope.launch { restoreAttachedImages() }
             }
 
             is RunEvent.Failed -> {

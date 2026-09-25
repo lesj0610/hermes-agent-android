@@ -28,6 +28,10 @@ sealed interface TranscriptItem {
         override val key: String,
         val text: String,
         val streaming: Boolean,
+        /** Pictures the agent produced, once fetched. */
+        val images: List<String> = emptyList(),
+        /** `MEDIA:` paths this reply referred to, before they are fetched. */
+        val imagePaths: List<String> = emptyList(),
     ) : TranscriptItem
 
     data class Reasoning(override val key: String, val text: String) : TranscriptItem
@@ -113,28 +117,46 @@ fun List<TranscriptItem>.withReasoning(block: TranscriptItem.Reasoning): List<Tr
     return if (answer >= 0) toMutableList().apply { add(answer, block) } else this + block
 }
 
-/** A stored user turn, split into what was typed and what was attached. */
+/** A stored turn, split into what was written and what was attached. */
 data class StoredUserTurn(val text: String, val imagePaths: List<String>)
 
 /**
- * Pull `@image:` directives out of a persisted user message.
+ * The directive a user turn stores an attachment under.
  *
- * The gateway stores an attached picture as a path directive on its own line,
- * caption first and directives last, and the desktop draws them as images. The
- * app used to render the whole thing as prose, so reopening a conversation
- * showed a raw filesystem path where the picture had been.
+ * The gateway persists an attached picture as a path on its own line, caption
+ * first and directives last, and the desktop draws them as images.
+ */
+const val USER_IMAGE_DIRECTIVE = "@image:"
+
+/**
+ * The directive an assistant turn stores a produced image under.
+ *
+ * The agent answers with `MEDIA:<absolute path>` on its own line. The HTTP
+ * route rewrites those into base64 data URLs on the way out — the socket does
+ * not, and neither does stored history, so the app resolves them itself and
+ * gets the same picture on every route.
+ */
+const val ASSISTANT_MEDIA_DIRECTIVE = "MEDIA:"
+
+/**
+ * Pull path directives out of a stored message.
+ *
+ * Rendering them as prose put a raw filesystem path in the transcript where a
+ * picture belonged — not a missing image, a leaked server path.
  *
  * A path containing spaces is wrapped by the writer in whichever of `` ` ``,
- * `"` or `'` it does not itself contain, so all three are unwrapped here.
+ * `"` or `'` it does not itself contain, so all three are unwrapped. Only a
+ * line that *begins* with the directive counts: the same characters inside a
+ * sentence are prose.
  */
-fun parseStoredUserTurn(raw: String): StoredUserTurn {
-    if (!raw.contains(IMAGE_DIRECTIVE)) return StoredUserTurn(raw, emptyList())
+fun parseAttachmentRefs(raw: String, directive: String): StoredUserTurn {
+    if (!raw.contains(directive)) return StoredUserTurn(raw, emptyList())
     val kept = mutableListOf<String>()
     val paths = mutableListOf<String>()
     raw.lines().forEach { line ->
         val trimmed = line.trim()
-        if (trimmed.startsWith(IMAGE_DIRECTIVE)) {
-            unquote(trimmed.removePrefix(IMAGE_DIRECTIVE).trim())
+        if (trimmed.startsWith(directive)) {
+            unquote(trimmed.removePrefix(directive).trim())
                 .takeIf { it.isNotEmpty() }
                 ?.let { paths += it }
         } else {
@@ -144,7 +166,9 @@ fun parseStoredUserTurn(raw: String): StoredUserTurn {
     return StoredUserTurn(kept.joinToString("\n").trim(), paths)
 }
 
-private const val IMAGE_DIRECTIVE = "@image:"
+/** The user-turn spelling of [parseAttachmentRefs]. */
+fun parseStoredUserTurn(raw: String): StoredUserTurn =
+    parseAttachmentRefs(raw, USER_IMAGE_DIRECTIVE)
 
 private fun unquote(value: String): String {
     for (quote in listOf('`', '"', '\'')) {

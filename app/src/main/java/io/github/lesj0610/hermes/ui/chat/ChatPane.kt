@@ -357,15 +357,22 @@ private fun TranscriptRow(item: TranscriptItem) {
         //
         // The caret still rides on the text rather than being a sibling: it has
         // to sit after the last character, wherever the last block put it.
-        is TranscriptItem.AssistantText -> RichText(
+        is TranscriptItem.AssistantText -> Column(
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            RichText(
             text = if (item.streaming) item.text + " ▉" else item.text,
             style = MaterialTheme.typography.bodyLarge.copy(
                 color = MaterialTheme.colorScheme.onSurface,
             ),
-            // While the text is still arriving it stays on the native renderer;
-            // a finished reply with maths in it is typeset instead.
-            streaming = item.streaming,
-        )
+                // While the text is still arriving it stays on the native
+                // renderer; a finished reply with maths in it is typeset.
+                streaming = item.streaming,
+            )
+            // What the agent produced, drawn rather than named: a reply used to
+            // end in a bare server path where the desktop showed the picture.
+            item.images.forEach { dataUrl -> SentImage(dataUrl) }
+        }
 
         is TranscriptItem.Reasoning -> {
             // Collapsed by default, the way the desktop treats

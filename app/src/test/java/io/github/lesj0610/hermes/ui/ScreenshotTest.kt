@@ -15,7 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.github.lesj0610.hermes.core.HermesSettings
@@ -99,13 +101,22 @@ class ScreenshotTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun capture(name: String, width: Int, height: Int, content: @Composable () -> Unit) {
+    private fun capture(
+        name: String,
+        width: Int,
+        height: Int,
+        /** A resource qualifier such as "ko", for checking a translation's fit. */
+        locale: String? = null,
+        /** Runs after the first frame, before the capture — a tap, say. */
+        before: () -> Unit = {},
+        content: @Composable () -> Unit,
+    ) {
         // The window is resized to match, not just the Surface inside it. The
         // class-level qualifier is 411dp, so without this a 690dp capture was
         // measured against a 411dp window and came out squeezed — the render
         // would have shown a layout bug the app does not have, and hidden the
         // proportions being checked.
-        RuntimeEnvironment.setQualifiers("w${width}dp-h${height}dp-xhdpi")
+        RuntimeEnvironment.setQualifiers(listOfNotNull(locale, "w${width}dp-h${height}dp-xhdpi").joinToString("-"))
         compose.setContent {
             HermesTheme {
                 // Surface, not a bare Box: in the app the Scaffold paints the
@@ -120,6 +131,7 @@ class ScreenshotTest {
                 }
             }
         }
+        before()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/$name.png")
     }
 
@@ -661,6 +673,139 @@ class ScreenshotTest {
                             smartDenied = false,
                         ),
                     ),
+                ),
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+
+    /**
+     * A settled turn as the desktop draws it: each thought reduced to how long
+     * it took, each run of calls to one line, and the edit left standing on its
+     * own because the edit is the deliverable.
+     */
+    private val runTurn: List<TranscriptItem> = run {
+        val t0 = 1_700_000_000_000L
+        listOf(
+            TranscriptItem.UserText("u1", "벤치 스크립트 고치고 테스트 돌려줘"),
+            TranscriptItem.Reasoning(
+                "r1", "먼저 벤치 스크립트와 설정을 읽고 어디가 느린지 확인한다.", t0, t0 + 12_000,
+            ),
+            TranscriptItem.ToolCall("t1", "read_file", "214줄", ToolState.Completed, 0.1, target = "latency.py"),
+            TranscriptItem.ToolCall("t2", "search_files", "3건", ToolState.Completed, 0.3, target = "warmup"),
+            TranscriptItem.ToolCall(
+                "t3", "terminal", "[50/50] 1.83 ms/iter", ToolState.Completed, 41.0,
+                target = "cd /repo && python bench/latency.py --seq 4096 2>&1 | tail -20",
+            ),
+            TranscriptItem.ToolCall(
+                "t4", "terminal", "fatal: not a git repository", ToolState.Failed, 0.1,
+                target = "git diff --stat",
+            ),
+            TranscriptItem.Reasoning("r2", "워밍업 반복이 빠져 있다.", t0 + 60_000, t0 + 60_400),
+            TranscriptItem.ToolCall(
+                "t5", "patch", "bench/latency.py\n+    for _ in range(10):\n+        step()",
+                ToolState.Completed, 0.2, target = "latency.py",
+            ),
+            TranscriptItem.ToolCall(
+                "t6", "terminal", "[50/50] 1.61 ms/iter", ToolState.Completed, 38.0,
+                target = "python bench/latency.py --seq 4096",
+            ),
+            TranscriptItem.AssistantText(
+                "a1", "워밍업을 추가했고 1.83 → 1.61 ms/iter로 줄었습니다.", streaming = false,
+            ),
+        )
+    }
+
+    @Test
+    fun chatToolRuns() {
+        capture("chat-tool-runs", 411, 891) {
+            ChatPane(
+                state = ChatState(sessionId = "s1", items = runTurn),
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
+                modifier = Modifier.fillMaxSize(),
+                openAtLatest = false,
+            )
+        }
+    }
+
+    /** The same turn in Korean, where the clauses keep their own case. */
+    @Test
+    fun chatToolRunsKo() {
+        capture("chat-tool-runs-ko", 411, 891, locale = "ko") {
+            ChatPane(
+                state = ChatState(sessionId = "s1", items = runTurn),
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
+                modifier = Modifier.fillMaxSize(),
+                openAtLatest = false,
+            )
+        }
+    }
+
+    /** A run opened by a tap: the calls behind the summary, as cards. */
+    @Test
+    fun chatToolRunOpen() {
+        capture(
+            "chat-tool-run-open", 411, 891,
+            before = { compose.onNodeWithText("Explored 2 files", substring = true).performClick() },
+        ) {
+            ChatPane(
+                state = ChatState(sessionId = "s1", items = runTurn),
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
+                modifier = Modifier.fillMaxSize(),
+                openAtLatest = false,
+            )
+        }
+    }
+
+    /**
+     * A run still going: the summary narrates the call it is waiting on, and
+     * the ticker under it shows that call rather than a growing list.
+     */
+    @Test
+    fun chatToolRunLive() {
+        val t0 = System.currentTimeMillis() - 30_000
+        capture("chat-tool-run-live", 411, 891, locale = "ko") {
+            ChatPane(
+                state = ChatState(
+                    sessionId = "s1",
+                    items = listOf(
+                        TranscriptItem.UserText("u1", "테스트 돌려줘"),
+                        TranscriptItem.Reasoning("r1", "테스트 설정부터 본다.", t0, t0 + 8_000),
+                        TranscriptItem.ToolCall("t1", "read_file", null, ToolState.Completed, target = "build.gradle.kts"),
+                        TranscriptItem.ToolCall("t2", "read_file", null, ToolState.Completed, target = "settings.gradle.kts"),
+                        TranscriptItem.ToolCall(
+                            "t3", "terminal", "> Task :app:testDebugUnitTest", ToolState.Running,
+                            target = "cd /repo && ./gradlew test 2>&1 | tail -20",
+                        ),
+                    ),
+                    phase = RunPhase.Running("r1"),
+                ),
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+
+    /**
+     * A thought still streaming: "Thinking" with its timer, and a short preview
+     * pinned to the newest line instead of the whole block pushing the reply
+     * off the screen.
+     */
+    @Test
+    fun chatThinkingLive() {
+        val thought = (1..14).joinToString("\n") { "단계 $it: 캐시 적중률과 워밍업 반복 수의 관계를 확인한다." }
+        capture("chat-thinking-live", 411, 891, locale = "ko") {
+            ChatPane(
+                state = ChatState(
+                    sessionId = "s1",
+                    items = listOf(
+                        TranscriptItem.UserText("u1", "왜 첫 반복만 느린지 분석해줘"),
+                        TranscriptItem.Reasoning(
+                            "r1", thought, startedAtMillis = System.currentTimeMillis() - 7_000,
+                        ),
+                    ),
+                    phase = RunPhase.Running("r1"),
                 ),
                 onSend = { _, _ -> }, onStop = {}, onDismissError = {},
                 modifier = Modifier.fillMaxSize(),

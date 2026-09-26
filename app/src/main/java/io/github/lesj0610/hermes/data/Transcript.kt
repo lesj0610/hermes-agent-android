@@ -34,7 +34,32 @@ sealed interface TranscriptItem {
         val imagePaths: List<String> = emptyList(),
     ) : TranscriptItem
 
-    data class Reasoning(override val key: String, val text: String) : TranscriptItem
+    /**
+     * A block of the model's thinking.
+     *
+     * Timed on this device from its first token to the next thing the turn did,
+     * the way the desktop measures a block — so a turn that thinks three times
+     * reports three durations, not a running total. A block that arrived whole
+     * (the HTTP route's single `reasoning.available`, or stored history) was
+     * never timed, and says so by having neither end.
+     */
+    data class Reasoning(
+        override val key: String,
+        val text: String,
+        val startedAtMillis: Long? = null,
+        val completedAtMillis: Long? = null,
+    ) : TranscriptItem {
+        /** Still streaming: it started here and has not been closed. */
+        val pending: Boolean get() = startedAtMillis != null && completedAtMillis == null
+
+        /** Whole seconds, or null for a block that was never timed. */
+        val durationSeconds: Long?
+            get() {
+                val start = startedAtMillis ?: return null
+                val end = completedAtMillis ?: return null
+                return ((end - start) / 1000).coerceAtLeast(0)
+            }
+    }
 
     data class ToolCall(
         override val key: String,
@@ -43,7 +68,20 @@ sealed interface TranscriptItem {
         val state: ToolState,
         val durationSeconds: Double? = null,
         val error: String? = null,
-    ) : TranscriptItem
+        /**
+         * What the call acted on — a command line, a file, a query — read from
+         * its arguments when it started.
+         *
+         * Separate from [preview] on purpose: that is replaced by the result
+         * when the call finishes, and a run summary that names what was done
+         * cannot be rebuilt from what it printed.
+         */
+        val target: String? = null,
+        /** A skill load that read one of the skill's files, not its instructions. */
+        val readsResource: Boolean = false,
+    ) : TranscriptItem {
+        val pending: Boolean get() = state == ToolState.Running || state == ToolState.AwaitingApproval
+    }
 
     /** A run-level failure, rendered inline so it cannot be missed. */
     data class Failure(override val key: String, val error: UiError) : TranscriptItem
@@ -100,6 +138,24 @@ data class ChatState(
 }
 
 /**
+ * Closes whatever is still open at the tail: a reply that was streaming, or a
+ * reasoning block that was — which is what stamps the block's duration.
+ *
+ * Only the tail can be open. Everything before it was closed when the next
+ * thing arrived, so this stays constant-time on a long transcript.
+ */
+internal fun List<TranscriptItem>.finishStreaming(
+    now: Long = System.currentTimeMillis(),
+): List<TranscriptItem> {
+    val last = lastOrNull()
+    return when {
+        last is TranscriptItem.AssistantText && last.streaming -> dropLast(1) + last.copy(streaming = false)
+        last is TranscriptItem.Reasoning && last.pending -> dropLast(1) + last.copy(completedAtMillis = now)
+        else -> this
+    }
+}
+
+/**
  * Place a whole-thought reasoning block, as the HTTP route delivers it.
  *
  * That route sends the thought once, after the answer has already streamed, so
@@ -107,14 +163,20 @@ data class ChatState(
  * last answer instead, which is the order the desktop shows and the order the
  * socket route produces naturally.
  *
- * A transcript that already has reasoning keeps it: on the socket the thought
- * streams as deltas and this event is the echo that follows, and drawing both
- * would say the same thing twice.
+ * A turn that already has reasoning keeps it: on the socket the thought streams
+ * as deltas and this event is the echo that follows, and drawing both would say
+ * the same thing twice.
+ *
+ * Both checks are bounded to the current turn — everything after the last user
+ * message. Reopened sessions now carry reasoning from earlier turns, and a
+ * whole-transcript check would have dropped every new thought because an old
+ * one existed, or slotted it above an earlier turn's answer.
  */
 fun List<TranscriptItem>.withReasoning(block: TranscriptItem.Reasoning): List<TranscriptItem> {
-    if (any { it is TranscriptItem.Reasoning }) return this
-    val answer = indexOfLast { it is TranscriptItem.AssistantText }
-    return if (answer >= 0) toMutableList().apply { add(answer, block) } else this + block
+    val turnStart = indexOfLast { it is TranscriptItem.UserText } + 1
+    if (subList(turnStart, size).any { it is TranscriptItem.Reasoning }) return this
+    val answer = indexOfLast { it is TranscriptItem.AssistantText }.takeIf { it >= turnStart }
+    return if (answer != null) toMutableList().apply { add(answer, block) } else this + block
 }
 
 /** A stored turn, split into what was written and what was attached. */

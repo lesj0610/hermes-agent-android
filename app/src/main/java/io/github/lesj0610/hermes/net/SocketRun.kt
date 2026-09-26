@@ -71,6 +71,12 @@ class SocketRun(
                         null, null,
                         tool = payload.str("name").orEmpty(),
                         preview = payload.str("context") ?: payload.str("args_text"),
+                        // `args` is an object; `args_text` is the same thing as
+                        // JSON text, read when the object is absent.
+                        args = payload["args"] as? JsonObject
+                            ?: payload.str("args_text")?.let { text ->
+                                runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
+                            },
                     ),
                 )
 

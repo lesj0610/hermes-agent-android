@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Whether a run summary lowercases each clause after the first. True where
+      clauses open with the verb ("Explored 3 files, ran 5 commands"); false
+      where they open with a noun or a file name that must keep its case.
+    -->
+    <bool name="run_summary_lowercase_joins">true</bool>
+</resources>

@@ -16,7 +16,6 @@ import io.github.lesj0610.hermes.net.HermesApi
 import io.github.lesj0610.hermes.net.SocketRun
 import io.github.lesj0610.hermes.net.HermesUnauthorizedException
 import io.github.lesj0610.hermes.net.RunEvent
-import io.github.lesj0610.hermes.net.StoredMessage
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -66,7 +65,7 @@ class RunEngine(
         if (sessionId == null) return
 
         runCatching { api.messages(sessionId) }
-            .onSuccess { stored -> _state.update { it.copy(items = stored.toTranscript()) } }
+            .onSuccess { stored -> _state.update { it.copy(items = storedToTranscript(stored, ::nextKey)) } }
             .onFailure { cause -> _state.update { it.copy(error = cause.toUiError()) } }
 
         // Pictures come back in a second pass, so the conversation is readable
@@ -114,49 +113,6 @@ class RunEngine(
                     },
                 )
             }
-        }
-    }
-
-    private fun List<StoredMessage>.toTranscript(): List<TranscriptItem> = mapNotNull { message ->
-        val body = message.text
-        when (message.role) {
-            // `@image:` directives are attachments, not prose: they are lifted
-            // out here so the bubble shows a caption, and the paths are kept
-            // for the pass that turns them back into pictures.
-            "user" -> parseStoredUserTurn(body).let { turn ->
-                if (turn.text.isBlank() && turn.imagePaths.isEmpty()) {
-                    null
-                } else {
-                    TranscriptItem.UserText(
-                        key = nextKey("u"),
-                        text = turn.text,
-                        imagePaths = turn.imagePaths,
-                    )
-                }
-            }
-            // `MEDIA:` is a produced image, not prose. The HTTP route rewrites
-            // these into data URLs on the way out; the socket and stored
-            // history leave them as paths, so they are resolved here and the
-            // picture looks the same on every route.
-            "assistant" -> parseAttachmentRefs(body, ASSISTANT_MEDIA_DIRECTIVE).let { turn ->
-                if (turn.text.isBlank() && turn.imagePaths.isEmpty()) {
-                    null
-                } else {
-                    TranscriptItem.AssistantText(
-                        key = nextKey("a"),
-                        text = turn.text,
-                        streaming = false,
-                        imagePaths = turn.imagePaths,
-                    )
-                }
-            }
-            "tool" -> TranscriptItem.ToolCall(
-                key = nextKey("t"),
-                tool = message.toolName ?: "tool",
-                preview = body.takeIf { it.isNotBlank() },
-                state = ToolState.Completed,
-            )
-            else -> null
         }
     }
 
@@ -271,13 +227,20 @@ class RunEngine(
 
             // Real reasoning, streamed. Appended into one block the way prose
             // is, so a long thought does not become a hundred cards.
+            // Timed from its first token to whatever the turn does next, which
+            // is what closes it (finishStreaming) — the desktop's per-block
+            // measure. Only an open block takes more tokens; a closed one means
+            // this is a new thought.
             is RunEvent.ReasoningDelta -> _state.update { current ->
                 val last = current.items.lastOrNull()
-                val items = if (last is TranscriptItem.Reasoning) {
+                val items = if (last is TranscriptItem.Reasoning && last.pending) {
                     current.items.dropLast(1) + last.copy(text = last.text + event.text)
                 } else {
-                    current.items.finishStreaming() +
-                        TranscriptItem.Reasoning(nextKey("r"), event.text)
+                    current.items.finishStreaming() + TranscriptItem.Reasoning(
+                        key = nextKey("r"),
+                        text = event.text,
+                        startedAtMillis = System.currentTimeMillis(),
+                    )
                 }
                 current.copy(items = items)
             }
@@ -312,12 +275,15 @@ class RunEngine(
             }
 
             is RunEvent.ToolStarted -> _state.update {
+                val aim = toolAim(event.tool, event.args, fallback = event.preview)
                 it.copy(
                     items = it.items.finishStreaming() + TranscriptItem.ToolCall(
                         key = nextKey("t"),
                         tool = event.tool,
                         preview = event.preview,
                         state = ToolState.Running,
+                        target = aim.target,
+                        readsResource = aim.readsResource,
                     ),
                 )
             }
@@ -432,7 +398,10 @@ class RunEngine(
             val items = if (last is TranscriptItem.AssistantText && last.streaming) {
                 current.items.dropLast(1) + last.copy(text = last.text + delta)
             } else {
-                current.items + TranscriptItem.AssistantText(nextKey("a"), delta, streaming = true)
+                // Closing the tail first: the reply starting is what ends the
+                // reasoning block before it, and so what times it.
+                current.items.finishStreaming() +
+                    TranscriptItem.AssistantText(nextKey("a"), delta, streaming = true)
             }
             current.copy(items = items)
         }
@@ -482,15 +451,6 @@ sealed interface RunSignal {
 }
 
 // ── transcript helpers ────────────────────────────────────────────────────
-
-private fun List<TranscriptItem>.finishStreaming(): List<TranscriptItem> {
-    val last = lastOrNull()
-    return if (last is TranscriptItem.AssistantText && last.streaming) {
-        dropLast(1) + last.copy(streaming = false)
-    } else {
-        this
-    }
-}
 
 private fun List<TranscriptItem>.updateLastTool(
     tool: String,

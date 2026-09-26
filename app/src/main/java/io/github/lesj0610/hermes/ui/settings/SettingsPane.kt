@@ -118,6 +118,7 @@ fun SettingsPane(
     modifier: Modifier = Modifier,
     /** App updates. Defaulted so previews render without an update check. */
     updateState: UpdateState = UpdateState.Idle,
+    onToggleReasoningCollapsed: (Boolean) -> Unit = {},
     onCheckUpdate: () -> Unit = {},
     onDownloadUpdate: () -> Unit = {},
     onGrantInstall: () -> Unit = {},
@@ -185,6 +186,7 @@ fun SettingsPane(
             }
             SettingsSection.Display -> DisplaySection(
                 settings, onSelectLayoutMode, onSetUiScale, onToggleOpenAtLatest,
+                onToggleReasoningCollapsed,
             )
             SettingsSection.Language -> LanguageSection(settings, onSelectLanguage)
             SettingsSection.Notifications -> NotificationsSection(
@@ -804,6 +806,7 @@ private fun DisplaySection(
     onSelectLayoutMode: (LayoutMode) -> Unit,
     onSetUiScale: (Float) -> Unit,
     onToggleOpenAtLatest: (Boolean) -> Unit,
+    onToggleReasoningCollapsed: (Boolean) -> Unit,
 ) {
     val colors = LocalRunColors.current
     Group(stringResource(R.string.settings_layout)) {
@@ -842,6 +845,30 @@ private fun DisplaySection(
                 )
             }
             Switch(checked = settings.openAtLatest, onCheckedChange = onToggleOpenAtLatest)
+        }
+
+        HorizontalDivider(color = colors.line)
+
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_reasoning_collapsed),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = stringResource(R.string.settings_reasoning_collapsed_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.muted,
+                )
+            }
+            Switch(
+                checked = settings.reasoningCollapsedByDefault,
+                onCheckedChange = onToggleReasoningCollapsed,
+            )
         }
 
         HorizontalDivider(color = colors.line)

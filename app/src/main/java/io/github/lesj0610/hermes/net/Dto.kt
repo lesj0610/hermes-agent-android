@@ -203,6 +203,13 @@ data class StoredMessage(
     @SerialName("tool_name") val toolName: String? = null,
     val timestamp: String? = null,
     val reasoning: String? = null,
+    /**
+     * The calls an assistant row made, with their arguments. An array on the
+     * wire; kept as a JsonElement because older rows stored it as JSON text.
+     */
+    @SerialName("tool_calls") val toolCalls: JsonElement? = null,
+    /** On a tool row: the call this result answers. */
+    @SerialName("tool_call_id") val toolCallId: String? = null,
 ) {
     /** Flattens whichever shape `content` arrived in down to displayable text. */
     val text: String

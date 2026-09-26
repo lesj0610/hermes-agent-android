@@ -593,7 +593,8 @@ fun HermesShell(
                                     onToggleCompletion = viewModel::setNotifyCompletion,
                                     onSelectLayoutMode = viewModel::setLayoutMode,
                                     onSetUiScale = viewModel::setUiScale,
-                        onToggleOpenAtLatest = viewModel::setOpenAtLatest,
+                                    onToggleOpenAtLatest = viewModel::setOpenAtLatest,
+                                    onToggleReasoningCollapsed = viewModel::setReasoningCollapsedByDefault,
                                     permissions = permissions,
                                     onRequestNotifications = onRequestNotifications,
                                     onRequestBackground = onRequestBackground,
@@ -616,6 +617,7 @@ fun HermesShell(
                             } else {
                                 ChatPane(
                                     openAtLatest = settings.openAtLatest,
+                                    reasoningCollapsedByDefault = settings.reasoningCollapsedByDefault,
                                     state = chat,
                                     onSend = viewModel::send,
                                     onStop = viewModel::stop,
@@ -682,6 +684,7 @@ fun HermesShell(
                 when (pane) {
                     Pane.Chat -> ChatPane(
                         openAtLatest = settings.openAtLatest,
+                        reasoningCollapsedByDefault = settings.reasoningCollapsedByDefault,
                         state = chat,
                         onSend = viewModel::send,
                         onStop = viewModel::stop,
@@ -763,6 +766,7 @@ fun HermesShell(
                         onSelectLayoutMode = viewModel::setLayoutMode,
                         onSetUiScale = viewModel::setUiScale,
                         onToggleOpenAtLatest = viewModel::setOpenAtLatest,
+                        onToggleReasoningCollapsed = viewModel::setReasoningCollapsedByDefault,
                         permissions = permissions,
                         onRequestNotifications = onRequestNotifications,
                         onRequestBackground = onRequestBackground,

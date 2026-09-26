@@ -16,7 +16,6 @@
     <string name="chat_stopping">Stopping…</string>
     <string name="chat_empty_title">Nothing here yet</string>
     <string name="chat_empty_body">Send a message to start a run.</string>
-    <string name="chat_reasoning">Reasoning</string>
 
     <!-- Tool cards -->
     <string name="tool_running">Running</string>
@@ -286,4 +285,79 @@
     <string name="settings_open_at_latest">Open at the latest message</string>
     <string name="settings_open_at_latest_note">Otherwise a conversation opens where you left it.</string>
     <string name="image_close">Close the picture</string>
+    <!-- Run summaries and reasoning headers: the desktop's wording (tool/run-summary.ts). -->
+    <string name="thinking_live">Thinking</string>
+    <string name="thinking_done">Thought</string>
+    <string name="thinking_brief">Thought briefly</string>
+    <string name="thinking_for">Thought for %1$s</string>
+    <string name="run_edit_named_past">Edited %1$s</string>
+    <string name="run_edit_named_present">Editing %1$s</string>
+    <string name="run_explore_named_past">Explored %1$s</string>
+    <string name="run_explore_named_present">Exploring %1$s</string>
+    <string name="run_run_named_past">Ran %1$s</string>
+    <string name="run_run_named_present">Running %1$s</string>
+    <string name="run_delegate_named_past">Delegated %1$s</string>
+    <string name="run_delegate_named_present">Delegating %1$s</string>
+    <string name="run_other_named_past">Used %1$s</string>
+    <string name="run_other_named_present">Using %1$s</string>
+    <string name="skill_loading">Loading skill</string>
+    <string name="skill_loaded">Loaded skill</string>
+    <string name="skill_load_failed">Failed to load skill</string>
+    <string name="skill_reading_resource">Reading skill resource</string>
+    <string name="skill_read_resource">Read skill resource</string>
+    <string name="skill_resource_failed">Failed to read skill resource</string>
+    <string name="skill_listing">Listing skills</string>
+    <string name="skill_listed">Listed skills</string>
+    <string name="skill_list_failed">Failed to list skills</string>
+    <string name="skill_with_target">%1$s: %2$s</string>
+    <string name="settings_reasoning_collapsed">Collapse reasoning by default</string>
+    <string name="settings_reasoning_collapsed_note">Reasoning rests as one “Thought for…” line instead of streaming open.</string>
+    <plurals name="run_edit_counted_past">
+        <item quantity="one">Edited %d file</item>
+        <item quantity="other">Edited %d files</item>
+    </plurals>
+    <plurals name="run_edit_counted_present">
+        <item quantity="one">Editing %d file</item>
+        <item quantity="other">Editing %d files</item>
+    </plurals>
+    <plurals name="run_explore_counted_past">
+        <item quantity="one">Explored %d file</item>
+        <item quantity="other">Explored %d files</item>
+    </plurals>
+    <plurals name="run_explore_counted_present">
+        <item quantity="one">Exploring %d file</item>
+        <item quantity="other">Exploring %d files</item>
+    </plurals>
+    <plurals name="run_run_counted_past">
+        <item quantity="one">Ran %d command</item>
+        <item quantity="other">Ran %d commands</item>
+    </plurals>
+    <plurals name="run_run_counted_present">
+        <item quantity="one">Running %d command</item>
+        <item quantity="other">Running %d commands</item>
+    </plurals>
+    <plurals name="run_delegate_counted_past">
+        <item quantity="one">Delegated %d task</item>
+        <item quantity="other">Delegated %d tasks</item>
+    </plurals>
+    <plurals name="run_delegate_counted_present">
+        <item quantity="one">Delegating %d task</item>
+        <item quantity="other">Delegating %d tasks</item>
+    </plurals>
+    <plurals name="run_other_counted_past">
+        <item quantity="one">Used %d tool</item>
+        <item quantity="other">Used %d tools</item>
+    </plurals>
+    <plurals name="run_other_counted_present">
+        <item quantity="one">Using %d tool</item>
+        <item quantity="other">Using %d tools</item>
+    </plurals>
+    <plurals name="run_failed">
+        <item quantity="one">%d tool call failed</item>
+        <item quantity="other">%d tool calls failed</item>
+    </plurals>
+    <plurals name="shell_more">
+        <item quantity="one">%1$s + %2$d command</item>
+        <item quantity="other">%1$s + %2$d commands</item>
+    </plurals>
 </resources>

@@ -73,7 +73,9 @@ import io.github.lesj0610.hermes.core.REASONING_SCALE
 import io.github.lesj0610.hermes.core.ReasoningEffort
 import io.github.lesj0610.hermes.data.ChatState
 import io.github.lesj0610.hermes.data.RunPhase
+import io.github.lesj0610.hermes.data.TranscriptBlock
 import io.github.lesj0610.hermes.data.TranscriptItem
+import io.github.lesj0610.hermes.data.groupTranscript
 import io.github.lesj0610.hermes.net.ModelChoice
 import io.github.lesj0610.hermes.ui.commands.SlashCommand
 import io.github.lesj0610.hermes.ui.commands.SlashPalette
@@ -136,6 +138,8 @@ fun ChatPane(
     onCommand: (SlashCommand) -> Unit = {},
     /** Whether opening a conversation lands on its newest message. */
     openAtLatest: Boolean = true,
+    /** Rest every reasoning block as its one-line header, live ones included. */
+    reasoningCollapsedByDefault: Boolean = false,
     /** Hoisted so a test can place the transcript before it is drawn. */
     listState: LazyListState = rememberLazyListState(),
 ) {
@@ -148,6 +152,10 @@ fun ChatPane(
     lightbox?.let { dataUrl ->
         ImageLightbox(dataUrl = dataUrl, onDismiss = { lightbox = null })
     }
+
+    // What the list draws: the transcript with consecutive tool calls folded
+    // into runs. Every index below is into this, not into state.items.
+    val blocks = remember(state.items) { groupTranscript(state.items) }
 
     // Follow the tail while the agent is talking.
     //
@@ -182,17 +190,17 @@ fun ChatPane(
     // because the history arrives a moment after the session id does — the
     // first composition has nothing to scroll to yet.
     var landed by remember(state.sessionId) { mutableStateOf(false) }
-    LaunchedEffect(state.sessionId, state.items.isNotEmpty(), openAtLatest) {
-        if (landed || !openAtLatest || state.items.isEmpty()) return@LaunchedEffect
-        listState.scrollToItem(state.items.lastIndex)
+    LaunchedEffect(state.sessionId, blocks.isNotEmpty(), openAtLatest) {
+        if (landed || !openAtLatest || blocks.isEmpty()) return@LaunchedEffect
+        listState.scrollToItem(blocks.lastIndex)
         landed = true
     }
 
     LaunchedEffect(state.items.size, tailSize) {
-        if (state.items.isEmpty() || !following) return@LaunchedEffect
+        if (blocks.isEmpty() || !following) return@LaunchedEffect
         // Not animated: deltas land faster than an animation completes, and
         // each new one cancelled the last, which stalled the scroll mid-way.
-        listState.scrollToItem(state.items.lastIndex)
+        listState.scrollToItem(blocks.lastIndex)
     }
 
     Column(modifier.fillMaxSize()) {
@@ -218,7 +226,9 @@ fun ChatPane(
             HorizontalDivider(color = colors.line)
         }
 
-        if (state.items.isEmpty()) {
+        // Blocks, not items: a transcript of nothing but silent calls draws
+        // nothing, and an empty list must not offer a jump to index -1.
+        if (blocks.isEmpty()) {
             EmptyTranscript(Modifier.weight(1f))
         } else {
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -228,8 +238,22 @@ fun ChatPane(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp),
                     verticalArrangement = Arrangement.spacedBy(11.dp),
                 ) {
-                    items(state.items, key = { it.key }) { item ->
-                        TranscriptRow(item, onOpenImage = { lightbox = it })
+                    itemsIndexed(blocks, key = { _, block -> block.key }) { index, block ->
+                        when (block) {
+                            is TranscriptBlock.Item -> TranscriptRow(
+                                block.item,
+                                reasoningCollapsedByDefault = reasoningCollapsedByDefault,
+                                onOpenImage = { lightbox = it },
+                            )
+                            // Live only at the tail of a running turn: a run
+                            // that something else has already followed is done,
+                            // whatever the turn is still doing.
+                            is TranscriptBlock.Run -> ToolRunRow(
+                                tools = block.tools,
+                                runKey = block.key,
+                                live = state.isBusy && index == blocks.lastIndex,
+                            )
+                        }
                     }
                 }
 
@@ -245,7 +269,7 @@ fun ChatPane(
                     val jumpLabel = stringResource(R.string.chat_jump_latest)
                     FilledIconButton(
                         onClick = {
-                            transcriptScope.launch { listState.animateScrollToItem(state.items.lastIndex) }
+                            transcriptScope.launch { listState.animateScrollToItem(blocks.lastIndex) }
                         },
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = colors.panelRaised,
@@ -333,7 +357,11 @@ private fun RuntimeChip(label: String, enabled: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun TranscriptRow(item: TranscriptItem, onOpenImage: (String) -> Unit = {}) {
+private fun TranscriptRow(
+    item: TranscriptItem,
+    reasoningCollapsedByDefault: Boolean = false,
+    onOpenImage: (String) -> Unit = {},
+) {
     val colors = LocalRunColors.current
     when (item) {
         is TranscriptItem.UserText -> Column(
@@ -385,49 +413,7 @@ private fun TranscriptRow(item: TranscriptItem, onOpenImage: (String) -> Unit = 
             }
         }
 
-        is TranscriptItem.Reasoning -> {
-            // Collapsed by default, the way the desktop treats
-            // display.sections.thinking. Reasoning is how the answer was
-            // reached, not the answer, and left open it pushes the reply off
-            // the screen — on a phone that is the whole screen.
-            var expanded by rememberSaveable(item.key) { mutableStateOf(false) }
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(colors.panel)
-                    .clickable { expanded = !expanded }
-                    .padding(10.dp),
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ChevronIcon(
-                        modifier = Modifier
-                            .size(13.dp)
-                            .rotate(if (expanded) 90f else 0f),
-                    )
-                    Text(
-                        text = stringResource(R.string.chat_reasoning),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.muted,
-                    )
-                }
-                Text(
-                    text = item.text,
-                    // A step below the reply rather than two: it is secondary,
-                    // but it is still prose someone reads.
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.muted,
-                    // One line closed, so the row says what the block is about
-                    // rather than being a bare disclosure triangle.
-                    maxLines = if (expanded) Int.MAX_VALUE else 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-        }
+        is TranscriptItem.Reasoning -> ThinkingDisclosure(item, reasoningCollapsedByDefault)
 
         is TranscriptItem.ToolCall -> ToolCard(item)
 

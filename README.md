@@ -14,7 +14,7 @@ from the machine.
 
 | | |
 |---|---|
-| Chat | Markdown replies including tables and maths, streamed reasoning, tool cards and results, approval sheet. The send button becomes Stop while a run is in flight, and Send again the moment you type |
+| Chat | Markdown replies including tables and maths; reasoning shown per block with how long it took ("Thought for 12s"), with a live preview while it streams; consecutive tool calls folded into one summary line ("Explored 3 files, ran 2 commands") that opens to the cards, as the desktop draws them; approval sheet. The send button becomes Stop while a run is in flight, and Send again the moment you type |
 | Composer | Camera, photo and text-file attachments; model and reasoning level; dictation; spoken conversation |
 | Commands | Typing `/` opens the gateway's own registry: skills and quick commands run on the agent, read-only queries answer inline, `/compress` compacts the conversation. What has no server-side action is listed and marked, not hidden |
 | Sessions | Drawer list with search, and a per-session menu: rename, pin, copy ID, branch, export, archive, delete |
@@ -75,9 +75,8 @@ These are properties of the surfaces the app is built on, not oversights:
 - **Reasoning needs the dashboard.** A turn runs over the gateway's event
   socket when one is configured, which is where streamed thinking and tool
   results live. Without it the app falls back to `/v1/runs`, which has no
-  thinking channel at all — that is a property of the route, not a setting. An
-  attachment also keeps the turn on HTTP, since the socket's submit takes text.
-  See [docs/ws-transcript-contract.md](docs/ws-transcript-contract.md).
+  thinking channel at all — that is a property of the route, not a setting.
+  Attachments go over the socket too, through `image.attach_bytes`. See [docs/ws-transcript-contract.md](docs/ws-transcript-contract.md).
 - **Markdown covers what an agent writes, not the whole spec.** Bold, italic,
   strikethrough, inline code, fenced code, headings, lists, quotes, rules,
   links, and tables with per-column alignment.
@@ -148,9 +147,8 @@ Hermes Agent source; the client was written against its HTTP surface.
 
 ## Status
 
-Version 1.23. Compiles, unit tests pass, lint clean, release AAB builds, and the
-app runs against a live gateway.
+Version 1.24. Compiles, unit tests pass, lint clean, release AAB builds, and the
+app runs against a live gateway, over both the socket and HTTP routes.
 
-Not yet exercised on hardware: the camera and file attachment round trip, the
-voice controls, and the socket transport — its event mapping was built against
-a captured live run, but the app has not yet driven one.
+Not yet exercised on hardware: the camera and text-file attachments, and the
+voice controls.

@@ -324,6 +324,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { graph.settings.setOpenAtLatest(enabled) }
     }
 
+    fun setReasoningCollapsedByDefault(enabled: Boolean) {
+        viewModelScope.launch { graph.settings.setReasoningCollapsedByDefault(enabled) }
+    }
+
     fun setUpdateChecks(enabled: Boolean) {
         viewModelScope.launch { graph.settings.setUpdateChecks(enabled) }
     }

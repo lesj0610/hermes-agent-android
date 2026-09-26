@@ -159,6 +159,12 @@ data class HermesSettings(
      * position, for reading a long session from where you left off.
      */
     val openAtLatest: Boolean = true,
+    /**
+     * Whether every reasoning block rests as its one-line header, live ones
+     * included. Off by default, as on the desktop: a live thought shows a
+     * short preview that follows it, the only sign a long think is moving.
+     */
+    val reasoningCollapsedByDefault: Boolean = false,
     val drawerPinned: Boolean = true,
     val showStatusBar: Boolean = true,
     /**
@@ -203,6 +209,7 @@ class SettingsRepository(private val context: Context) {
         val RAIL_WIDTH = floatPreferencesKey("rail_width")
         val RAIL_PANEL = stringPreferencesKey("rail_panel")
         val OPEN_AT_LATEST = booleanPreferencesKey("open_at_latest")
+        val REASONING_COLLAPSED = booleanPreferencesKey("reasoning_collapsed_by_default")
         val DRAWER_PINNED = booleanPreferencesKey("drawer_pinned")
         val SHOW_STATUS_BAR = booleanPreferencesKey("show_status_bar")
         val UPDATE_CHECKS = booleanPreferencesKey("update_checks")
@@ -246,6 +253,7 @@ class SettingsRepository(private val context: Context) {
                     .coerceIn(RAIL_WIDTH_MIN, RAIL_WIDTH_MAX),
                 railPanel = rail(prefs[Keys.RAIL_PANEL], RailPanel.Activity),
                 openAtLatest = prefs[Keys.OPEN_AT_LATEST] ?: true,
+                reasoningCollapsedByDefault = prefs[Keys.REASONING_COLLAPSED] ?: false,
                 drawerPinned = prefs[Keys.DRAWER_PINNED] ?: true,
                 showStatusBar = prefs[Keys.SHOW_STATUS_BAR] ?: true,
                 updateChecks = prefs[Keys.UPDATE_CHECKS] ?: true,
@@ -347,6 +355,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setOpenAtLatest(enabled: Boolean) {
         context.dataStore.edit { it[Keys.OPEN_AT_LATEST] = enabled }
+    }
+
+    suspend fun setReasoningCollapsedByDefault(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.REASONING_COLLAPSED] = enabled }
     }
 
     suspend fun setDrawerPinned(pinned: Boolean) {

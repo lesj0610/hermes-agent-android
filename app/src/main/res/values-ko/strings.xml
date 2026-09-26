@@ -16,7 +16,6 @@
     <string name="chat_stopping">중단하는 중…</string>
     <string name="chat_empty_title">아직 아무것도 없습니다</string>
     <string name="chat_empty_body">메시지를 보내면 실행이 시작됩니다.</string>
-    <string name="chat_reasoning">추론</string>
 
     <string name="tool_running">실행 중</string>
     <string name="tool_awaiting">승인 대기</string>
@@ -274,4 +273,67 @@
     <string name="settings_open_at_latest">대화를 열 때 최신 위치로</string>
     <string name="settings_open_at_latest_note">끄면 마지막으로 보던 위치에서 열립니다.</string>
     <string name="image_close">이미지 닫기</string>
+    <!-- Run summaries and reasoning headers: the desktop's wording (tool/run-summary.ts). -->
+    <string name="thinking_live">생각하는 중</string>
+    <string name="thinking_done">생각함</string>
+    <string name="thinking_brief">잠시 생각함</string>
+    <string name="thinking_for">%1$s 동안 생각함</string>
+    <string name="run_edit_named_past">%1$s 수정함</string>
+    <string name="run_edit_named_present">%1$s 수정하는 중</string>
+    <string name="run_explore_named_past">%1$s 탐색함</string>
+    <string name="run_explore_named_present">%1$s 탐색하는 중</string>
+    <string name="run_run_named_past">%1$s 실행함</string>
+    <string name="run_run_named_present">%1$s 실행하는 중</string>
+    <string name="run_delegate_named_past">%1$s 위임함</string>
+    <string name="run_delegate_named_present">%1$s 위임하는 중</string>
+    <string name="run_other_named_past">%1$s 사용함</string>
+    <string name="run_other_named_present">%1$s 사용하는 중</string>
+    <string name="skill_loading">스킬을 불러오는 중</string>
+    <string name="skill_loaded">스킬을 불러옴</string>
+    <string name="skill_load_failed">스킬을 불러오지 못함</string>
+    <string name="skill_reading_resource">스킬 리소스를 읽는 중</string>
+    <string name="skill_read_resource">스킬 리소스를 읽음</string>
+    <string name="skill_resource_failed">스킬 리소스를 읽지 못함</string>
+    <string name="skill_listing">스킬 목록을 가져오는 중</string>
+    <string name="skill_listed">스킬 목록을 가져옴</string>
+    <string name="skill_list_failed">스킬 목록을 가져오지 못함</string>
+    <string name="skill_with_target">%1$s: %2$s</string>
+    <string name="settings_reasoning_collapsed">추론 기본 접기</string>
+    <string name="settings_reasoning_collapsed_note">추론을 실시간으로 펼치지 않고 \"… 동안 생각함\" 한 줄로 접어 둡니다.</string>
+    <plurals name="run_edit_counted_past">
+        <item quantity="other">파일 %d개 수정함</item>
+    </plurals>
+    <plurals name="run_edit_counted_present">
+        <item quantity="other">파일 %d개 수정하는 중</item>
+    </plurals>
+    <plurals name="run_explore_counted_past">
+        <item quantity="other">파일 %d개 탐색함</item>
+    </plurals>
+    <plurals name="run_explore_counted_present">
+        <item quantity="other">파일 %d개 탐색하는 중</item>
+    </plurals>
+    <plurals name="run_run_counted_past">
+        <item quantity="other">명령 %d개 실행함</item>
+    </plurals>
+    <plurals name="run_run_counted_present">
+        <item quantity="other">명령 %d개 실행하는 중</item>
+    </plurals>
+    <plurals name="run_delegate_counted_past">
+        <item quantity="other">작업 %d개 위임함</item>
+    </plurals>
+    <plurals name="run_delegate_counted_present">
+        <item quantity="other">작업 %d개 위임하는 중</item>
+    </plurals>
+    <plurals name="run_other_counted_past">
+        <item quantity="other">도구 %d개 사용함</item>
+    </plurals>
+    <plurals name="run_other_counted_present">
+        <item quantity="other">도구 %d개 사용하는 중</item>
+    </plurals>
+    <plurals name="run_failed">
+        <item quantity="other">도구 호출 %d개 실패</item>
+    </plurals>
+    <plurals name="shell_more">
+        <item quantity="other">%1$s 외 명령 %2$d개</item>
+    </plurals>
 </resources>

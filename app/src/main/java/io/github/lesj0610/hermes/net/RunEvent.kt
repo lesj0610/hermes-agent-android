@@ -65,6 +65,11 @@ sealed interface RunEvent {
         override val timestamp: Double?,
         val tool: String,
         val preview: String?,
+        /**
+         * The call's arguments, where the route sends them — the socket does,
+         * the HTTP route does not. What a run summary names comes from here.
+         */
+        val args: JsonObject? = null,
     ) : RunEvent
 
     /**

@@ -16,7 +16,8 @@ import org.junit.Test
  * Bringing a live session to the runtime a turn asked for.
  *
  * The fake below plays the gateway: each stored session keeps its own model and
- * reasoning, `session.resume` reports them under a fresh live id, and
+ * reasoning, `session.resume` reports them under that conversation's live id —
+ * one per conversation, reused while alive, as the gateway does — and
  * `config.set` changes only the session whose live id it names — the property
  * that keeps two conversations from bleeding into each other.
  */
@@ -40,8 +41,8 @@ class SocketTurnSetupTest {
                 "session.resume" -> {
                     val id = params.field("session_id")
                     val runtime = stored.getValue(id)
-                    val liveId = "live-${++nextLive}"
-                    live[liveId] = id
+                    val liveId = live.entries.firstOrNull { it.value == id }?.key
+                        ?: "live-${++nextLive}".also { live[it] = id }
                     session(liveId, runtime)
                 }
                 "session.create" -> {

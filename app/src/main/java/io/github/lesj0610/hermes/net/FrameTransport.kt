@@ -36,6 +36,9 @@ internal interface FrameTransport {
  */
 class SocketClosedException(message: String) : Exception(message)
 
+/** The gateway did not answer within the limit. Not proof that it did nothing. */
+class GatewayTimeoutException(message: String) : Exception(message)
+
 /** [FrameTransport] over a Ktor client WebSocket. Non-text frames are skipped. */
 internal class WebSocketTransport(private val session: DefaultClientWebSocketSession) : FrameTransport {
     override suspend fun send(text: String) {
@@ -68,7 +71,7 @@ internal class RpcSession(
     private val transport: FrameTransport,
     @PublishedApi internal val codec: Json,
 ) {
-    private var nextId = 1
+    private val nextId = java.util.concurrent.atomic.AtomicInteger(1)
 
     suspend inline fun <reified T> call(method: String, params: JsonObject): T =
         decode(callRaw(method, params))
@@ -96,13 +99,16 @@ internal class RpcSession(
         }
     }
 
+    /** An id for a request about to be sent, known before its answer can arrive. */
+    fun reserve(): Int = nextId.getAndIncrement()
+
     /**
      * Sends a request without waiting for its reply, and answers its id. For
      * requests whose answer is the event stream (`prompt.submit`) or that a
-     * reader of that stream would otherwise have to wait on.
+     * reader of that stream would otherwise have to wait on. Pass a [reserve]d
+     * id when something must be ready to recognise the answer before it lands.
      */
-    suspend fun send(method: String, params: JsonObject): Int {
-        val id = nextId++
+    suspend fun send(method: String, params: JsonObject, id: Int = reserve()): Int {
         transport.send(
             codec.encodeToString(
                 JsonObject.serializer(),

@@ -155,7 +155,12 @@ data class ChatState(
     val startedTurn: Long = 0,
     val endedTurn: Long = 0,
 ) {
-    val isBusy: Boolean get() = phase !is RunPhase.Idle
+    /**
+     * A turn is in progress: running on the gateway, or sent and still being
+     * set up there. Setup counts — a second turn sent during it would race the
+     * first for the same live session.
+     */
+    val isBusy: Boolean get() = phase !is RunPhase.Idle || startedTurn > endedTurn
     val pendingApproval: PendingApproval?
         get() = (phase as? RunPhase.AwaitingApproval)?.approval
 }

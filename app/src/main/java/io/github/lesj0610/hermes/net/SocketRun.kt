@@ -29,7 +29,12 @@ class SocketRun internal constructor(
     private val live: LiveTurn,
     /** The gateway's live session id, which is *not* the stored one. */
     val liveSessionId: String,
+    /** The id `prompt.submit` went out under. Its answer can be a refusal. */
+    private val submitId: Int,
 ) {
+    /** Ids of stop requests still awaiting an answer. */
+    private val interrupts = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
+
     /**
      * Frames for this turn, mapped onto the same events the HTTP path produces
      * so the transcript reducer does not care which transport ran.
@@ -37,12 +42,33 @@ class SocketRun internal constructor(
      * The flow ends after the turn's terminal event, or when the socket closes.
      * A socket that closes first ends the flow with no terminal event at all;
      * the caller sees the turn still open and ends it as a disconnection.
+     *
+     * Answers share the socket with events and arrive in whatever order the
+     * gateway sends them — a delta can come before the submit is acknowledged —
+     * so both are read here and neither is waited for. A refused submit ends
+     * the turn with the gateway's reason: the socket stays open after one, and
+     * nothing else would ever end it.
      */
     fun events(): Flow<RunEvent> = flow {
         while (true) {
             val frame = transport.receive() ?: return@flow
             val message = runCatching { json.parseToJsonElement(frame).jsonObject }.getOrNull() ?: continue
-            if ((message["method"] as? JsonPrimitive)?.content != "event") continue
+            if ((message["method"] as? JsonPrimitive)?.content != "event") {
+                val id = (message["id"] as? JsonPrimitive)?.content?.toIntOrNull() ?: continue
+                val error = message["error"] as? JsonObject
+                if (error == null) {
+                    interrupts.remove(id)
+                    continue
+                }
+                val reason = (error["message"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
+                    ?: "The gateway refused the request"
+                if (id == submitId) {
+                    emit(RunEvent.Failed(null, null, reason))
+                    return@flow
+                }
+                if (interrupts.remove(id)) emit(RunEvent.StopRefused(reason))
+                continue
+            }
 
             val params = message["params"] as? JsonObject ?: continue
             val type = (params["type"] as? JsonPrimitive)?.content ?: continue
@@ -142,7 +168,10 @@ class SocketRun internal constructor(
      * The answer is the event stream's `message.complete`, not this reply.
      */
     suspend fun interrupt() {
-        rpc.send("session.interrupt", buildJsonObject { put("session_id", liveSessionId) })
+        // Registered before it is sent, so a refusal read back at once is still known for one.
+        val id = rpc.reserve()
+        interrupts += id
+        rpc.send("session.interrupt", buildJsonObject { put("session_id", liveSessionId) }, id)
     }
 
     /**

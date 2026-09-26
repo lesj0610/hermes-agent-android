@@ -134,6 +134,15 @@ sealed interface RunEvent {
         override val timestamp: Double?,
         val name: String,
     ) : RunEvent
+
+    /**
+     * The gateway refused the request to stop the turn. The turn is still
+     * running; it must not be left looking as if it were stopping.
+     */
+    data class StopRefused(val reason: String) : RunEvent {
+        override val runId: String? get() = null
+        override val timestamp: Double? get() = null
+    }
 }
 
 /** Maps one decoded SSE payload onto [RunEvent]. Returns null for frames with no `event` key. */

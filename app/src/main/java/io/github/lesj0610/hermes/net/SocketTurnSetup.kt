@@ -85,6 +85,13 @@ internal suspend fun prepareSocketTurn(
     voice: VoiceTurn? = null,
     onLive: (String) -> Unit = {},
     onRestorePlan: (String?) -> Unit = {},
+    /**
+     * Send the reasoning level even when the session reports it already. Set
+     * when the previous turn's restore went out and its outcome is unknown: the
+     * reported level cannot be trusted, and the latest explicit setting should
+     * be this turn's.
+     */
+    forceReasoning: Boolean = false,
 ): PreparedTurn {
     val model = runtime.model?.trim().orEmpty()
     val provider = runtime.provider?.trim().orEmpty()
@@ -102,7 +109,17 @@ internal suspend fun prepareSocketTurn(
             },
         )
     } else {
-        rpc.call("session.resume", buildJsonObject { put("session_id", storedSessionId) })
+        try {
+            // Built before the answer: an agent not built yet reports neither its
+            // provider nor its level, and the settings below are decided on both.
+            resume(rpc, storedSessionId, eager = true)
+        } catch (refused: GatewayRpcException) {
+            if (refused.code != RESUME_FAILED) throw refused
+            // The stored runtime could not be built — a provider since removed,
+            // say — and this turn may be picking another. Resumed without the
+            // build, nothing is reported, so everything is applied explicitly.
+            resume(rpc, storedSessionId, eager = false)
+        }
     }
     val openedObject = opened as? JsonObject
     val liveId = (openedObject?.get("session_id") as? JsonPrimitive)?.content?.trim().orEmpty()
@@ -157,7 +174,7 @@ internal suspend fun prepareSocketTurn(
     }
     if (voice != null) onRestorePlan(restore)
 
-    if (reasoning.isNotEmpty() && before != reasoning) {
+    if (reasoning.isNotEmpty() && (before != reasoning || forceReasoning)) {
         try {
             rpc.call(
                 "config.set",
@@ -177,17 +194,33 @@ internal suspend fun prepareSocketTurn(
 }
 
 /**
+ * `session.resume` for [storedId]. A session another client already holds live
+ * is reused as it is: [eager] builds only a session this call brings up, so an
+ * unbuilt one can still come back.
+ */
+private suspend fun resume(rpc: RpcCaller, storedId: String, eager: Boolean): JsonElement = rpc.call(
+    "session.resume",
+    buildJsonObject {
+        put("session_id", storedId)
+        if (eager) put("eager_build", true)
+        // The history is read over HTTP; resending it with every turn is only payload.
+        put("omit_messages", true)
+    },
+)
+
+/** The gateway's code for a resume whose agent could not be built. */
+private const val RESUME_FAILED = 5000
+
+/**
  * Whether the live session already runs [model] on the endpoint [provider]
- * names.
+ * names. Anything short of a confirmation counts as different, and the pick is
+ * applied explicitly.
  *
- * For a fixed provider the reported name settles it. A custom endpoint does
- * not: the gateway reports it under an identity canonicalised from the endpoint
- * (`custom:custom`) that does not round-trip with the picker's slug
- * (`custom:local-(127.0.0.1:8088)`), and two custom endpoints can serve the
- * same model name. There the endpoint itself decides — `model.options` for the
- * live session marks the row the agent is on, found by its URL, and lists every
- * row's URL. Anything that cannot be confirmed counts as different, and the
- * pick is applied explicitly.
+ * With its agent built, the session reports the picker row it routes by, so an
+ * exact match confirms it. Nothing else does: an agent not built yet reports no
+ * provider, and bare `custom` is the class every custom endpoint resolves to,
+ * not a row. Two custom rows can still be aliases of one endpoint, which only
+ * their URLs settle: see [sameEndpoint].
  */
 private suspend fun onPickedModel(
     rpc: RpcCaller,
@@ -198,13 +231,25 @@ private suspend fun onPickedModel(
 ): Boolean {
     if (info == null || info.model != model) return false
     if (provider.isEmpty()) return true
-    if (!isCustom(provider) && !isCustom(info.provider)) return info.provider == provider
-    return sameEndpoint(rpc, liveId, provider)
+    val reported = info.provider
+    if (reported.isEmpty() || reported == "custom") return false
+    if (reported == provider) return true
+    if (!isCustom(provider) || !isCustom(reported)) return false
+    return sameEndpoint(rpc, liveId, reported, provider)
 }
 
 private fun isCustom(provider: String) = provider == "custom" || provider.startsWith("custom:")
 
-private suspend fun sameEndpoint(rpc: RpcCaller, liveId: String, provider: String): Boolean {
+/**
+ * Whether the custom row [provider] points at the same URL as the row the
+ * session is on, per `model.options` for the live session, which lists every
+ * row's URL.
+ *
+ * Its current mark follows the session's identity once the agent is built, and
+ * the profile default before; it is used only where it agrees with the identity
+ * the session itself reports ([reported]).
+ */
+private suspend fun sameEndpoint(rpc: RpcCaller, liveId: String, reported: String, provider: String): Boolean {
     val options = try {
         rpc.call("model.options", buildJsonObject { put("session_id", liveId) }) as? JsonObject
     } catch (cancelled: CancellationException) {
@@ -214,18 +259,36 @@ private suspend fun sameEndpoint(rpc: RpcCaller, liveId: String, provider: Strin
     } ?: return false
     val rows = (options["providers"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
     val current = rows.firstOrNull { (it["is_current"] as? JsonPrimitive)?.booleanOrNull == true } ?: return false
+    if (current.text("slug") != reported) return false
     val picked = rows.firstOrNull { it.text("slug") == provider } ?: return false
-    // The gateway found the current row by the agent's URL; the picked row
-    // being that row is the endpoint confirmed.
-    if (picked === current) return true
-    val here = endpoint(current.text("api_url"))
-    return here.isNotEmpty() && here == endpoint(picked.text("api_url"))
+    val here = endpoint(current.text("api_url")) ?: return false
+    return here == endpoint(picked.text("api_url"))
 }
 
 private fun JsonObject.text(key: String): String =
     (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
 
-private fun endpoint(url: String): String = url.trim().trimEnd('/').lowercase()
+/**
+ * An endpoint URL reduced only by what cannot change the endpoint: the scheme
+ * and host are case-insensitive, a default port is the same as none, and a
+ * trailing slash on the path is not a different resource. The path and query
+ * keep their case — `/TenantA/v1` and `/tenanta/v1` can be different services —
+ * and anything that does not parse is not comparable at all.
+ */
+internal fun endpoint(url: String): String? {
+    val uri = runCatching { java.net.URI(url.trim()) }.getOrNull() ?: return null
+    val scheme = uri.scheme?.lowercase() ?: return null
+    val host = uri.host?.lowercase() ?: return null
+    val port = when {
+        uri.port == -1 -> ""
+        scheme == "http" && uri.port == 80 -> ""
+        scheme == "https" && uri.port == 443 -> ""
+        else -> ":${uri.port}"
+    }
+    val path = uri.rawPath.orEmpty().trimEnd('/')
+    val query = uri.rawQuery?.let { "?$it" }.orEmpty()
+    return "$scheme://$host$port$path$query"
+}
 
 /** The `prompt.submit` parameters for a turn, spoken or typed. */
 internal fun promptSubmitParams(liveId: String, text: String, voice: VoiceTurn?): JsonObject =

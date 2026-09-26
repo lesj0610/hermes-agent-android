@@ -63,6 +63,8 @@ class DashboardApi internal constructor(
     private val socketOpener: (suspend () -> FrameTransport)?,
     /** The bound on each cleanup send and wait. */
     private val cleanupTimeoutMillis: Long,
+    /** The bound on each setup request — resume, a setting, an attachment, the submit. */
+    private val setupTimeoutMillis: Long = SETUP_TIMEOUT_MILLIS,
 ) {
     constructor(
         baseUrlProvider: suspend () -> String,
@@ -407,6 +409,8 @@ class DashboardApi internal constructor(
          * reported here, separately, rather than replacing it.
          */
         onCleanup: (CleanupReport) -> Unit = {},
+        /** The previous turn's restore has an unknown outcome; see [prepareSocketTurn]. */
+        forceReasoning: Boolean = false,
     ): SocketRun {
         val transport = openSocket(
             "The dashboard did not issue a WebSocket ticket, so the conversation cannot run over it.",
@@ -416,13 +420,21 @@ class DashboardApi internal constructor(
         // step below still closes what was opened and restores what was changed.
         val live = LiveTurn(transport, rpc, cleanupTimeoutMillis)
         try {
+            // Every setup request is bounded. A setup that hangs would hold the
+            // turn open with nothing to stop, so no answer in time is a failure —
+            // an ordinary one, never a cancellation, so the turn still ends.
+            suspend fun <T : Any> timed(what: String, request: suspend () -> T): T =
+                withTimeoutOrNull(setupTimeoutMillis) { request() }
+                    ?: throw GatewayTimeoutException("The gateway did not answer $what in time")
+
             val prepared = prepareSocketTurn(
-                rpc = { method, params -> rpc.callRaw(method, params) },
+                rpc = { method, params -> timed(method) { rpc.callRaw(method, params) } },
                 storedSessionId = storedSessionId,
                 runtime = runtime,
                 voice = voice,
                 onLive = { live.liveId = it },
                 onRestorePlan = { live.restoreReasoning = it },
+                forceReasoning = forceReasoning,
             )
 
             // Attachments go first, and each one is awaited: `image.attach_bytes`
@@ -435,22 +447,27 @@ class DashboardApi internal constructor(
             // images but emits no reasoning stream and no tool events, so a turn
             // with an attachment used to arrive as a bare answer.
             images.forEachIndexed { index, dataUrl ->
-                rpc.call<JsonObject>(
-                    "image.attach_bytes",
-                    buildJsonObject {
-                        put("session_id", prepared.liveId)
-                        // The data URL whole: the server reads the mime prefix off it.
-                        put("content_base64", dataUrl)
-                        put("filename", "attachment-${index + 1}.jpg")
-                    },
-                )
+                timed("image.attach_bytes") {
+                    rpc.callRaw(
+                        "image.attach_bytes",
+                        buildJsonObject {
+                            put("session_id", prepared.liveId)
+                            // The data URL whole: the server reads the mime prefix off it.
+                            put("content_base64", dataUrl)
+                            put("filename", "attachment-${index + 1}.jpg")
+                        },
+                    )
+                }
             }
 
             // Fire and forget: the answer to prompt.submit is the event stream,
             // not its return value, and waiting for the reply would block the
             // reader.
-            rpc.send("prompt.submit", promptSubmitParams(prepared.liveId, text, voice))
-            return SocketRun(transport, json, rpc, live, prepared.liveId)
+            // Its answer is read with the events, so a refusal still ends the turn.
+            val submitId = timed("prompt.submit") {
+                rpc.send("prompt.submit", promptSubmitParams(prepared.liveId, text, voice))
+            }
+            return SocketRun(transport, json, rpc, live, prepared.liveId, submitId)
         } catch (cause: Throwable) {
             onCleanup(live.finish())
             throw cause
@@ -505,3 +522,9 @@ class GatewayRpcException(val code: Int, override val message: String) : Excepti
 
 /** The bound on each cleanup send and each wait for its answer. */
 internal const val CLOSE_TIMEOUT_MILLIS = 3_000L
+
+/**
+ * The bound on each setup request. Generous: a model switch builds an agent,
+ * and an attachment is megabytes over a phone connection.
+ */
+internal const val SETUP_TIMEOUT_MILLIS = 60_000L

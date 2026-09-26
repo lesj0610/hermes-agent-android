@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import io.github.lesj0610.hermes.net.CleanupReport
 import io.github.lesj0610.hermes.net.DashboardApi
 import io.github.lesj0610.hermes.net.HermesApi
@@ -57,6 +59,26 @@ class RunEngine(
 
     /** Set while a turn is running over the socket, so approvals go back the same way. */
     private var socketRun: SocketRun? = null
+
+    /**
+     * The last spoken turn's restore went out and its outcome is unknown, so it
+     * may still land on the live session later. The next socket turn sends its
+     * own level even if the session reports it already.
+     */
+    @Volatile
+    private var restoreUnknown = false
+
+    /**
+     * Held by a socket turn from its first request to the end of its cleanup.
+     *
+     * The gateway hands every turn of a conversation the SAME live session, by
+     * the same id, for as long as it is alive — so a turn that has ended but is
+     * still restoring its level would otherwise be restoring it over the next
+     * turn's settings. The next turn cannot reach the gateway until the lock is
+     * released, which is after cleanup; a cancelled waiter just stops waiting,
+     * and the holder still releases only once its cleanup is done.
+     */
+    private val gatewayTurn = Mutex()
 
     private fun nextKey(prefix: String): String = "$prefix-${keySeq.incrementAndGet()}"
 
@@ -208,16 +230,31 @@ class RunEngine(
         images: List<String>,
         runtime: TurnRuntime,
         voice: VoiceTurn?,
+    ) = gatewayTurn.withLock { runSocketLocked(turn, prompt, images, runtime, voice) }
+
+    private suspend fun runSocketLocked(
+        turn: Long,
+        prompt: String,
+        images: List<String>,
+        runtime: TurnRuntime,
+        voice: VoiceTurn?,
     ) {
         val api = dashboard ?: return
+        val force = restoreUnknown
         val run = try {
-            api.startSocketRun(_state.value.sessionId, prompt, images, runtime, voice, onCleanup = ::noteCleanup)
+            api.startSocketRun(
+                _state.value.sessionId, prompt, images, runtime, voice,
+                onCleanup = ::noteCleanup,
+                forceReasoning = force,
+            )
         } catch (cause: CancellationException) {
             throw cause
         } catch (cause: Exception) {
             endTurn(turn, cause.toUiError(), asItem = false)
             return
         }
+        // This turn's own level went out after whatever an earlier restore did.
+        if (force && runtime.reasoning?.isNotBlank() == true) restoreUnknown = false
         socketRun = run
         running(turn, run.liveSessionId)
         try {
@@ -258,7 +295,7 @@ class RunEngine(
      * mid-reply shows it; otherwise it goes to the banner, for a turn that
      * never started.
      */
-    private fun endTurn(turn: Long, error: UiError, asItem: Boolean = true) {
+    private fun endTurn(turn: Long, error: UiError?, asItem: Boolean = true) {
         var ended = false
         _state.update { state ->
             if (state.endedTurn >= turn) return@update state
@@ -267,16 +304,16 @@ class RunEngine(
             state.copy(
                 phase = RunPhase.Idle,
                 runStartedAtMillis = null,
-                items = if (asItem) {
+                items = if (asItem && error != null) {
                     state.items.finishStreaming() + TranscriptItem.Failure(nextKey("e"), error)
                 } else {
                     state.items.finishStreaming()
                 },
-                error = if (asItem) state.error else error,
+                error = if (asItem || error == null) state.error else error,
                 endedTurn = turn,
             )
         }
-        if (ended) _signals.tryEmit(RunSignal.Finished("", ok = false))
+        if (ended) _signals.tryEmit(RunSignal.Finished("", ok = error == null))
     }
 
     /**
@@ -284,6 +321,7 @@ class RunEngine(
      * Recorded apart from any error, which stays the one that ended the turn.
      */
     private fun noteCleanup(report: CleanupReport) {
+        if (report.restoreUnknown) restoreUnknown = true
         if (report.restoreFailed) _state.update { it.copy(warning = UiError.ReasoningNotRestored) }
     }
 
@@ -473,6 +511,16 @@ class RunEngine(
                 if (applied) _signals.tryEmit(RunSignal.Finished(event.runId.orEmpty(), ok = true))
             }
 
+            // Stop was refused: the turn runs on, so it must not stay "stopping"
+            // with nothing coming to end that.
+            is RunEvent.StopRefused -> updateTurn(turn) { current ->
+                val phase = current.phase
+                current.copy(
+                    phase = if (phase is RunPhase.Stopping) RunPhase.Running(phase.runId) else phase,
+                    error = UiError.Raw(event.reason),
+                )
+            }
+
             // A tenth event name from a newer server is ignored, not fatal.
             is RunEvent.Unknown -> Unit
         }
@@ -514,10 +562,20 @@ class RunEngine(
     }
 
     fun stop() {
-        val runId = when (val phase = _state.value.phase) {
+        val state = _state.value
+        val runId = when (val phase = state.phase) {
             is RunPhase.Running -> phase.runId
             is RunPhase.AwaitingApproval -> phase.runId
-            else -> return
+            else -> {
+                // Sent but still being set up: nothing runs on the gateway yet, so
+                // the setup itself is what stops. Its cleanup still runs — it is
+                // not cancellable — and the next turn waits for it.
+                if (state.startedTurn > state.endedTurn) {
+                    streamJob?.cancel()
+                    endTurn(state.startedTurn, error = null, asItem = false)
+                }
+                return
+            }
         }
         _state.update { it.copy(phase = RunPhase.Stopping(runId)) }
         scope.launch {

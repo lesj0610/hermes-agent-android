@@ -373,6 +373,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _onDeviceRecognition = MutableStateFlow(SpeechIn.OnDevice.Unknown)
     val onDeviceRecognition: StateFlow<SpeechIn.OnDevice> = _onDeviceRecognition.asStateFlow()
 
+    private val _recognizers = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+
+    /** The recognition services installed on the device, as (component, label). */
+    val recognizers: StateFlow<List<Pair<String, String>>> = _recognizers.asStateFlow()
+
     init {
         refresh()
         refreshDashboard()
@@ -381,15 +386,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // of the reply it is following.
         viewModelScope.launch { graph.runEngine.state.collect { voice.onChatState(it) } }
         viewModelScope.launch {
+            var checkedLocale: Locale? = null
             settings.collect { current ->
+                val locale = voiceLocale(current)
                 voice.configure(
-                    locale = voiceLocale(current),
+                    locale = locale,
                     rate = current.speechRate,
                     pitch = current.speechPitch,
                     engine = current.speechEngine,
-                    preferOnDevice = current.preferOnDeviceRecognition,
+                    recognizer = current.speechRecognizer,
                 )
                 voice.autoRead = current.autoReadReplies
+                // Whether the device recognizes this language on the device decides
+                // which recognizer the device default uses, so it is known from the
+                // start rather than only once the settings page has been opened.
+                if (locale != checkedLocale && voiceAvailable) {
+                    checkedLocale = locale
+                    voice.refreshOnDevice { _onDeviceRecognition.value = it }
+                }
             }
         }
     }
@@ -469,8 +483,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { graph.settings.setSpeechEngine(engine) }
     }
 
-    fun setPreferOnDeviceRecognition(enabled: Boolean) {
-        viewModelScope.launch { graph.settings.setPreferOnDeviceRecognition(enabled) }
+    fun setSpeechRecognizer(recognizer: String) {
+        viewModelScope.launch { graph.settings.setSpeechRecognizer(recognizer) }
     }
 
     fun previewSpeech() = voice.preview()
@@ -478,6 +492,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Asks the engines what they can do, for the voice settings page. */
     fun inspectVoice() {
         voice.warmUpSpeech()
+        _recognizers.value = voice.recognizers()
         voice.refreshOnDevice { _onDeviceRecognition.value = it }
     }
 

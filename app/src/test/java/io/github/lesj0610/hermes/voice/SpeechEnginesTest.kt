@@ -1,9 +1,16 @@
 package io.github.lesj0610.hermes.voice
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageInfo
+import android.content.pm.ServiceInfo
 import android.os.Bundle
 import android.os.Looper
+import android.speech.RecognitionService
 import android.speech.RecognitionSupport
+import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import org.junit.Assert.assertEquals
@@ -18,6 +25,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowSpeechRecognizer
 import org.robolectric.shadows.ShadowTextToSpeech
+import org.robolectric.util.ReflectionHelpers
 import java.util.Locale
 
 /**
@@ -312,7 +320,7 @@ class SpeechInTest {
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals(SpeechIn.OnDevice.Installed, status)
 
-        input.preferOnDevice = true
+        // Left to the device, a confirmed on-device recognizer is what runs.
         val session = input.start(Locale.KOREA) { id, event -> events += id to event }
         idle()
         val local = latest()
@@ -324,6 +332,58 @@ class SpeechInTest {
 
         latest().triggerOnResults(results("기본 인식기"))
         assertEquals(listOf(session to SpeechIn.Event.Final("기본 인식기")), events)
+    }
+
+    private fun installRecognizer(pkg: String, label: String): ComponentName {
+        val packages = shadowOf(context.packageManager)
+        val app = ApplicationInfo().apply { packageName = pkg }
+        packages.installPackage(PackageInfo().apply { packageName = pkg; applicationInfo = app })
+        val component = ComponentName(pkg, "$pkg.RecognizerService")
+        packages.addOrUpdateService(
+            ServiceInfo().apply {
+                packageName = pkg
+                name = component.className
+                nonLocalizedLabel = label
+                applicationInfo = app
+                exported = true
+            },
+        )
+        packages.addIntentFilterForService(component, IntentFilter(RecognitionService.SERVICE_INTERFACE))
+        return component
+    }
+
+    private fun serviceOf(recognizer: SpeechRecognizer): ComponentName? =
+        ReflectionHelpers.getField(recognizer, "mServiceComponent")
+
+    @Test
+    fun `the recognizers installed on the device are listed, by name`() {
+        val samsung = installRecognizer("com.samsung.recognizer", "Samsung 음성 인식")
+        val google = installRecognizer("com.google.recognizer", "Google 음성 인식")
+        assertEquals(
+            listOf(google.flattenToString() to "Google 음성 인식", samsung.flattenToString() to "Samsung 음성 인식"),
+            SpeechIn(context).recognizers(),
+        )
+    }
+
+    @Test
+    fun `a chosen recognizer is used, and asked to stay offline`() {
+        val chosen = installRecognizer("com.samsung.recognizer", "Samsung 음성 인식")
+        val input = SpeechIn(context)
+        input.service = chosen.flattenToString()
+        input.start(Locale.KOREA) { id, event -> events += id to event }
+        idle()
+        assertEquals(chosen, serviceOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer()))
+        assertTrue(latest().lastRecognizerIntent.getBooleanExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false))
+    }
+
+    @Test
+    fun `a chosen recognizer since removed leaves it to the device, still offline`() {
+        val input = SpeechIn(context)
+        input.service = "com.gone.recognizer/com.gone.recognizer.RecognizerService"
+        input.start(Locale.KOREA) { id, event -> events += id to event }
+        idle()
+        assertEquals(null, serviceOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer()))
+        assertTrue(latest().lastRecognizerIntent.getBooleanExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false))
     }
 
     @Test(expected = IllegalStateException::class)

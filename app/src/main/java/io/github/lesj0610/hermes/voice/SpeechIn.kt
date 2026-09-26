@@ -1,11 +1,13 @@
 package io.github.lesj0610.hermes.voice
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import android.speech.RecognitionListener
+import android.speech.RecognitionService
 import android.speech.RecognitionSupport
 import android.speech.RecognitionSupportCallback
 import android.speech.RecognizerIntent
@@ -17,13 +19,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
 
 /**
- * The phone's own speech recognizer.
+ * The phone's own speech recognizer, kept on the device.
  *
- * Whichever service the system has as its default recognizer does the work —
- * Google's, Samsung's — and it may well send audio over the network; only a
- * recognizer confirmed to have the language installed on the device is offline,
- * and that is used only when asked for and confirmed, never assumed from the
- * Android version.
+ * Which one is chosen among the recognition services the phone carries
+ * ([service], listed by [recognizers]) — Google's everywhere, Samsung's on a
+ * Samsung — or left to the device: its on-device recognizer once that has
+ * confirmed the language is installed, its default recognizer otherwise. Every
+ * request asks for offline recognition only ([RecognizerIntent.EXTRA_PREFER_OFFLINE]);
+ * a recognizer without the language on the device fails rather than sending
+ * audio away, and says so.
  *
  * Every session gets an id, carried by each event. [start] and [cancel] retire
  * the previous session, and its late callbacks — a result from a recognizer
@@ -51,8 +55,8 @@ class SpeechIn(private val context: Context) {
     private var session = 0L
     private val onDevice = HashMap<String, OnDevice>()
 
-    /** Recognise on the device when that is confirmed possible. */
-    var preferOnDevice = false
+    /** The chosen recognition service, a flattened component; empty leaves it to the device. */
+    var service = ""
 
     private val _level = MutableStateFlow(0f)
 
@@ -63,14 +67,42 @@ class SpeechIn(private val context: Context) {
 
     val listening: Boolean get() = recognizer != null
 
+    /** The recognition services installed on the device, as (flattened component, label), by label. */
+    fun recognizers(): List<Pair<String, String>> {
+        val packages = context.packageManager
+        return runCatching {
+            packages.queryIntentServices(Intent(RecognitionService.SERVICE_INTERFACE), 0).map { info ->
+                ComponentName(info.serviceInfo.packageName, info.serviceInfo.name).flattenToString() to
+                    info.loadLabel(packages).toString()
+            }
+        }.getOrDefault(emptyList()).sortedBy { it.second.lowercase(Locale.ROOT) }
+    }
+
     /** Starts a session; answers the id its events carry. */
     fun start(locale: Locale, listener: (session: Long, event: Event) -> Unit): Long {
         checkMain()
         cancel()
         val id = ++session
-        val local = preferOnDevice && onDeviceStatus(locale) == OnDevice.Installed
-        begin(id, locale, local, listener)
+        val source = chosen()?.let(Source::Service)
+            ?: if (onDeviceStatus(locale) == OnDevice.Installed) Source.OnDevice else Source.Default
+        begin(id, locale, source, listener)
         return id
+    }
+
+    /** [service], while it is still installed; otherwise the device decides. */
+    private fun chosen(): ComponentName? {
+        val component = service.takeIf { it.isNotBlank() }?.let(ComponentName::unflattenFromString) ?: return null
+        return component.takeIf { wanted -> recognizers().any { it.first == wanted.flattenToString() } }
+    }
+
+    private sealed interface Source {
+        /** The device's on-device recognizer, confirmed to have the language. */
+        data object OnDevice : Source
+
+        /** The device's default recognizer. */
+        data object Default : Source
+
+        data class Service(val component: ComponentName) : Source
     }
 
     /** Stops listening; what was heard so far still comes back as a result. */
@@ -128,12 +160,13 @@ class SpeechIn(private val context: Context) {
         probe.destroy()
     }
 
-    private fun begin(id: Long, locale: Locale, local: Boolean, listener: (Long, Event) -> Unit) {
+    private fun begin(id: Long, locale: Locale, source: Source, listener: (Long, Event) -> Unit) {
         val engine = runCatching {
-            if (local && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-            } else {
-                SpeechRecognizer.createSpeechRecognizer(context)
+            when {
+                source is Source.Service -> SpeechRecognizer.createSpeechRecognizer(context, source.component)
+                source == Source.OnDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+                    SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+                else -> SpeechRecognizer.createSpeechRecognizer(context)
             }
         }.getOrNull()
         if (engine == null) {
@@ -185,11 +218,11 @@ class SpeechIn(private val context: Context) {
                 if (id != session) return retire()
                 retire()
                 // An on-device recognizer that turns out not to serve this
-                // language falls back to the default one, once, without the
-                // caller seeing a failure.
-                if (local && !heardAnything && error in ON_DEVICE_FALLBACK) {
+                // language falls back to the device's default one, once,
+                // without the caller seeing a failure — still offline only.
+                if (source == Source.OnDevice && !heardAnything && error in ON_DEVICE_FALLBACK) {
                     onDevice[locale.language] = OnDevice.Unavailable
-                    begin(id, locale, local = false, listener)
+                    begin(id, locale, Source.Default, listener)
                     return
                 }
                 deliver(eventFor(error))
@@ -241,6 +274,8 @@ class SpeechIn(private val context: Context) {
         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
+        // Offline engines only, despite the name: audio stays on the phone.
+        putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
     }
 
     private fun checkMain() {

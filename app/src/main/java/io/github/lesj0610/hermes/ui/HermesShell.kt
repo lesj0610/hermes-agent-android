@@ -144,6 +144,7 @@ fun HermesShell(
     val readingKey by viewModel.readingKey.collectAsStateWithLifecycle()
     val speechInfo by viewModel.speechInfo.collectAsStateWithLifecycle()
     val onDeviceRecognition by viewModel.onDeviceRecognition.collectAsStateWithLifecycle()
+    val recognizers by viewModel.recognizers.collectAsStateWithLifecycle()
     val pane by viewModel.pane.collectAsStateWithLifecycle()
     val jobs by viewModel.jobs.collectAsStateWithLifecycle()
     val health by viewModel.health.collectAsStateWithLifecycle()
@@ -623,7 +624,8 @@ fun HermesShell(
                                     onSetSpeechRate = viewModel::setSpeechRate,
                                     onSetSpeechPitch = viewModel::setSpeechPitch,
                                     onSelectSpeechEngine = viewModel::setSpeechEngine,
-                                    onTogglePreferOnDevice = viewModel::setPreferOnDeviceRecognition,
+                                    recognizers = recognizers,
+                                    onSelectRecognizer = viewModel::setSpeechRecognizer,
                                     onDownloadOnDevice = viewModel::downloadOnDeviceRecognition,
                                     onPreviewSpeech = viewModel::previewSpeech,
                                     permissions = permissions,
@@ -820,7 +822,8 @@ fun HermesShell(
                         onSetSpeechRate = viewModel::setSpeechRate,
                         onSetSpeechPitch = viewModel::setSpeechPitch,
                         onSelectSpeechEngine = viewModel::setSpeechEngine,
-                        onTogglePreferOnDevice = viewModel::setPreferOnDeviceRecognition,
+                        recognizers = recognizers,
+                        onSelectRecognizer = viewModel::setSpeechRecognizer,
                         onDownloadOnDevice = viewModel::downloadOnDeviceRecognition,
                         onPreviewSpeech = viewModel::previewSpeech,
                         permissions = permissions,

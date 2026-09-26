@@ -177,11 +177,11 @@ data class HermesSettings(
     /** The text-to-speech engine's package; empty follows the system's choice. */
     val speechEngine: String = "",
     /**
-     * Recognise speech on the device. Honoured only when the on-device
-     * recognizer reports the language installed; otherwise the system's default
-     * recognizer runs, which may use the network.
+     * The speech recognizer, as a flattened service component; empty follows the
+     * device: its on-device recognizer when the language is installed there,
+     * its default recognizer otherwise.
      */
-    val preferOnDeviceRecognition: Boolean = false,
+    val speechRecognizer: String = "",
     val drawerPinned: Boolean = true,
     val showStatusBar: Boolean = true,
     /**
@@ -231,7 +231,7 @@ class SettingsRepository(private val context: Context) {
         val SPEECH_RATE = floatPreferencesKey("speech_rate")
         val SPEECH_PITCH = floatPreferencesKey("speech_pitch")
         val SPEECH_ENGINE = stringPreferencesKey("speech_engine")
-        val ON_DEVICE_ASR = booleanPreferencesKey("prefer_on_device_recognition")
+        val SPEECH_RECOGNIZER = stringPreferencesKey("speech_recognizer")
         val DRAWER_PINNED = booleanPreferencesKey("drawer_pinned")
         val SHOW_STATUS_BAR = booleanPreferencesKey("show_status_bar")
         val UPDATE_CHECKS = booleanPreferencesKey("update_checks")
@@ -280,7 +280,7 @@ class SettingsRepository(private val context: Context) {
                 speechRate = (prefs[Keys.SPEECH_RATE] ?: 1f).coerceIn(SPEECH_SCALE_MIN, SPEECH_SCALE_MAX),
                 speechPitch = (prefs[Keys.SPEECH_PITCH] ?: 1f).coerceIn(SPEECH_SCALE_MIN, SPEECH_SCALE_MAX),
                 speechEngine = prefs[Keys.SPEECH_ENGINE].orEmpty(),
-                preferOnDeviceRecognition = prefs[Keys.ON_DEVICE_ASR] ?: false,
+                speechRecognizer = prefs[Keys.SPEECH_RECOGNIZER].orEmpty(),
                 drawerPinned = prefs[Keys.DRAWER_PINNED] ?: true,
                 showStatusBar = prefs[Keys.SHOW_STATUS_BAR] ?: true,
                 updateChecks = prefs[Keys.UPDATE_CHECKS] ?: true,
@@ -404,8 +404,8 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.SPEECH_ENGINE] = engine }
     }
 
-    suspend fun setPreferOnDeviceRecognition(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.ON_DEVICE_ASR] = enabled }
+    suspend fun setSpeechRecognizer(recognizer: String) {
+        context.dataStore.edit { it[Keys.SPEECH_RECOGNIZER] = recognizer }
     }
 
     suspend fun setDrawerPinned(pinned: Boolean) {

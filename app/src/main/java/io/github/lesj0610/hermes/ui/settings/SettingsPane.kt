@@ -141,7 +141,9 @@ fun SettingsPane(
     onSetSpeechRate: (Float) -> Unit = {},
     onSetSpeechPitch: (Float) -> Unit = {},
     onSelectSpeechEngine: (String) -> Unit = {},
-    onTogglePreferOnDevice: (Boolean) -> Unit = {},
+    /** The recognition services on the device, as (component, label). */
+    recognizers: List<Pair<String, String>> = emptyList(),
+    onSelectRecognizer: (String) -> Unit = {},
     onDownloadOnDevice: () -> Unit = {},
     onPreviewSpeech: () -> Unit = {},
     onGrantInstall: () -> Unit = {},
@@ -221,7 +223,8 @@ fun SettingsPane(
                 onSetRate = onSetSpeechRate,
                 onSetPitch = onSetSpeechPitch,
                 onSelectEngine = onSelectSpeechEngine,
-                onTogglePreferOnDevice = onTogglePreferOnDevice,
+                recognizers = recognizers,
+                onSelectRecognizer = onSelectRecognizer,
                 onDownloadOnDevice = onDownloadOnDevice,
                 onPreview = onPreviewSpeech,
             )
@@ -922,10 +925,10 @@ private fun DisplaySection(
 }
 
 /**
- * Speech in and out. Both run on the phone's own engines, and the page says
- * what that means rather than promising more: the default recognizer may send
- * audio over the network, and on-device recognition is offered only once the
- * recognizer has confirmed the language is installed.
+ * Speech in and out, both on the phone's own engines, each chosen the same way:
+ * the device's default or one of the engines installed — Google's on every
+ * phone, a maker's own where it has one. Recognition is asked to stay on the
+ * device, and the page says what the device default can do for the language.
  */
 @Composable
 private fun VoiceSection(
@@ -938,7 +941,8 @@ private fun VoiceSection(
     onSetRate: (Float) -> Unit,
     onSetPitch: (Float) -> Unit,
     onSelectEngine: (String) -> Unit,
-    onTogglePreferOnDevice: (Boolean) -> Unit,
+    recognizers: List<Pair<String, String>>,
+    onSelectRecognizer: (String) -> Unit,
     onDownloadOnDevice: () -> Unit,
     onPreview: () -> Unit,
 ) {
@@ -962,34 +966,44 @@ private fun VoiceSection(
                 color = colors.muted,
             )
             HorizontalDivider(color = colors.line)
-            val installed = onDevice == SpeechIn.OnDevice.Installed
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.settings_asr_on_device),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = stringResource(
-                            when (onDevice) {
-                                SpeechIn.OnDevice.Installed -> R.string.settings_asr_on_device_installed
-                                SpeechIn.OnDevice.Downloadable -> R.string.settings_asr_on_device_downloadable
-                                SpeechIn.OnDevice.Unavailable -> R.string.settings_asr_on_device_unavailable
-                                SpeechIn.OnDevice.Unknown -> R.string.settings_asr_on_device_unknown
-                            },
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.muted,
-                    )
-                }
-                Switch(
-                    checked = installed && settings.preferOnDeviceRecognition,
-                    onCheckedChange = onTogglePreferOnDevice,
-                    enabled = installed,
+            Text(
+                text = stringResource(R.string.settings_speech_recognizer),
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.muted,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            // A chosen recognizer since removed from the phone reads as the
+            // device default, which is what recognition falls back to.
+            val chosen = settings.speechRecognizer.takeIf { component -> recognizers.any { it.first == component } }
+            SelectableRow(
+                label = stringResource(R.string.settings_speech_recognizer_default),
+                selected = chosen == null,
+                onClick = { onSelectRecognizer("") },
+            )
+            recognizers.forEach { (component, label) ->
+                SelectableRow(
+                    label = label,
+                    selected = chosen == component,
+                    onClick = { onSelectRecognizer(component) },
+                )
+            }
+            HorizontalDivider(color = colors.line)
+            Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Text(
+                    text = stringResource(R.string.settings_asr_on_device),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = stringResource(
+                        when (onDevice) {
+                            SpeechIn.OnDevice.Installed -> R.string.settings_asr_on_device_installed
+                            SpeechIn.OnDevice.Downloadable -> R.string.settings_asr_on_device_downloadable
+                            SpeechIn.OnDevice.Unavailable -> R.string.settings_asr_on_device_unavailable
+                            SpeechIn.OnDevice.Unknown -> R.string.settings_asr_on_device_unknown
+                        },
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.muted,
                 )
             }
             if (onDevice == SpeechIn.OnDevice.Downloadable) {

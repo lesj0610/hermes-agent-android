@@ -898,6 +898,10 @@ class ScreenshotTest {
                     fault = VoiceFault.SpeechData,
                 ),
                 onDeviceRecognition = SpeechIn.OnDevice.Downloadable,
+                recognizers = listOf(
+                    "com.google.android.as/.AiAiSpeechRecognitionService" to "Android System Intelligence",
+                    "com.google.android.tts/.GoogleTTSRecognitionService" to "Speech Recognition and Synthesis from Google",
+                ),
             )
         }
     }

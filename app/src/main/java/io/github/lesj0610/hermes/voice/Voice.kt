@@ -147,12 +147,12 @@ class VoiceController(
         output.onFirstAudio = { token -> if (token == speechToken && purpose == Purpose.Conversation) trace.firstAudio() }
     }
 
-    fun configure(locale: Locale, rate: Float, pitch: Float, engine: String, preferOnDevice: Boolean) {
+    fun configure(locale: Locale, rate: Float, pitch: Float, engine: String, recognizer: String) {
         if (locale != this.locale || codeNote == null) {
             this.locale = locale
             codeNote = localized(locale).getString(R.string.voice_code_omitted)
         }
-        input.preferOnDevice = preferOnDevice
+        input.service = recognizer
         output.configure(locale, rate, pitch, engine)
     }
 
@@ -328,6 +328,9 @@ class VoiceController(
     fun onDeviceStatus(): SpeechIn.OnDevice = input.onDeviceStatus(locale)
 
     fun refreshOnDevice(done: (SpeechIn.OnDevice) -> Unit) = input.refreshOnDevice(locale, done)
+
+    /** The recognition services installed on the device; see [SpeechIn.recognizers]. */
+    fun recognizers(): List<Pair<String, String>> = input.recognizers()
 
     fun downloadOnDevice() = input.downloadOnDevice(locale)
 

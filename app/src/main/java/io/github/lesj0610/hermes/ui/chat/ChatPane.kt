@@ -89,11 +89,15 @@ import io.github.lesj0610.hermes.ui.components.PhotoIcon
 import io.github.lesj0610.hermes.ui.components.PlusIcon
 import io.github.lesj0610.hermes.ui.components.SendIcon
 import io.github.lesj0610.hermes.ui.components.StopIcon
+import io.github.lesj0610.hermes.ui.components.SpeakerIcon
 import io.github.lesj0610.hermes.ui.components.ToolCard
 import io.github.lesj0610.hermes.ui.components.WaveformIcon
 import io.github.lesj0610.hermes.ui.components.uiErrorText
 import io.github.lesj0610.hermes.ui.markdown.RichText
 import io.github.lesj0610.hermes.ui.theme.LocalRunColors
+import io.github.lesj0610.hermes.voice.DictationDraft
+import io.github.lesj0610.hermes.voice.DictationUpdate
+import io.github.lesj0610.hermes.voice.VoiceFault
 import io.github.lesj0610.hermes.voice.VoiceState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -123,10 +127,19 @@ fun ChatPane(
     voiceAvailable: Boolean = false,
     voiceState: VoiceState = VoiceState.Idle,
     conversing: Boolean = false,
-    dictation: String? = null,
+    dictation: DictationUpdate? = null,
     onDictate: () -> Unit = {},
     onDictationConsumed: () -> Unit = {},
+    onCancelDictation: () -> Unit = {},
     onToggleConversation: () -> Unit = {},
+    /** Input level while listening, 0…1, for the microphone's meter. */
+    voiceLevel: Float = 0f,
+    /** Why the last voice action stopped, until it has been shown. */
+    voiceNotice: VoiceFault? = null,
+    onVoiceNoticeShown: () -> Unit = {},
+    /** The reply being read aloud, and the action that reads one. */
+    readingKey: String? = null,
+    onReadAloud: (key: String, text: String) -> Unit = { _, _ -> },
     /**
      * The slash palette. Empty by default so a preview renders a composer
      * without standing up the catalogue.
@@ -244,6 +257,10 @@ fun ChatPane(
                                 block.item,
                                 reasoningCollapsedByDefault = reasoningCollapsedByDefault,
                                 onOpenImage = { lightbox = it },
+                                // A conversation owns the speaker; reading one
+                                // reply over it would talk across the next.
+                                readingKey = readingKey.takeUnless { conversing },
+                                onReadAloud = onReadAloud.takeUnless { conversing },
                             )
                             // Live only at the tail of a running turn: a run
                             // that something else has already followed is done,
@@ -310,7 +327,11 @@ fun ChatPane(
             dictation = dictation,
             onDictate = onDictate,
             onDictationConsumed = onDictationConsumed,
+            onCancelDictation = onCancelDictation,
             onToggleConversation = onToggleConversation,
+            voiceLevel = voiceLevel,
+            voiceNotice = voiceNotice,
+            onVoiceNoticeShown = onVoiceNoticeShown,
         )
     }
 }
@@ -361,6 +382,9 @@ private fun TranscriptRow(
     item: TranscriptItem,
     reasoningCollapsedByDefault: Boolean = false,
     onOpenImage: (String) -> Unit = {},
+    readingKey: String? = null,
+    /** Null where replies cannot be read aloud right now. */
+    onReadAloud: ((key: String, text: String) -> Unit)? = null,
 ) {
     val colors = LocalRunColors.current
     when (item) {
@@ -411,6 +435,14 @@ private fun TranscriptRow(
             item.images.forEach { dataUrl ->
                 SentImage(dataUrl, onOpen = { onOpenImage(dataUrl) })
             }
+            // Only once the reply is whole: a reply still arriving is read by
+            // auto-read as it streams, and reading half of it here would stop.
+            if (onReadAloud != null && !item.streaming && item.text.isNotBlank()) {
+                ReadAloudButton(
+                    reading = readingKey == item.key,
+                    onClick = { onReadAloud(item.key, item.text) },
+                )
+            }
         }
 
         is TranscriptItem.Reasoning -> ThinkingDisclosure(item, reasoningCollapsedByDefault)
@@ -430,6 +462,46 @@ private fun TranscriptRow(
         )
     }
 }
+
+/** Reads one finished reply aloud, or stops it. */
+@Composable
+private fun ReadAloudButton(reading: Boolean, onClick: () -> Unit) {
+    val colors = LocalRunColors.current
+    val label = stringResource(if (reading) R.string.voice_read_stop else R.string.voice_read_aloud)
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(32.dp)
+            .semantics { contentDescription = label },
+    ) {
+        if (reading) {
+            StopIcon(tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+        } else {
+            SpeakerIcon(tint = colors.muted, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+/** What went wrong with speech, in words the user can act on. */
+@Composable
+internal fun voiceFaultText(fault: VoiceFault): String = stringResource(
+    when (fault) {
+        VoiceFault.Network -> R.string.voice_fault_network
+        VoiceFault.Audio -> R.string.voice_fault_audio
+        VoiceFault.Server -> R.string.voice_fault_server
+        VoiceFault.Busy -> R.string.voice_fault_busy
+        VoiceFault.Permission -> R.string.voice_fault_permission
+        VoiceFault.LanguageUnsupported, VoiceFault.LanguageUnavailable -> R.string.voice_fault_language
+        VoiceFault.NoRecognizer -> R.string.voice_fault_no_recognizer
+        VoiceFault.Recognizer -> R.string.voice_fault_recognizer
+        VoiceFault.NoSpeech -> R.string.voice_fault_no_speech
+        VoiceFault.SpeechEngine -> R.string.voice_fault_speech_engine
+        VoiceFault.SpeechData -> R.string.voice_fault_speech_data
+        VoiceFault.SpeechLanguage -> R.string.voice_fault_speech_language
+        VoiceFault.Speech -> R.string.voice_fault_speech
+        VoiceFault.TurnRefused -> R.string.voice_fault_turn_refused
+    },
+)
 
 @Composable
 private fun EmptyTranscript(modifier: Modifier = Modifier) {
@@ -470,10 +542,14 @@ private fun Composer(
     voiceAvailable: Boolean,
     voiceState: VoiceState,
     conversing: Boolean,
-    dictation: String?,
+    dictation: DictationUpdate?,
     onDictate: () -> Unit,
     onDictationConsumed: () -> Unit,
+    onCancelDictation: () -> Unit,
     onToggleConversation: () -> Unit,
+    voiceLevel: Float,
+    voiceNotice: VoiceFault?,
+    onVoiceNoticeShown: () -> Unit,
 ) {
     val colors = LocalRunColors.current
     val context = LocalContext.current
@@ -551,17 +627,41 @@ private fun Composer(
     }
     // Resolved out here: a semantics block is not a composable scope.
     val dictateLabel = stringResource(R.string.voice_dictate)
+    val dictateStopLabel = stringResource(R.string.voice_dictate_stop)
     val conversationLabel = stringResource(R.string.voice_conversation)
     val sendLabel = stringResource(R.string.chat_send)
     val stopLabel = stringResource(R.string.chat_stop)
 
     // Dictation lands in the box rather than being sent, so a misheard word can
-    // be fixed before it costs a turn. Appended, so it adds to whatever was
-    // already typed instead of discarding it.
+    // be fixed before it costs a turn. Partial results replace the words
+    // dictation owns, after whatever was already typed, and only the final
+    // result stays. Typing mid-dictation hands the box back: what is still
+    // being heard is dropped rather than written over the edit.
+    val dictating = remember { DictationDraft() }
+    var dictationSession by remember { mutableStateOf<Long?>(null) }
     LaunchedEffect(dictation) {
-        dictation?.let { heard ->
-            draft = if (draft.isBlank()) heard else "$draft $heard"
-            onDictationConsumed()
+        val update = dictation ?: return@LaunchedEffect
+        if (update.session != dictationSession) {
+            dictationSession = update.session
+            dictating.begin(draft)
+        }
+        when (update.kind) {
+            DictationUpdate.Kind.Partial ->
+                dictating.partial(draft, update.text)?.let { draft = it }
+                    ?: run { if (!dictating.active) onCancelDictation() }
+            DictationUpdate.Kind.Final -> dictating.commit(draft, update.text)?.let { draft = it }
+            DictationUpdate.Kind.Ended -> dictating.abandon(draft)?.let { draft = it }
+        }
+        // Terminal steps are consumed so a recreated composer cannot apply a
+        // finished dictation to a fresh draft a second time.
+        if (update.kind != DictationUpdate.Kind.Partial) onDictationConsumed()
+    }
+
+    val faultText = voiceNotice?.let { voiceFaultText(it) }
+    LaunchedEffect(voiceNotice) {
+        if (voiceNotice != null) {
+            notice = faultText
+            onVoiceNoticeShown()
         }
     }
 
@@ -637,10 +737,29 @@ private fun Composer(
         // and a second one inside it reads as a box in a box.
         TextField(
             value = draft,
-            onValueChange = { draft = it },
+            onValueChange = { value ->
+                if (dictating.isUserEdit(value)) {
+                    dictating.release()
+                    onCancelDictation()
+                }
+                draft = value
+            },
             modifier = Modifier.fillMaxWidth(),
             enabled = enabled,
-            placeholder = { Text(stringResource(R.string.chat_input_hint)) },
+            // In a spoken conversation the box says where the exchange is,
+            // which is otherwise invisible: listening, speaking, or waiting.
+            placeholder = {
+                Text(
+                    stringResource(
+                        when {
+                            !conversing -> R.string.chat_input_hint
+                            voiceState == VoiceState.Listening -> R.string.voice_listening
+                            voiceState == VoiceState.Speaking -> R.string.voice_speaking
+                            else -> R.string.voice_waiting
+                        },
+                    ),
+                )
+            },
             maxLines = 5,
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
@@ -853,15 +972,21 @@ private fun Composer(
 
             Spacer(Modifier.weight(1f))
 
-            if (voiceAvailable) {
+            // Dictation only: in a conversation the microphone is the loop's.
+            if (voiceAvailable && !conversing) {
+                val listening = voiceState == VoiceState.Listening
                 IconButton(onClick = onDictate, enabled = enabled) {
                     MicIcon(
-                        tint = if (voiceState == VoiceState.Listening) {
-                            MaterialTheme.colorScheme.primary
+                        // The level drives the tint while listening, so the
+                        // button shows it is hearing something, not just on.
+                        tint = if (listening) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.55f + 0.45f * voiceLevel)
                         } else {
                             colors.muted
                         },
-                        modifier = Modifier.semantics { contentDescription = dictateLabel },
+                        modifier = Modifier.semantics {
+                            contentDescription = if (listening) dictateStopLabel else dictateLabel
+                        },
                     )
                 }
             }

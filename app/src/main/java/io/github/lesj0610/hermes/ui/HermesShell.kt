@@ -139,6 +139,11 @@ fun HermesShell(
     val voiceState by viewModel.voiceState.collectAsStateWithLifecycle()
     val conversing by viewModel.voiceConversing.collectAsStateWithLifecycle()
     val dictation by viewModel.dictation.collectAsStateWithLifecycle()
+    val voiceLevel by viewModel.voiceLevel.collectAsStateWithLifecycle()
+    val voiceNotice by viewModel.voiceNotice.collectAsStateWithLifecycle()
+    val readingKey by viewModel.readingKey.collectAsStateWithLifecycle()
+    val speechInfo by viewModel.speechInfo.collectAsStateWithLifecycle()
+    val onDeviceRecognition by viewModel.onDeviceRecognition.collectAsStateWithLifecycle()
     val pane by viewModel.pane.collectAsStateWithLifecycle()
     val jobs by viewModel.jobs.collectAsStateWithLifecycle()
     val health by viewModel.health.collectAsStateWithLifecycle()
@@ -166,7 +171,22 @@ fun HermesShell(
 
     val context = LocalContext.current
     val dictate = {
-        if (SystemPermissions.canRecordAudio(context)) viewModel.dictate() else onRequestMicrophone()
+        if (SystemPermissions.canRecordAudio(context)) {
+            viewModel.dictate()
+        } else {
+            viewModel.afterMicrophoneGrant(conversation = false)
+            onRequestMicrophone()
+        }
+    }
+    // A conversation needs the microphone as much as dictation does; asked for
+    // here, the grant starts the conversation rather than a dictation.
+    val converse = {
+        if (conversing || SystemPermissions.canRecordAudio(context)) {
+            viewModel.toggleConversation()
+        } else {
+            viewModel.afterMicrophoneGrant(conversation = true)
+            onRequestMicrophone()
+        }
     }
 
     // The list re-reads on launch and on the pull; there is no refresh button.
@@ -595,6 +615,17 @@ fun HermesShell(
                                     onSetUiScale = viewModel::setUiScale,
                                     onToggleOpenAtLatest = viewModel::setOpenAtLatest,
                                     onToggleReasoningCollapsed = viewModel::setReasoningCollapsedByDefault,
+                                    voiceAvailable = viewModel.voiceAvailable,
+                                    speechInfo = speechInfo,
+                                    onDeviceRecognition = onDeviceRecognition,
+                                    onInspectVoice = viewModel::inspectVoice,
+                                    onToggleAutoRead = viewModel::setAutoReadReplies,
+                                    onSetSpeechRate = viewModel::setSpeechRate,
+                                    onSetSpeechPitch = viewModel::setSpeechPitch,
+                                    onSelectSpeechEngine = viewModel::setSpeechEngine,
+                                    onTogglePreferOnDevice = viewModel::setPreferOnDeviceRecognition,
+                                    onDownloadOnDevice = viewModel::downloadOnDeviceRecognition,
+                                    onPreviewSpeech = viewModel::previewSpeech,
                                     permissions = permissions,
                                     onRequestNotifications = onRequestNotifications,
                                     onRequestBackground = onRequestBackground,
@@ -632,8 +663,14 @@ fun HermesShell(
                                     conversing = conversing,
                                     dictation = dictation,
                                     onDictate = dictate,
+                                    onCancelDictation = viewModel::cancelDictation,
                                     onDictationConsumed = viewModel::consumeDictation,
-                                    onToggleConversation = viewModel::toggleConversation,
+                                    voiceLevel = voiceLevel,
+                                    voiceNotice = voiceNotice,
+                                    onVoiceNoticeShown = viewModel::consumeVoiceNotice,
+                                    readingKey = readingKey,
+                                    onReadAloud = viewModel::readAloud,
+                                    onToggleConversation = converse,
                                     commands = commands,
                                     commandsLoading = commandsLoading,
                                     commandsError = commandsError,
@@ -700,8 +737,14 @@ fun HermesShell(
                         conversing = conversing,
                         dictation = dictation,
                         onDictate = dictate,
+                        onCancelDictation = viewModel::cancelDictation,
                         onDictationConsumed = viewModel::consumeDictation,
-                        onToggleConversation = viewModel::toggleConversation,
+                        voiceLevel = voiceLevel,
+                        voiceNotice = voiceNotice,
+                        onVoiceNoticeShown = viewModel::consumeVoiceNotice,
+                        readingKey = readingKey,
+                        onReadAloud = viewModel::readAloud,
+                        onToggleConversation = converse,
                         commands = commands,
                         commandsLoading = commandsLoading,
                         commandsError = commandsError,
@@ -767,6 +810,17 @@ fun HermesShell(
                         onSetUiScale = viewModel::setUiScale,
                         onToggleOpenAtLatest = viewModel::setOpenAtLatest,
                         onToggleReasoningCollapsed = viewModel::setReasoningCollapsedByDefault,
+                        voiceAvailable = viewModel.voiceAvailable,
+                        speechInfo = speechInfo,
+                        onDeviceRecognition = onDeviceRecognition,
+                        onInspectVoice = viewModel::inspectVoice,
+                        onToggleAutoRead = viewModel::setAutoReadReplies,
+                        onSetSpeechRate = viewModel::setSpeechRate,
+                        onSetSpeechPitch = viewModel::setSpeechPitch,
+                        onSelectSpeechEngine = viewModel::setSpeechEngine,
+                        onTogglePreferOnDevice = viewModel::setPreferOnDeviceRecognition,
+                        onDownloadOnDevice = viewModel::downloadOnDeviceRecognition,
+                        onPreviewSpeech = viewModel::previewSpeech,
                         permissions = permissions,
                         onRequestNotifications = onRequestNotifications,
                         onRequestBackground = onRequestBackground,

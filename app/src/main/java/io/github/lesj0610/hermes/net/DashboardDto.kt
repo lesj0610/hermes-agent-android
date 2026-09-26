@@ -202,6 +202,19 @@ data class ResumedSession(
     @SerialName("session_id") val liveId: String = "",
     val resumed: String = "",
     @SerialName("message_count") val messageCount: Int = 0,
+    val info: SessionLiveInfo? = null,
+)
+
+/**
+ * The runtime a live session is on, as `session.create` and `session.resume`
+ * report it. An empty [reasoningEffort] means unset — the provider's default —
+ * and `none` means thinking is off; the two are different statements.
+ */
+@Serializable
+data class SessionLiveInfo(
+    val model: String = "",
+    val provider: String = "",
+    @SerialName("reasoning_effort") val reasoningEffort: String = "",
 )
 
 /** `session.compress` — the headline is already formatted by the server. */

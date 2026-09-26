@@ -15,7 +15,7 @@ from the machine.
 | | |
 |---|---|
 | Chat | Markdown replies including tables and maths; reasoning shown per block with how long it took ("Thought for 12s"), with a live preview while it streams; consecutive tool calls folded into one summary line ("Explored 3 files, ran 2 commands") that opens to the cards, as the desktop draws them; approval sheet. The send button becomes Stop while a run is in flight, and Send again the moment you type |
-| Composer | Camera, photo and text-file attachments; model and reasoning level; dictation; spoken conversation |
+| Composer | Camera, photo and text-file attachments; model and reasoning level; dictation that shows words as they are recognised; spoken conversation that reads the reply aloud while it is still arriving, with thinking off for speed |
 | Commands | Typing `/` opens the gateway's own registry: skills and quick commands run on the agent, read-only queries answer inline, `/compress` compacts the conversation. What has no server-side action is listed and marked, not hidden |
 | Sessions | Drawer list with search, and a per-session menu: rename, pin, copy ID, branch, export, archive, delete |
 | Artifacts | The images, files and links the recent runs produced, gathered from the session transcripts |
@@ -72,6 +72,12 @@ These are properties of the surfaces the app is built on, not oversights:
   quick/plugin/bundle/skill command" because there is nothing on the server to
   run. Skills, quick commands and plugin commands do run, and so does
   `/compress`.
+- **Voice uses the phone's own engines.** Speech recognition and text-to-speech
+  are the system's (Google's, Samsung's, or whichever is set as default), so the
+  recognizer may send audio over the network unless on-device recognition is
+  confirmed for the language in Settings → Voice. A spoken conversation takes
+  turns: it listens, answers aloud as the reply streams, then listens again.
+  Stop silences the reply; talking over it is not supported yet.
 - **Reasoning needs the dashboard.** A turn runs over the gateway's event
   socket when one is configured, which is where streamed thinking and tool
   results live. Without it the app falls back to `/v1/runs`, which has no
@@ -147,7 +153,7 @@ Hermes Agent source; the client was written against its HTTP surface.
 
 ## Status
 
-Version 1.24. Compiles, unit tests pass, lint clean, release AAB builds, and the
+Version 1.25. Compiles, unit tests pass, lint clean, release AAB builds, and the
 app runs against a live gateway, over both the socket and HTTP routes.
 
 Not yet exercised on hardware: the camera and text-file attachments, and the

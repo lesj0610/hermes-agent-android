@@ -1,5 +1,7 @@
 package io.github.lesj0610.hermes.ui.settings
 
+import android.content.Intent
+import android.speech.tts.TextToSpeech
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,6 +30,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,12 +53,19 @@ import io.github.lesj0610.hermes.core.GATEWAY_DEFAULT_PORT
 import io.github.lesj0610.hermes.core.HermesSettings
 import io.github.lesj0610.hermes.core.Language
 import io.github.lesj0610.hermes.core.LayoutMode
+import io.github.lesj0610.hermes.core.SPEECH_SCALE_MAX
+import io.github.lesj0610.hermes.core.SPEECH_SCALE_MIN
 import io.github.lesj0610.hermes.core.UI_SCALE_MAX
 import io.github.lesj0610.hermes.core.UI_SCALE_MIN
 import io.github.lesj0610.hermes.core.UI_SCALE_STEP
 import io.github.lesj0610.hermes.core.coercePort
 import io.github.lesj0610.hermes.core.defaultDashboardHost
 import io.github.lesj0610.hermes.core.parseEndpoint
+import io.github.lesj0610.hermes.ui.chat.voiceFaultText
+import io.github.lesj0610.hermes.voice.SpeechIn
+import io.github.lesj0610.hermes.voice.SpeechOut
+import io.github.lesj0610.hermes.voice.VoiceFault
+import java.util.Locale
 import io.github.lesj0610.hermes.data.UpdateState
 import io.github.lesj0610.hermes.net.ActiveProfile
 import io.github.lesj0610.hermes.net.DashboardSkill
@@ -94,7 +105,7 @@ data class PermissionState(
  */
 private enum class SettingsSection {
     Gateway, Dashboard, Model, Profiles, Skills, Toolsets, ServerState,
-    Display, Language, Notifications, Permissions, Update,
+    Display, Voice, Language, Notifications, Permissions, Update,
 }
 
 @Composable
@@ -121,6 +132,18 @@ fun SettingsPane(
     onToggleReasoningCollapsed: (Boolean) -> Unit = {},
     onCheckUpdate: () -> Unit = {},
     onDownloadUpdate: () -> Unit = {},
+    /** Voice. Defaulted so previews render without speech engines. */
+    voiceAvailable: Boolean = false,
+    speechInfo: SpeechOut.Info = SpeechOut.Info(),
+    onDeviceRecognition: SpeechIn.OnDevice = SpeechIn.OnDevice.Unknown,
+    onInspectVoice: () -> Unit = {},
+    onToggleAutoRead: (Boolean) -> Unit = {},
+    onSetSpeechRate: (Float) -> Unit = {},
+    onSetSpeechPitch: (Float) -> Unit = {},
+    onSelectSpeechEngine: (String) -> Unit = {},
+    onTogglePreferOnDevice: (Boolean) -> Unit = {},
+    onDownloadOnDevice: () -> Unit = {},
+    onPreviewSpeech: () -> Unit = {},
     onGrantInstall: () -> Unit = {},
     onToggleUpdateChecks: (Boolean) -> Unit = {},
     /** The model in effect, resolved the same way the composer's chip resolves it. */
@@ -188,6 +211,20 @@ fun SettingsPane(
                 settings, onSelectLayoutMode, onSetUiScale, onToggleOpenAtLatest,
                 onToggleReasoningCollapsed,
             )
+            SettingsSection.Voice -> VoiceSection(
+                settings = settings,
+                voiceAvailable = voiceAvailable,
+                speech = speechInfo,
+                onDevice = onDeviceRecognition,
+                onInspect = onInspectVoice,
+                onToggleAutoRead = onToggleAutoRead,
+                onSetRate = onSetSpeechRate,
+                onSetPitch = onSetSpeechPitch,
+                onSelectEngine = onSelectSpeechEngine,
+                onTogglePreferOnDevice = onTogglePreferOnDevice,
+                onDownloadOnDevice = onDownloadOnDevice,
+                onPreview = onPreviewSpeech,
+            )
             SettingsSection.Language -> LanguageSection(settings, onSelectLanguage)
             SettingsSection.Notifications -> NotificationsSection(
                 settings, onToggleApprovals, onToggleCompletion,
@@ -217,6 +254,7 @@ private fun sectionTitle(section: SettingsSection): String = when (section) {
     SettingsSection.Toolsets -> stringResource(R.string.settings_row_toolsets)
     SettingsSection.ServerState -> stringResource(R.string.settings_row_server_state)
     SettingsSection.Display -> stringResource(R.string.settings_group_display)
+    SettingsSection.Voice -> stringResource(R.string.settings_group_voice)
     SettingsSection.Language -> stringResource(R.string.settings_group_language)
     SettingsSection.Notifications -> stringResource(R.string.settings_group_notifications)
     SettingsSection.Permissions -> stringResource(R.string.settings_group_permissions)
@@ -333,6 +371,12 @@ private fun SettingsHub(
                     (settings.uiScale * 100).roundToInt(),
                 ),
                 onClick = { onOpen(SettingsSection.Display) },
+            )
+            HorizontalDivider(color = LocalRunColors.current.line)
+            NavRow(
+                label = stringResource(R.string.settings_group_voice),
+                value = if (settings.autoReadReplies) stringResource(R.string.settings_sub_voice_auto) else null,
+                onClick = { onOpen(SettingsSection.Voice) },
             )
             HorizontalDivider(color = LocalRunColors.current.line)
             NavRow(
@@ -876,6 +920,183 @@ private fun DisplaySection(
         ScaleRow(scale = settings.uiScale, onChange = onSetUiScale)
     }
 }
+
+/**
+ * Speech in and out. Both run on the phone's own engines, and the page says
+ * what that means rather than promising more: the default recognizer may send
+ * audio over the network, and on-device recognition is offered only once the
+ * recognizer has confirmed the language is installed.
+ */
+@Composable
+private fun VoiceSection(
+    settings: HermesSettings,
+    voiceAvailable: Boolean,
+    speech: SpeechOut.Info,
+    onDevice: SpeechIn.OnDevice,
+    onInspect: () -> Unit,
+    onToggleAutoRead: (Boolean) -> Unit,
+    onSetRate: (Float) -> Unit,
+    onSetPitch: (Float) -> Unit,
+    onSelectEngine: (String) -> Unit,
+    onTogglePreferOnDevice: (Boolean) -> Unit,
+    onDownloadOnDevice: () -> Unit,
+    onPreview: () -> Unit,
+) {
+    val colors = LocalRunColors.current
+    val context = LocalContext.current
+    // Ask the engines what they can do each time the page opens: voice data or
+    // a recognition model may have been installed since.
+    LaunchedEffect(Unit) { onInspect() }
+
+    Group(stringResource(R.string.settings_voice_input)) {
+        if (!voiceAvailable) {
+            Text(
+                text = stringResource(R.string.settings_asr_unavailable),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.failed,
+            )
+        } else {
+            Text(
+                text = stringResource(R.string.settings_asr_system_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.muted,
+            )
+            HorizontalDivider(color = colors.line)
+            val installed = onDevice == SpeechIn.OnDevice.Installed
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.settings_asr_on_device),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = stringResource(
+                            when (onDevice) {
+                                SpeechIn.OnDevice.Installed -> R.string.settings_asr_on_device_installed
+                                SpeechIn.OnDevice.Downloadable -> R.string.settings_asr_on_device_downloadable
+                                SpeechIn.OnDevice.Unavailable -> R.string.settings_asr_on_device_unavailable
+                                SpeechIn.OnDevice.Unknown -> R.string.settings_asr_on_device_unknown
+                            },
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.muted,
+                    )
+                }
+                Switch(
+                    checked = installed && settings.preferOnDeviceRecognition,
+                    onCheckedChange = onTogglePreferOnDevice,
+                    enabled = installed,
+                )
+            }
+            if (onDevice == SpeechIn.OnDevice.Downloadable) {
+                OutlinedButton(onClick = onDownloadOnDevice) {
+                    Text(stringResource(R.string.settings_asr_download))
+                }
+            }
+        }
+    }
+
+    Group(stringResource(R.string.settings_voice_output)) {
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_auto_read),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = stringResource(R.string.settings_auto_read_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.muted,
+                )
+            }
+            Switch(checked = settings.autoReadReplies, onCheckedChange = onToggleAutoRead)
+        }
+        HorizontalDivider(color = colors.line)
+        SpeechStepRow(stringResource(R.string.settings_speech_rate), settings.speechRate, onSetRate)
+        SpeechStepRow(stringResource(R.string.settings_speech_pitch), settings.speechPitch, onSetPitch)
+        HorizontalDivider(color = colors.line)
+        Text(
+            text = stringResource(R.string.settings_speech_engine),
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.muted,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        SelectableRow(
+            label = stringResource(R.string.settings_speech_engine_default),
+            selected = settings.speechEngine.isBlank(),
+            onClick = { onSelectEngine("") },
+        )
+        speech.engines.forEach { (engine, label) ->
+            SelectableRow(
+                label = label,
+                selected = settings.speechEngine == engine,
+                onClick = { onSelectEngine(engine) },
+            )
+        }
+        speech.fault?.let { fault ->
+            Text(
+                text = voiceFaultText(fault),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.failed,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            if (fault == VoiceFault.SpeechData) {
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }
+                    },
+                ) { Text(stringResource(R.string.settings_speech_install)) }
+            }
+        }
+        HorizontalDivider(color = colors.line)
+        OutlinedButton(onClick = onPreview, modifier = Modifier.padding(top = 4.dp)) {
+            Text(stringResource(R.string.settings_speech_preview))
+        }
+    }
+}
+
+/** A speech multiplier stepped in tenths — rate or pitch. */
+@Composable
+private fun SpeechStepRow(label: String, value: Float, onChange: (Float) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        OutlinedButton(
+            onClick = { onChange(((value - SPEECH_STEP) * 10).roundToInt() / 10f) },
+            enabled = value > SPEECH_SCALE_MIN + 0.001f,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        ) { Text("−") }
+        Text(
+            text = String.format(Locale.ROOT, "%.1f×", value),
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.widthIn(min = 44.dp),
+            textAlign = TextAlign.Center,
+        )
+        OutlinedButton(
+            onClick = { onChange(((value + SPEECH_STEP) * 10).roundToInt() / 10f) },
+            enabled = value < SPEECH_SCALE_MAX - 0.001f,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        ) { Text("+") }
+    }
+}
+
+private const val SPEECH_STEP = 0.1f
 
 @Composable
 private fun LanguageSection(settings: HermesSettings, onSelectLanguage: (String) -> Unit) {

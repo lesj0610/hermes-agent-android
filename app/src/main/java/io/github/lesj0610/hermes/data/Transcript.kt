@@ -131,6 +131,17 @@ data class ChatState(
     val runStartedAtMillis: Long? = null,
     /** Token usage reported by the last `run.completed` of this session. */
     val lastUsage: io.github.lesj0610.hermes.net.RunUsage? = null,
+    /**
+     * The newest turn sent, and the newest one that has ended — by completing,
+     * failing, being stopped, or never starting at all.
+     *
+     * [isBusy] cannot answer "has my turn ended": a turn whose socket failed to
+     * open never becomes busy, so a listener waiting for busy to fall again
+     * waits forever. These are monotonic across sessions; opening one marks
+     * every earlier turn ended.
+     */
+    val startedTurn: Long = 0,
+    val endedTurn: Long = 0,
 ) {
     val isBusy: Boolean get() = phase !is RunPhase.Idle
     val pendingApproval: PendingApproval?

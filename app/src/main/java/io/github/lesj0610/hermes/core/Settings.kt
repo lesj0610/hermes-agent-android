@@ -112,6 +112,10 @@ const val RAIL_WIDTH_MIN = 220f
 const val RAIL_WIDTH_MAX = 480f
 const val RAIL_WIDTH_DEFAULT = 300f
 
+/** Speech rate and pitch, as multiples of the engine's normal. */
+const val SPEECH_SCALE_MIN = 0.5f
+const val SPEECH_SCALE_MAX = 2f
+
 data class HermesSettings(
     val baseUrl: String = "",
     val token: String = "",
@@ -165,6 +169,19 @@ data class HermesSettings(
      * short preview that follows it, the only sign a long think is moving.
      */
     val reasoningCollapsedByDefault: Boolean = false,
+    /** Read every reply aloud as it streams, outside a spoken conversation. */
+    val autoReadReplies: Boolean = false,
+    /** Text-to-speech rate and pitch, 1.0 being the engine's normal. */
+    val speechRate: Float = 1f,
+    val speechPitch: Float = 1f,
+    /** The text-to-speech engine's package; empty follows the system's choice. */
+    val speechEngine: String = "",
+    /**
+     * Recognise speech on the device. Honoured only when the on-device
+     * recognizer reports the language installed; otherwise the system's default
+     * recognizer runs, which may use the network.
+     */
+    val preferOnDeviceRecognition: Boolean = false,
     val drawerPinned: Boolean = true,
     val showStatusBar: Boolean = true,
     /**
@@ -210,6 +227,11 @@ class SettingsRepository(private val context: Context) {
         val RAIL_PANEL = stringPreferencesKey("rail_panel")
         val OPEN_AT_LATEST = booleanPreferencesKey("open_at_latest")
         val REASONING_COLLAPSED = booleanPreferencesKey("reasoning_collapsed_by_default")
+        val AUTO_READ = booleanPreferencesKey("auto_read_replies")
+        val SPEECH_RATE = floatPreferencesKey("speech_rate")
+        val SPEECH_PITCH = floatPreferencesKey("speech_pitch")
+        val SPEECH_ENGINE = stringPreferencesKey("speech_engine")
+        val ON_DEVICE_ASR = booleanPreferencesKey("prefer_on_device_recognition")
         val DRAWER_PINNED = booleanPreferencesKey("drawer_pinned")
         val SHOW_STATUS_BAR = booleanPreferencesKey("show_status_bar")
         val UPDATE_CHECKS = booleanPreferencesKey("update_checks")
@@ -254,6 +276,11 @@ class SettingsRepository(private val context: Context) {
                 railPanel = rail(prefs[Keys.RAIL_PANEL], RailPanel.Activity),
                 openAtLatest = prefs[Keys.OPEN_AT_LATEST] ?: true,
                 reasoningCollapsedByDefault = prefs[Keys.REASONING_COLLAPSED] ?: false,
+                autoReadReplies = prefs[Keys.AUTO_READ] ?: false,
+                speechRate = (prefs[Keys.SPEECH_RATE] ?: 1f).coerceIn(SPEECH_SCALE_MIN, SPEECH_SCALE_MAX),
+                speechPitch = (prefs[Keys.SPEECH_PITCH] ?: 1f).coerceIn(SPEECH_SCALE_MIN, SPEECH_SCALE_MAX),
+                speechEngine = prefs[Keys.SPEECH_ENGINE].orEmpty(),
+                preferOnDeviceRecognition = prefs[Keys.ON_DEVICE_ASR] ?: false,
                 drawerPinned = prefs[Keys.DRAWER_PINNED] ?: true,
                 showStatusBar = prefs[Keys.SHOW_STATUS_BAR] ?: true,
                 updateChecks = prefs[Keys.UPDATE_CHECKS] ?: true,
@@ -359,6 +386,26 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setReasoningCollapsedByDefault(enabled: Boolean) {
         context.dataStore.edit { it[Keys.REASONING_COLLAPSED] = enabled }
+    }
+
+    suspend fun setAutoReadReplies(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.AUTO_READ] = enabled }
+    }
+
+    suspend fun setSpeechRate(rate: Float) {
+        context.dataStore.edit { it[Keys.SPEECH_RATE] = rate.coerceIn(SPEECH_SCALE_MIN, SPEECH_SCALE_MAX) }
+    }
+
+    suspend fun setSpeechPitch(pitch: Float) {
+        context.dataStore.edit { it[Keys.SPEECH_PITCH] = pitch.coerceIn(SPEECH_SCALE_MIN, SPEECH_SCALE_MAX) }
+    }
+
+    suspend fun setSpeechEngine(engine: String) {
+        context.dataStore.edit { it[Keys.SPEECH_ENGINE] = engine }
+    }
+
+    suspend fun setPreferOnDeviceRecognition(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.ON_DEVICE_ASR] = enabled }
     }
 
     suspend fun setDrawerPinned(pinned: Boolean) {

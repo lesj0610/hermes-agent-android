@@ -25,8 +25,11 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -377,6 +380,14 @@ class DashboardApi(
         storedSessionId: String?,
         text: String,
         images: List<String> = emptyList(),
+        /**
+         * The model, provider and reasoning level the turn runs with. The HTTP
+         * route carries these on every request; the socket used to drop them,
+         * so the composer's picks only ever applied to turns that went over HTTP.
+         */
+        runtime: TurnRuntime = TurnRuntime.DEFAULT,
+        /** Present on a turn spoken in a conversation. */
+        voice: VoiceTurn? = null,
     ): SocketRun {
         val ticket = wsTicket()
         val target = buildString {
@@ -396,64 +407,71 @@ class DashboardApi(
         }
 
         val rpc = RpcSession(ws, json)
-        val live = if (storedSessionId.isNullOrBlank()) {
-            rpc.call<JsonObject>("session.create", buildJsonObject { })
-                .let { (it["session_id"] as? JsonPrimitive)?.content }
-        } else {
-            rpc.call<ResumedSession>(
-                "session.resume",
-                buildJsonObject { put("session_id", storedSessionId) },
-            ).liveId
-        }
-        if (live.isNullOrBlank()) {
-            runCatching { ws.close() }
-            throw GatewayRpcException(-1, "The gateway did not return a live session")
-        }
-
-        // Attachments go first, and each one is awaited: `image.attach_bytes`
-        // stages the picture on the session, and `prompt.submit` sends whatever
-        // is staged when it arrives. Submitting first would send the turn
-        // without them.
-        //
-        // This is the RPC the gateway documents for remote clients, which is
-        // what makes a picture usable here at all: the HTTP route carries
-        // images but emits no reasoning stream and no tool events, so a turn
-        // with an attachment used to arrive as a bare answer.
-        images.forEachIndexed { index, dataUrl ->
-            rpc.call<JsonObject>(
-                "image.attach_bytes",
-                buildJsonObject {
-                    put("session_id", live)
-                    // The data URL whole: the server reads the mime prefix off it.
-                    put("content_base64", dataUrl)
-                    put("filename", "attachment-${index + 1}.jpg")
-                },
+        var liveId: String? = null
+        try {
+            val prepared = prepareSocketTurn(
+                rpc = { method, params -> rpc.callRaw(method, params) },
+                storedSessionId = storedSessionId,
+                runtime = runtime,
+                voice = voice,
             )
-        }
+            val live = prepared.liveId.also { liveId = it }
 
-        val run = SocketRun(ws, json, live)
-        // Fire and forget: the answer to prompt.submit is the event stream, not
-        // its return value, and waiting for the reply would block the reader.
-        ws.send(
-            Frame.Text(
-                json.encodeToString(
-                    JsonObject.serializer(),
+            // Attachments go first, and each one is awaited: `image.attach_bytes`
+            // stages the picture on the session, and `prompt.submit` sends
+            // whatever is staged when it arrives. Submitting first would send the
+            // turn without them.
+            //
+            // This is the RPC the gateway documents for remote clients, which is
+            // what makes a picture usable here at all: the HTTP route carries
+            // images but emits no reasoning stream and no tool events, so a turn
+            // with an attachment used to arrive as a bare answer.
+            images.forEachIndexed { index, dataUrl ->
+                rpc.call<JsonObject>(
+                    "image.attach_bytes",
                     buildJsonObject {
-                        put("jsonrpc", "2.0")
-                        put("id", 1)
-                        put("method", "prompt.submit")
-                        put(
-                            "params",
-                            buildJsonObject {
-                                put("session_id", live)
-                                put("text", text)
-                            },
-                        )
+                        put("session_id", live)
+                        // The data URL whole: the server reads the mime prefix off it.
+                        put("content_base64", dataUrl)
+                        put("filename", "attachment-${index + 1}.jpg")
                     },
+                )
+            }
+
+            val run = SocketRun(ws, json, live, restoreReasoning = prepared.restoreReasoning)
+            // Fire and forget: the answer to prompt.submit is the event stream,
+            // not its return value, and waiting for the reply would block the
+            // reader.
+            ws.send(
+                Frame.Text(
+                    json.encodeToString(
+                        JsonObject.serializer(),
+                        buildJsonObject {
+                            put("jsonrpc", "2.0")
+                            put("id", 1)
+                            put("method", "prompt.submit")
+                            put("params", promptSubmitParams(live, text, voice))
+                        },
+                    ),
                 ),
-            ),
-        )
-        return run
+            )
+            return run
+        } catch (cause: Throwable) {
+            // A turn that fails before it is submitted leaves nothing running,
+            // but it did open a live session and a socket; both are the
+            // gateway's to reclaim and neither is released by an exception.
+            withContext(NonCancellable) {
+                liveId?.let { live ->
+                    runCatching {
+                        withTimeoutOrNull(CLOSE_TIMEOUT_MILLIS) {
+                            rpc.callRaw("session.close", buildJsonObject { put("session_id", live) })
+                        }
+                    }
+                }
+                runCatching { ws.close() }
+            }
+            throw cause
+        }
     }
 
     /** Reads a config key — `reasoning` answers with the level in force. */
@@ -509,6 +527,9 @@ class GatewayRpcException(val code: Int, override val message: String) : Excepti
  * carries the gateway's live broadcasts — and are skipped rather than treated
  * as protocol errors.
  */
+/** How long closing a live session may hold up the socket's release. */
+internal const val CLOSE_TIMEOUT_MILLIS = 3_000L
+
 internal class RpcSession(
     private val session: DefaultClientWebSocketSession,
     @PublishedApi internal val codec: Json,

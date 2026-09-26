@@ -34,8 +34,15 @@ import io.github.lesj0610.hermes.ui.artifacts.Artifact
 import io.github.lesj0610.hermes.ui.artifacts.collectArtifacts
 import io.github.lesj0610.hermes.ui.commands.SlashCommand
 import io.github.lesj0610.hermes.ui.commands.buildCommands
+import io.github.lesj0610.hermes.core.REASONING_OFF
+import io.github.lesj0610.hermes.net.VoiceTurn
+import io.github.lesj0610.hermes.voice.DictationUpdate
+import io.github.lesj0610.hermes.voice.SpeechIn
+import io.github.lesj0610.hermes.voice.SpeechOut
 import io.github.lesj0610.hermes.voice.VoiceController
+import io.github.lesj0610.hermes.voice.VoiceFault
 import io.github.lesj0610.hermes.voice.VoiceState
+import io.github.lesj0610.hermes.voice.voiceContext
 import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -350,67 +357,134 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ── voice ─────────────────────────────────────────────────────────────
 
     /**
-     * Speech in and out, both on the device: the gateway has no audio route, so
-     * a spoken turn becomes text before it is sent and the reply becomes speech
-     * after it arrives.
+     * Speech in and out on the phone's own engines: a spoken turn becomes text
+     * before it is sent, and the reply is read aloud as it streams.
      */
-    private val voice = VoiceController(app)
+    private val voice = VoiceController(app, sendTurn = ::sendVoiceTurn)
     val voiceState: StateFlow<VoiceState> = voice.state
     val voiceConversing: StateFlow<Boolean> = voice.conversing
     val voiceAvailable: Boolean get() = voice.available
+    val dictation: StateFlow<DictationUpdate?> = voice.dictation
+    val voiceNotice: StateFlow<VoiceFault?> = voice.notice
+    val voiceLevel: StateFlow<Float> get() = voice.level
+    val readingKey: StateFlow<String?> = voice.reading
+    val speechInfo: StateFlow<SpeechOut.Info> get() = voice.speech
 
-    /**
-     * A dictated utterance waiting to be dropped into the composer. Null once
-     * the composer has taken it, so the same text is not inserted twice.
-     */
-    private val _dictation = MutableStateFlow<String?>(null)
-    val dictation: StateFlow<String?> = _dictation.asStateFlow()
+    private val _onDeviceRecognition = MutableStateFlow(SpeechIn.OnDevice.Unknown)
+    val onDeviceRecognition: StateFlow<SpeechIn.OnDevice> = _onDeviceRecognition.asStateFlow()
 
     init {
         refresh()
         refreshDashboard()
 
-        voice.onTranscript = { text ->
-            // In a spoken conversation the turn goes straight out; dictation
-            // fills the box instead, so what was heard can be corrected before
-            // it is sent.
-            if (voice.conversing.value) send(text) else _dictation.value = text
-        }
-
-        // Read each completed reply aloud while a conversation is running. Only
-        // on completion: speaking the stream would restart the utterance on
-        // every delta.
+        // Every change to the chat reaches voice, which reads only the new text
+        // of the reply it is following.
+        viewModelScope.launch { graph.runEngine.state.collect { voice.onChatState(it) } }
         viewModelScope.launch {
-            var wasBusy = false
-            graph.runEngine.state.collect { state ->
-                if (wasBusy && !state.isBusy && voice.conversing.value) {
-                    val reply = state.items
-                        .filterIsInstance<io.github.lesj0610.hermes.data.TranscriptItem.AssistantText>()
-                        .lastOrNull()
-                        ?.text
-                    if (reply != null) voice.speak(reply, voiceLocale())
-                }
-                wasBusy = state.isBusy
+            settings.collect { current ->
+                voice.configure(
+                    locale = voiceLocale(current),
+                    rate = current.speechRate,
+                    pitch = current.speechPitch,
+                    engine = current.speechEngine,
+                    preferOnDevice = current.preferOnDeviceRecognition,
+                )
+                voice.autoRead = current.autoReadReplies
             }
         }
     }
 
     /** Follows the app's language so Korean is transcribed and spoken as Korean. */
-    private fun voiceLocale(): Locale =
-        settings.value.language.takeIf { it.isNotBlank() }
+    private fun voiceLocale(current: HermesSettings = settings.value): Locale =
+        current.language.takeIf { it.isNotBlank() }
             ?.let { Locale.forLanguageTag(it) }
             ?: Locale.getDefault()
 
-    fun dictate() = voice.listen(voiceLocale())
+    /**
+     * A spoken turn. It runs with thinking off — an answer spoken aloud is
+     * waited for in silence, and a long think is dead air — on the model the
+     * composer has selected, and is shaped for speech on the socket route. The
+     * level typed turns use is restored on the session when it ends.
+     */
+    private fun sendVoiceTurn(text: String) {
+        viewModelScope.launch {
+            val current = graph.settings.current()
+            val turn = graph.runEngine.send(
+                prompt = text,
+                model = current.model.takeIf { it.isNotBlank() },
+                provider = current.provider.takeIf { it.isNotBlank() },
+                effort = REASONING_OFF,
+                voice = VoiceTurn(
+                    context = voiceContext(graph.runEngine.state.value.items),
+                    restoreReasoning = current.reasoningEffort.wire,
+                ),
+            )
+            if (turn != null) voice.onTurnSent(turn) else voice.onTurnRefused()
+        }
+    }
 
-    fun consumeDictation() { _dictation.value = null }
+    fun dictate() = voice.dictate()
 
-    fun toggleConversation() {
-        if (voice.conversing.value) voice.stopConversation() else voice.startConversation(voiceLocale())
+    /** The draft was edited while dictating: what is still being heard is dropped. */
+    fun cancelDictation() = voice.cancelDictation()
+
+    fun consumeDictation() = voice.consumeDictation()
+
+    fun toggleConversation() = voice.toggleConversation()
+
+    fun readAloud(key: String, text: String) = voice.readAloud(key, text)
+
+    fun consumeVoiceNotice() = voice.consumeNotice()
+
+    private var conversationAfterGrant = false
+
+    /** Which tap asked for the microphone, so the grant can finish it. */
+    fun afterMicrophoneGrant(conversation: Boolean) {
+        conversationAfterGrant = conversation
     }
 
     /** The microphone was just granted, so act on the tap that triggered the ask. */
-    fun onMicrophoneGranted() = dictate()
+    fun onMicrophoneGranted() {
+        if (conversationAfterGrant) {
+            conversationAfterGrant = false
+            voice.startConversation()
+        } else {
+            dictate()
+        }
+    }
+
+    fun setAutoReadReplies(enabled: Boolean) {
+        viewModelScope.launch { graph.settings.setAutoReadReplies(enabled) }
+    }
+
+    fun setSpeechRate(rate: Float) {
+        viewModelScope.launch { graph.settings.setSpeechRate(rate) }
+    }
+
+    fun setSpeechPitch(pitch: Float) {
+        viewModelScope.launch { graph.settings.setSpeechPitch(pitch) }
+    }
+
+    fun setSpeechEngine(engine: String) {
+        viewModelScope.launch { graph.settings.setSpeechEngine(engine) }
+    }
+
+    fun setPreferOnDeviceRecognition(enabled: Boolean) {
+        viewModelScope.launch { graph.settings.setPreferOnDeviceRecognition(enabled) }
+    }
+
+    fun previewSpeech() = voice.preview()
+
+    /** Asks the engines what they can do, for the voice settings page. */
+    fun inspectVoice() {
+        voice.warmUpSpeech()
+        voice.refreshOnDevice { _onDeviceRecognition.value = it }
+    }
+
+    fun downloadOnDeviceRecognition() {
+        voice.downloadOnDevice()
+        voice.refreshOnDevice { _onDeviceRecognition.value = it }
+    }
 
     override fun onCleared() {
         voice.release()
@@ -580,7 +654,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun respondToApproval(choice: String) = graph.runEngine.respondToApproval(choice)
 
-    fun stop() = graph.runEngine.stop()
+    fun stop() {
+        // In a spoken conversation Stop also silences the reply at once; the
+        // conversation listens again when the stopped turn has ended.
+        voice.interruptReply()
+        graph.runEngine.stop()
+    }
 
     fun dismissError() = graph.runEngine.clearError()
 

@@ -4,9 +4,12 @@ import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -32,6 +35,13 @@ class SocketRun(
     private val json: Json,
     /** The gateway's live session id, which is *not* the stored one. */
     val liveSessionId: String,
+    /**
+     * The reasoning level to put back when the turn is over — set only when a
+     * spoken turn switched thinking off. The level is stored on the session, so
+     * leaving it would hand the next typed turn, on any client, a thinking-off
+     * agent nobody asked for.
+     */
+    private val restoreReasoning: String? = null,
 ) {
     private var nextId = 1_000
 
@@ -106,9 +116,14 @@ class SocketRun(
                 )
 
                 // The turn's end, and its own copy of everything — used to
-                // finish rather than to re-render.
+                // finish rather than to re-render. A turn stopped by
+                // `session.interrupt` ends here too, and says so.
                 "message.complete" -> {
-                    emit(RunEvent.Completed(null, null, null, null))
+                    if (payload.str("status") == "interrupted") {
+                        emit(RunEvent.Cancelled(null, null))
+                    } else {
+                        emit(RunEvent.Completed(null, null, null, null))
+                    }
                     return@flow
                 }
 
@@ -137,15 +152,49 @@ class SocketRun(
         )
     }
 
-    suspend fun close() {
-        // The live session is the gateway's, not ours to leave running.
-        runCatching {
-            send("session.close", buildJsonObject { put("session_id", liveSessionId) })
-        }
-        runCatching { session.close() }
+    /**
+     * Stops the turn. The socket's own verb: the HTTP stop route knows runs by
+     * the ids `/v1/runs` hands out, and a live session id is not one of them, so
+     * Stop on a socket turn used to fail while the turn ran on.
+     */
+    suspend fun interrupt() {
+        send("session.interrupt", buildJsonObject { put("session_id", liveSessionId) })
     }
 
-    private suspend fun send(method: String, params: JsonObject) {
+    /**
+     * Ends the turn's hold on the gateway: restores anything the turn changed,
+     * then closes the live session and the socket.
+     *
+     * Runs to completion even when the caller was cancelled — a stopped turn is
+     * exactly when the session must still be put back — but each step is
+     * bounded, so a dead socket cannot hold the caller up.
+     */
+    suspend fun close() {
+        withContext(NonCancellable) {
+            restoreReasoning?.let { level ->
+                // Awaited before the close: sent together, the gateway may
+                // process the close first and the restore would land on a
+                // session that no longer exists.
+                runCatching {
+                    request(
+                        "config.set",
+                        buildJsonObject {
+                            put("session_id", liveSessionId)
+                            put("key", "reasoning")
+                            put("value", level)
+                        },
+                    )
+                }
+            }
+            // The live session is the gateway's, not ours to leave running.
+            runCatching {
+                request("session.close", buildJsonObject { put("session_id", liveSessionId) })
+            }
+            runCatching { session.close() }
+        }
+    }
+
+    private suspend fun send(method: String, params: JsonObject): Int {
         val id = nextId++
         session.send(
             Frame.Text(
@@ -160,6 +209,30 @@ class SocketRun(
                 ),
             ),
         )
+        return id
+    }
+
+    /**
+     * Sends [method] and waits for its reply, for the steps after the event
+     * stream has finished. Frames that are not the reply — late events, the
+     * answer to `prompt.submit` — are skipped. Null on timeout or a closed socket.
+     */
+    private suspend fun request(method: String, params: JsonObject): JsonObject? {
+        val id = send(method, params)
+        return withTimeoutOrNull(CLOSE_TIMEOUT_MILLIS) {
+            var reply: JsonObject? = null
+            while (reply == null) {
+                val frame = try {
+                    session.incoming.receive()
+                } catch (_: ClosedReceiveChannelException) {
+                    break
+                }
+                val text = (frame as? Frame.Text)?.readText() ?: continue
+                val message = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: continue
+                if ((message["id"] as? JsonPrimitive)?.content?.toIntOrNull() == id) reply = message
+            }
+            reply
+        }
     }
 }
 

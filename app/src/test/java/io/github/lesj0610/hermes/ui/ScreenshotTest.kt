@@ -74,6 +74,10 @@ import io.github.lesj0610.hermes.ui.search.SearchPane
 import io.github.lesj0610.hermes.ui.settings.PermissionState
 import io.github.lesj0610.hermes.ui.settings.SettingsPane
 import io.github.lesj0610.hermes.ui.theme.HermesTheme
+import io.github.lesj0610.hermes.voice.SpeechIn
+import io.github.lesj0610.hermes.voice.SpeechOut
+import io.github.lesj0610.hermes.voice.VoiceFault
+import io.github.lesj0610.hermes.voice.VoiceState
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -809,6 +813,91 @@ class ScreenshotTest {
                 ),
                 onSend = { _, _ -> }, onStop = {}, onDismissError = {},
                 modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+
+    /**
+     * A finished reply offers to be read aloud; the one being read shows how
+     * to stop it. The notice line is where a voice failure lands.
+     */
+    @Test
+    fun chatReadAloud() {
+        capture("chat-read-aloud", 411, 891, locale = "ko") {
+            ChatPane(
+                state = ChatState(
+                    sessionId = "s1",
+                    items = listOf(
+                        TranscriptItem.UserText("u1", "오늘 일정 알려줘"),
+                        TranscriptItem.AssistantText("a1", "오전 10시에 회의가 있고, 오후 3시에 치과 예약이 있습니다.", streaming = false),
+                        TranscriptItem.UserText("u2", "회의 장소는?"),
+                        TranscriptItem.AssistantText("a2", "본관 3층 대회의실입니다.", streaming = false),
+                    ),
+                ),
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
+                modifier = Modifier.fillMaxSize(),
+                voiceAvailable = true,
+                readingKey = "a1",
+                voiceNotice = VoiceFault.NoSpeech,
+            )
+        }
+    }
+
+    /** A spoken conversation: the box says where the exchange is. */
+    @Test
+    fun chatConversing() {
+        capture("chat-conversing", 411, 891, locale = "ko") {
+            ChatPane(
+                state = ChatState(
+                    sessionId = "s1",
+                    items = listOf(
+                        TranscriptItem.UserText("u1", "내일 날씨 어때?"),
+                        TranscriptItem.AssistantText("a1", "내일은 맑고 최고 기온은 24도입니다.", streaming = false),
+                    ),
+                ),
+                onSend = { _, _ -> }, onStop = {}, onDismissError = {},
+                modifier = Modifier.fillMaxSize(),
+                voiceAvailable = true,
+                voiceState = VoiceState.Listening,
+                conversing = true,
+            )
+        }
+    }
+
+    /** The voice page: what the engines can do, said plainly. */
+    @Test
+    fun settingsVoice() {
+        capture(
+            "settings-voice", 411, 891, locale = "ko",
+            before = { compose.onNodeWithText("음성").performClick() },
+        ) {
+            SettingsPane(
+                settings = HermesSettings(autoReadReplies = true, speechRate = 1.2f),
+                connection = Connection.Connected("2.4.1", 38),
+                dashboardState = DashboardState.Ready,
+                models = emptyList(),
+                permissions = PermissionState(canNotify = true, batteryExempt = true),
+                onSaveServer = { _, _, _ -> },
+                onSaveDashboard = { _, _, _, _ -> },
+                onSelectModel = {},
+                onSelectLanguage = {},
+                onToggleApprovals = {},
+                onToggleCompletion = {},
+                onSelectLayoutMode = {},
+                onSetUiScale = {},
+                onToggleOpenAtLatest = {},
+                onRequestNotifications = {},
+                onRequestBackground = {},
+                voiceAvailable = true,
+                speechInfo = SpeechOut.Info(
+                    ready = false,
+                    engines = listOf(
+                        "com.samsung.SMT" to "Samsung TTS",
+                        "com.google.android.tts" to "Speech Recognition and Synthesis from Google",
+                    ),
+                    fault = VoiceFault.SpeechData,
+                ),
+                onDeviceRecognition = SpeechIn.OnDevice.Downloadable,
             )
         }
     }

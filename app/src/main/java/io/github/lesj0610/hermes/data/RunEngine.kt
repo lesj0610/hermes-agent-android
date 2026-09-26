@@ -16,6 +16,8 @@ import io.github.lesj0610.hermes.net.HermesApi
 import io.github.lesj0610.hermes.net.SocketRun
 import io.github.lesj0610.hermes.net.HermesUnauthorizedException
 import io.github.lesj0610.hermes.net.RunEvent
+import io.github.lesj0610.hermes.net.TurnRuntime
+import io.github.lesj0610.hermes.net.VoiceTurn
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -48,6 +50,7 @@ class RunEngine(
     val signals: SharedFlow<RunSignal> = _signals.asSharedFlow()
 
     private val keySeq = AtomicLong(0)
+    private val turnSeq = AtomicLong(0)
     private var streamJob: Job? = null
 
     /** Set while a turn is running over the socket, so approvals go back the same way. */
@@ -61,7 +64,10 @@ class RunEngine(
     suspend fun openSession(sessionId: String?) {
         streamJob?.cancelAndJoin()
         streamJob = null
-        _state.value = ChatState(sessionId = sessionId)
+        // Every turn so far counts as ended: whatever was waiting on one from the
+        // previous session must not wait on into this one.
+        val last = turnSeq.get()
+        _state.value = ChatState(sessionId = sessionId, startedTurn = last, endedTurn = last)
         if (sessionId == null) return
 
         runCatching { api.messages(sessionId) }
@@ -118,19 +124,29 @@ class RunEngine(
 
     // ── sending ───────────────────────────────────────────────────────────
 
+    /**
+     * Sends a turn and answers its number, or null when it was not sent.
+     *
+     * [voice] marks a turn spoken in a conversation: it is shaped for speech and
+     * runs with whatever [effort] the caller chose for speech, and the socket
+     * restores the session's level afterwards.
+     */
     fun send(
         prompt: String,
         model: String?,
         provider: String?,
         effort: String?,
         images: List<String> = emptyList(),
-    ) {
-        if ((prompt.isBlank() && images.isEmpty()) || _state.value.isBusy) return
+        voice: VoiceTurn? = null,
+    ): Long? {
+        if ((prompt.isBlank() && images.isEmpty()) || _state.value.isBusy) return null
 
+        val turn = turnSeq.incrementAndGet()
         _state.update {
             it.copy(
                 items = it.items + TranscriptItem.UserText(nextKey("u"), prompt, images),
                 error = null,
+                startedTurn = turn,
             )
         }
 
@@ -142,13 +158,13 @@ class RunEngine(
             val viaSocket = dashboard != null &&
                 runCatching { socketEnabled() }.getOrDefault(false)
             if (viaSocket) {
-                runSocket(prompt, images)
+                runSocket(prompt, images, TurnRuntime(model, provider, effort), voice)
                 return@launch
             }
 
             val started = runCatching { api.startRun(prompt, _state.value.sessionId, model, provider, effort, images) }
                 .getOrElse { cause ->
-                    _state.update { it.copy(phase = RunPhase.Idle, error = cause.toUiError()) }
+                    _state.update { it.copy(phase = RunPhase.Idle, error = cause.toUiError()).ended() }
                     return@launch
                 }
 
@@ -161,6 +177,7 @@ class RunEngine(
             _signals.tryEmit(RunSignal.Started(started.runId))
             consume(started.runId)
         }
+        return turn
     }
 
     /**
@@ -169,11 +186,17 @@ class RunEngine(
      * The live session is closed in a finally: it belongs to the gateway, and
      * one left open per turn accumulates there.
      */
-    private suspend fun runSocket(prompt: String, images: List<String>) {
+    private suspend fun runSocket(
+        prompt: String,
+        images: List<String>,
+        runtime: TurnRuntime,
+        voice: VoiceTurn?,
+    ) {
         val api = dashboard ?: return
-        val run = runCatching { api.startSocketRun(_state.value.sessionId, prompt, images) }
+        val run = runCatching { api.startSocketRun(_state.value.sessionId, prompt, images, runtime, voice) }
             .getOrElse { cause ->
-                _state.update { it.copy(phase = RunPhase.Idle, error = cause.toUiError()) }
+                if (cause is kotlinx.coroutines.CancellationException) throw cause
+                _state.update { it.copy(phase = RunPhase.Idle, error = cause.toUiError()).ended() }
                 return
             }
         socketRun = run
@@ -193,7 +216,7 @@ class RunEngine(
                             phase = RunPhase.Idle,
                             items = it.items.finishStreaming() +
                                 TranscriptItem.Failure(nextKey("e"), cause.toUiError()),
-                        )
+                        ).ended()
                     }
                     _signals.tryEmit(RunSignal.Finished(run.liveSessionId, ok = false))
                 }
@@ -213,7 +236,7 @@ class RunEngine(
                     phase = RunPhase.Idle,
                     items = it.items.finishStreaming() +
                         TranscriptItem.Failure(nextKey("e"), cause.toUiError()),
-                )
+                ).ended()
             }
             _signals.tryEmit(RunSignal.Finished(runId, ok = false))
         }
@@ -352,7 +375,7 @@ class RunEngine(
                         phase = RunPhase.Idle,
                         runStartedAtMillis = null,
                         lastUsage = event.usage ?: current.lastUsage,
-                    )
+                    ).ended()
                 }
                 _signals.tryEmit(RunSignal.Finished(event.runId.orEmpty(), ok = true))
                 // Fetch whatever that turn produced, the same pass a reopened
@@ -370,7 +393,7 @@ class RunEngine(
                         ),
                         phase = RunPhase.Idle,
                         runStartedAtMillis = null,
-                    )
+                    ).ended()
                 }
                 _signals.tryEmit(RunSignal.Finished(event.runId.orEmpty(), ok = false))
             }
@@ -381,7 +404,7 @@ class RunEngine(
                         items = it.items.finishStreaming(),
                         phase = RunPhase.Idle,
                         runStartedAtMillis = null,
-                    )
+                    ).ended()
                 }
                 _signals.tryEmit(RunSignal.Finished(event.runId.orEmpty(), ok = true))
             }
@@ -434,7 +457,10 @@ class RunEngine(
         }
         _state.update { it.copy(phase = RunPhase.Stopping(runId)) }
         scope.launch {
-            runCatching { api.stopRun(runId) }
+            // Back down the transport that is running it: a socket turn is
+            // stopped on its socket, and the HTTP route does not know its id.
+            val run = socketRun
+            runCatching { if (run != null) run.interrupt() else api.stopRun(runId) }
                 .onFailure { cause -> _state.update { it.copy(error = cause.toUiError()) } }
         }
     }
@@ -451,6 +477,9 @@ sealed interface RunSignal {
 }
 
 // ── transcript helpers ────────────────────────────────────────────────────
+
+/** Marks the newest turn ended, whichever way it ended. */
+private fun ChatState.ended(): ChatState = copy(endedTurn = startedTurn)
 
 private fun List<TranscriptItem>.updateLastTool(
     tool: String,

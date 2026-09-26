@@ -315,6 +315,40 @@ fun MicIcon(modifier: Modifier = Modifier, tint: Color? = null) {
     }
 }
 
+/** A speaker with sound coming off it: read this reply aloud. */
+@Composable
+fun SpeakerIcon(modifier: Modifier = Modifier, tint: Color? = null) {
+    val color = tint ?: LocalRunColors.current.muted
+    Canvas(modifier.size(ICON_DP.dp)) {
+        val bounds = iconBounds()
+        val w = bounds.width
+        val h = bounds.height
+        val cone = Path().apply {
+            moveTo(bounds.left, bounds.top + h * 0.36f)
+            lineTo(bounds.left + w * 0.22f, bounds.top + h * 0.36f)
+            lineTo(bounds.left + w * 0.48f, bounds.top + h * 0.12f)
+            lineTo(bounds.left + w * 0.48f, bounds.top + h * 0.88f)
+            lineTo(bounds.left + w * 0.22f, bounds.top + h * 0.64f)
+            lineTo(bounds.left, bounds.top + h * 0.64f)
+            close()
+        }
+        drawPath(cone, color, style = iconStroke())
+        // Two waves, nearer and farther: the sound, not a second speaker.
+        listOf(0.2f, 0.38f).forEach { share ->
+            val radius = w * share
+            drawArc(
+                color = color,
+                startAngle = -48f,
+                sweepAngle = 96f,
+                useCenter = false,
+                topLeft = Offset(bounds.left + w * 0.56f - radius, bounds.center.y - radius),
+                size = Size(radius * 2f, radius * 2f),
+                style = iconStroke(),
+            )
+        }
+    }
+}
+
 /** A waveform: the spoken conversation, where replies are read back. */
 @Composable
 fun WaveformIcon(modifier: Modifier = Modifier, tint: Color? = null) {

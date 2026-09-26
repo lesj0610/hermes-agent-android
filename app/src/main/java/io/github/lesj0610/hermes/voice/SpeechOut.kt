@@ -163,8 +163,27 @@ class SpeechOut(private val context: Context) {
         shutdownEngine()
     }
 
-    /** Starts the engine ahead of need, so settings can report on it. */
-    fun warmUp() = ensureEngine()
+    /**
+     * Starts the engine ahead of need, so settings can report on it. One already
+     * running is asked again, and one that failed is started afresh while
+     * nothing is being spoken: an engine or voice data installed since would
+     * otherwise not show until the engine next restarts.
+     */
+    fun warmUp() {
+        when (engineState) {
+            EngineState.Ready -> tts?.let { current ->
+                val spoken = applyLanguage(current)
+                if (!spoken) engineState = EngineState.Failed
+                _info.value = describe(current, spoken)
+            }
+            EngineState.Failed -> if (groupDone) {
+                shutdownEngine()
+                ensureEngine()
+            }
+            EngineState.Off -> ensureEngine()
+            EngineState.Starting -> Unit
+        }
+    }
 
     private fun silence() {
         waiting.clear()
@@ -234,18 +253,7 @@ class SpeechOut(private val context: Context) {
         engine.setPitch(pitch)
         engine.setOnUtteranceProgressListener(progress)
         val spoken = applyLanguage(engine)
-        val offered = runCatching { engine.engines.orEmpty() }.getOrDefault(emptyList())
-        val withheld = withheldDefault(offered)
-        _info.value = Info(
-            ready = spoken,
-            engines = offered.map { it.name to it.label },
-            defaultEngine = runCatching { engine.defaultEngine.orEmpty() }.getOrDefault(""),
-            withheldDefault = withheld,
-            // The system falls back to its highest-ranked engine: the first
-            // system one in the list, which is sorted that way.
-            standIn = if (withheld.isEmpty()) "" else offered.firstOrNull { isSystem(it.name) }?.label.orEmpty(),
-            fault = engineFault,
-        )
+        _info.value = describe(engine, spoken)
         if (!spoken) {
             engineState = EngineState.Failed
             if (waiting.isNotEmpty()) fail(engineFault ?: VoiceFault.SpeechLanguage)
@@ -256,6 +264,22 @@ class SpeechOut(private val context: Context) {
         waiting.clear()
         queued.forEach(::speakNow)
         drainedIfDone()
+    }
+
+    /** What [engine] reports about itself and the engines installed, for settings. */
+    private fun describe(engine: TextToSpeech, spoken: Boolean): Info {
+        val offered = runCatching { engine.engines.orEmpty() }.getOrDefault(emptyList())
+        val withheld = withheldDefault(offered)
+        return Info(
+            ready = spoken,
+            engines = offered.map { it.name to it.label },
+            defaultEngine = runCatching { engine.defaultEngine.orEmpty() }.getOrDefault(""),
+            withheldDefault = withheld,
+            // The system falls back to its highest-ranked engine: the first
+            // system one in the list, which is sorted that way.
+            standIn = if (withheld.isEmpty()) "" else offered.firstOrNull { isSystem(it.name) }?.label.orEmpty(),
+            fault = engineFault,
+        )
     }
 
     /**

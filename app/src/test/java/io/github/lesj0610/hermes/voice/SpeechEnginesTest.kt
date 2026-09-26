@@ -298,6 +298,36 @@ class SpeechOutTest {
         start()
         assertEquals("", again.info.value.withheldDefault)
     }
+
+    // Seen on a phone: an engine installed while the app ran stayed off the
+    // settings page until the engine happened to restart.
+    @Test
+    fun `an engine installed while the engine runs shows when settings look again`() {
+        val out = speaker()
+        out.warmUp()
+        start()
+        assertTrue(out.info.value.engines.none { it.first == "com.new.tts" })
+        installEngine("com.new.tts", "새 엔진", speaks = true)
+        out.warmUp()
+        assertTrue(out.info.value.engines.any { it.first == "com.new.tts" })
+    }
+
+    @Test
+    fun `voice data installed after a failure is picked up when settings look again`() {
+        ShadowTextToSpeech.reset()
+        val out = speaker()
+        out.warmUp()
+        start()
+        val first = engine()
+        assertTrue(out.info.value.fault != null)
+        ShadowTextToSpeech.addLanguageAvailability(Locale.KOREA)
+        out.warmUp()
+        assertTrue(engine() !== first)
+        assertTrue(shadowOf(first).isShutdown)
+        start()
+        assertNull(out.info.value.fault)
+        assertTrue(out.info.value.ready)
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)

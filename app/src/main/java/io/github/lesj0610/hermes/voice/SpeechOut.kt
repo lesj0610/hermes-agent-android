@@ -1,11 +1,13 @@
 package io.github.lesj0610.hermes.voice
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +39,14 @@ class SpeechOut(private val context: Context) {
         /** Installed engines as (package, label). */
         val engines: List<Pair<String, String>> = emptyList(),
         val defaultEngine: String = "",
+        /**
+         * The device's default engine, by name, when it refuses this app — a
+         * maker's engine can serve only the apps its maker allows — and is left
+         * out of [engines]; empty otherwise.
+         */
+        val withheldDefault: String = "",
+        /** The engine the system speaks with in place of [withheldDefault], when known. */
+        val standIn: String = "",
         /** Why the configured language cannot be spoken, when the engine said so. */
         val fault: VoiceFault? = null,
     )
@@ -224,10 +234,16 @@ class SpeechOut(private val context: Context) {
         engine.setPitch(pitch)
         engine.setOnUtteranceProgressListener(progress)
         val spoken = applyLanguage(engine)
+        val offered = runCatching { engine.engines.orEmpty() }.getOrDefault(emptyList())
+        val withheld = withheldDefault(offered)
         _info.value = Info(
             ready = spoken,
-            engines = runCatching { engine.engines.map { it.name to it.label } }.getOrDefault(emptyList()),
+            engines = offered.map { it.name to it.label },
             defaultEngine = runCatching { engine.defaultEngine.orEmpty() }.getOrDefault(""),
+            withheldDefault = withheld,
+            // The system falls back to its highest-ranked engine: the first
+            // system one in the list, which is sorted that way.
+            standIn = if (withheld.isEmpty()) "" else offered.firstOrNull { isSystem(it.name) }?.label.orEmpty(),
             fault = engineFault,
         )
         if (!spoken) {
@@ -241,6 +257,24 @@ class SpeechOut(private val context: Context) {
         queued.forEach(::speakNow)
         drainedIfDone()
     }
+
+    /**
+     * The name of the engine set as the device default, when it is installed but
+     * not among the engines [offered] to this app: an engine that turns this app
+     * away is left out of the list, and the system speaks with another instead.
+     */
+    private fun withheldDefault(offered: List<TextToSpeech.EngineInfo>): String {
+        val name = runCatching {
+            Settings.Secure.getString(context.contentResolver, Settings.Secure.TTS_DEFAULT_SYNTH)
+        }.getOrNull()
+        if (name.isNullOrBlank() || offered.any { it.name == name }) return ""
+        val packages = context.packageManager
+        return runCatching { packages.getApplicationInfo(name, 0).loadLabel(packages).toString() }.getOrDefault("")
+    }
+
+    private fun isSystem(pkg: String): Boolean = runCatching {
+        context.packageManager.getApplicationInfo(pkg, 0).flags and ApplicationInfo.FLAG_SYSTEM != 0
+    }.getOrDefault(false)
 
     /** Sets the language, recording why when the engine cannot speak it. */
     private fun applyLanguage(engine: TextToSpeech): Boolean {

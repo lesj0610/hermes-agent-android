@@ -2,12 +2,14 @@ package io.github.lesj0610.hermes.voice
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.ServiceInfo
 import android.os.Bundle
 import android.os.Looper
+import android.provider.Settings
 import android.speech.RecognitionService
 import android.speech.RecognitionSupport
 import android.speech.RecognizerIntent
@@ -237,6 +239,64 @@ class SpeechOutTest {
         assertEquals(emptyList<Long>(), drained)
         idle()
         assertEquals(listOf(3L), drained)
+    }
+
+    /** An installed package; with [speaks], one that offers a text-to-speech service. */
+    private fun installEngine(pkg: String, label: String, speaks: Boolean) {
+        val packages = shadowOf(context.packageManager)
+        val app = ApplicationInfo().apply {
+            packageName = pkg
+            nonLocalizedLabel = label
+            flags = ApplicationInfo.FLAG_SYSTEM
+        }
+        packages.installPackage(PackageInfo().apply { packageName = pkg; applicationInfo = app })
+        if (!speaks) return
+        val component = ComponentName(pkg, "$pkg.SpeechService")
+        packages.addOrUpdateService(
+            ServiceInfo().apply {
+                packageName = pkg
+                name = component.className
+                nonLocalizedLabel = label
+                applicationInfo = app
+                exported = true
+            },
+        )
+        packages.addIntentFilterForService(
+            component,
+            IntentFilter(TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE).apply { addCategory(Intent.CATEGORY_DEFAULT) },
+        )
+    }
+
+    // A maker's engine that serves only the apps its maker allows is left out
+    // of the engines an app is shown, and the system reads with another.
+    @Test
+    fun `a default engine that turns the app away is named, with the one that reads instead`() {
+        installEngine("com.maker.tts", "제조사 TTS", speaks = false)
+        installEngine("com.open.tts", "공개 TTS", speaks = true)
+        Settings.Secure.putString(context.contentResolver, Settings.Secure.TTS_DEFAULT_SYNTH, "com.maker.tts")
+        val out = speaker()
+        out.warmUp()
+        start()
+        assertEquals(listOf("com.open.tts" to "공개 TTS"), out.info.value.engines)
+        assertEquals("제조사 TTS", out.info.value.withheldDefault)
+        assertEquals("공개 TTS", out.info.value.standIn)
+    }
+
+    @Test
+    fun `a default engine the app may use, or one since removed, is not called withheld`() {
+        installEngine("com.open.tts", "공개 TTS", speaks = true)
+        Settings.Secure.putString(context.contentResolver, Settings.Secure.TTS_DEFAULT_SYNTH, "com.open.tts")
+        val out = speaker()
+        out.warmUp()
+        start()
+        assertEquals("", out.info.value.withheldDefault)
+        assertEquals("", out.info.value.standIn)
+
+        Settings.Secure.putString(context.contentResolver, Settings.Secure.TTS_DEFAULT_SYNTH, "com.gone.tts")
+        val again = speaker()
+        again.warmUp()
+        start()
+        assertEquals("", again.info.value.withheldDefault)
     }
 }
 

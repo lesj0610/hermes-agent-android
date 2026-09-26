@@ -244,6 +244,8 @@
     <string name="settings_speech_pitch">Pitch</string>
     <string name="settings_speech_engine">Speech engine</string>
     <string name="settings_speech_engine_default">Device default</string>
+    <string name="settings_speech_engine_withheld">This device’s default engine (%1$s) turns other apps away, so it cannot be used here. With Device default, %2$s reads instead.</string>
+    <string name="settings_speech_engine_withheld_other">This device’s default engine (%1$s) turns other apps away, so it cannot be used here. With Device default, another engine the system picks reads instead.</string>
     <string name="settings_speech_install">Install voice data</string>
     <string name="settings_speech_preview">Play a sample</string>
     <string name="settings_speech_sample">Hello. This is how replies will sound.</string>

@@ -1048,6 +1048,19 @@ private fun VoiceSection(
             selected = settings.speechEngine.isBlank(),
             onClick = { onSelectEngine("") },
         )
+        // The device default can name an engine that turns this app away; say
+        // so, and who speaks instead, rather than let it sound like a bug.
+        if (speech.withheldDefault.isNotEmpty()) {
+            Text(
+                text = if (speech.standIn.isNotEmpty()) {
+                    stringResource(R.string.settings_speech_engine_withheld, speech.withheldDefault, speech.standIn)
+                } else {
+                    stringResource(R.string.settings_speech_engine_withheld_other, speech.withheldDefault)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.muted,
+            )
+        }
         speech.engines.forEach { (engine, label) ->
             SelectableRow(
                 label = label,

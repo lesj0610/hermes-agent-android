@@ -234,6 +234,8 @@
     <string name="settings_speech_pitch">음높이</string>
     <string name="settings_speech_engine">음성 합성 엔진</string>
     <string name="settings_speech_engine_default">기기 기본값</string>
+    <string name="settings_speech_engine_withheld">이 기기의 기본 엔진(%1$s)은 다른 앱의 사용을 막고 있어 여기서는 쓸 수 없습니다. 기기 기본값을 고르면 %2$s 엔진이 대신 읽습니다.</string>
+    <string name="settings_speech_engine_withheld_other">이 기기의 기본 엔진(%1$s)은 다른 앱의 사용을 막고 있어 여기서는 쓸 수 없습니다. 기기 기본값을 고르면 시스템이 고른 다른 엔진이 대신 읽습니다.</string>
     <string name="settings_speech_install">음성 데이터 설치</string>
     <string name="settings_speech_preview">미리 듣기</string>
     <string name="settings_speech_sample">안녕하세요. 답변은 이렇게 들립니다.</string>

@@ -66,6 +66,10 @@ class SpeechOut(private val context: Context) {
     private var pitch = 1f
 
     private var token = NONE
+    /** The current group has drained, failed or been cancelled: nothing is being spoken. */
+    private var groupDone = true
+    /** An engine chosen while a group was playing, applied once it is over. */
+    private var pendingEngine: String? = null
     private var sequence = 0
     private var outstanding = 0
     private var finished = false
@@ -75,15 +79,20 @@ class SpeechOut(private val context: Context) {
 
     private enum class EngineState { Off, Starting, Ready, Failed }
 
-    /** Applies to the next sentence; a different engine restarts it. */
+    /**
+     * Rate, pitch and language apply to the next sentence. A different engine
+     * applies once nothing is being spoken: shutting the current one down
+     * mid-reply would strand the sentences it was given — a stopped engine
+     * never reports them done — and the reply would never drain.
+     */
     fun configure(locale: Locale, rate: Float, pitch: Float, engine: String) {
         this.rate = rate
         this.pitch = pitch
         val relocalised = locale != this.locale
         this.locale = locale
-        if (engine != this.engine) {
-            this.engine = engine
-            shutdownEngine()
+        pendingEngine = engine.takeIf { it != this.engine }
+        if (pendingEngine != null && groupDone) {
+            applyPendingEngine()
             return
         }
         tts?.takeIf { engineState == EngineState.Ready }?.let { current ->
@@ -100,10 +109,12 @@ class SpeechOut(private val context: Context) {
     /** Starts a new group of speech and silences whatever was playing. */
     fun begin(token: Long) {
         silence()
+        applyPendingEngine()
         // A failure is not permanent — voice data can be installed, another
         // engine chosen — so each new reply gives the engine another start.
         if (engineState == EngineState.Failed) shutdownEngine()
         this.token = token
+        groupDone = false
         sequence = 0
         outstanding = 0
         finished = false
@@ -133,6 +144,8 @@ class SpeechOut(private val context: Context) {
     fun cancel() {
         silence()
         token = NONE
+        groupDone = true
+        applyPendingEngine()
     }
 
     fun release() {
@@ -167,6 +180,7 @@ class SpeechOut(private val context: Context) {
         if (!finished || outstanding > 0 || waiting.isNotEmpty()) return
         val done = token
         finished = false
+        groupDone = true
         abandonFocus()
         // Posted, never called in place: the listener reacting to "drained" may
         // start listening, and doing that inside finish() would re-enter the
@@ -178,6 +192,7 @@ class SpeechOut(private val context: Context) {
         val failed = token
         silence()
         token = NONE
+        groupDone = true
         main.post { onFailed?.invoke(failed, fault) }
     }
 
@@ -281,6 +296,13 @@ class SpeechOut(private val context: Context) {
     private fun abandonFocus() {
         focus?.let { audio?.abandonAudioFocusRequest(it) }
         focus = null
+    }
+
+    private fun applyPendingEngine() {
+        val next = pendingEngine ?: return
+        pendingEngine = null
+        engine = next
+        shutdownEngine()
     }
 
     private fun shutdownEngine() {

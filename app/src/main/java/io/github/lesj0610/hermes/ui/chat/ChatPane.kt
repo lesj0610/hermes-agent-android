@@ -217,7 +217,13 @@ fun ChatPane(
     }
 
     Column(modifier.fillMaxSize()) {
-        state.error?.let { error ->
+        // The error that ended something, then anything that went wrong
+        // without ending it — a cleanup that could not be confirmed — in the
+        // same place, so neither hides the other.
+        listOfNotNull(
+            state.error?.let { it to colors.failed },
+            state.warning?.let { it to colors.muted },
+        ).forEach { (error, tone) ->
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -229,7 +235,7 @@ fun ChatPane(
                 Text(
                     text = uiErrorText(error),
                     style = MaterialTheme.typography.bodySmall,
-                    color = colors.failed,
+                    color = tone,
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(onClick = onDismissError) {

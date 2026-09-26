@@ -45,6 +45,8 @@ import io.github.lesj0610.hermes.ui.theme.LocalRunColors
 fun uiErrorText(error: UiError): String = when (error) {
     UiError.Unauthorized -> stringResource(R.string.connection_unauthorized_help)
     UiError.RunFailed -> stringResource(R.string.error_run_failed)
+    UiError.Disconnected -> stringResource(R.string.error_disconnected)
+    UiError.ReasoningNotRestored -> stringResource(R.string.error_reasoning_not_restored)
     is UiError.Raw -> error.text
 }
 

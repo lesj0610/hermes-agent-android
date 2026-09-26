@@ -118,6 +118,16 @@ sealed interface UiError {
     /** The run failed and the server sent no explanation. */
     data object RunFailed : UiError
 
+    /** The connection closed before the turn's own ending arrived. */
+    data object Disconnected : UiError
+
+    /**
+     * A spoken turn switched thinking off on the session, and putting the
+     * previous level back could not be confirmed. The next typed turn from this
+     * app applies its level again.
+     */
+    data object ReasoningNotRestored : UiError
+
     /** Server- or platform-authored text, shown as-is. */
     data class Raw(val text: String) : UiError
 }
@@ -127,6 +137,8 @@ data class ChatState(
     val items: List<TranscriptItem> = emptyList(),
     val phase: RunPhase = RunPhase.Idle,
     val error: UiError? = null,
+    /** Something that went wrong without ending anything, shown apart from [error]. */
+    val warning: UiError? = null,
     /** Wall-clock start of the current run, for the status bar timer. Null when idle. */
     val runStartedAtMillis: Long? = null,
     /** Token usage reported by the last `run.completed` of this session. */

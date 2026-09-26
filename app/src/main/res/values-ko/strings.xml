@@ -144,6 +144,8 @@
     <string name="settings_dashboard_why">게이트웨이와 별개인 두 번째 Hermes 서버입니다. 없어도 대화는 됩니다. 프로필·스킬 관리가 추가됩니다.</string>
 
     <string name="error_run_failed">실행이 실패했습니다.</string>
+    <string name="error_disconnected">응답이 끝나기 전에 연결이 끊겼습니다.</string>
+    <string name="error_reasoning_not_restored">음성 턴 뒤 이 대화의 추론 수준을 되돌렸는지 확인하지 못했습니다. 다음 입력 턴에서 다시 적용됩니다.</string>
     <string name="error_dismiss">닫기</string>
 
     <string name="notif_channel_approvals">승인 요청</string>

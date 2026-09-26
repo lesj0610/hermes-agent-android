@@ -7,7 +7,6 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.cookies.AcceptAllCookiesStorage
 import io.ktor.client.plugins.cookies.HttpCookies
-import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.request.get
@@ -15,9 +14,6 @@ import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
-import io.ktor.websocket.Frame
-import io.ktor.websocket.close
-import io.ktor.websocket.readText
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -39,7 +35,6 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.serializer
 
 /** The dashboard refused the credentials, or the session could not be established. */
 class DashboardAuthException(override val message: String) : Exception(message)
@@ -61,10 +56,19 @@ class DashboardRateLimitedException(override val message: String) : Exception(me
  *    minute per IP, and a retry loop would spend that budget and lock the user
  *    out of their own dashboard.
  */
-class DashboardApi(
+class DashboardApi internal constructor(
     private val baseUrlProvider: suspend () -> String,
     private val credentialsProvider: suspend () -> Pair<String, String>,
+    /** Opens the event socket. Replaced in tests by an in-process gateway. */
+    private val socketOpener: (suspend () -> FrameTransport)?,
+    /** The bound on each cleanup send and wait. */
+    private val cleanupTimeoutMillis: Long,
 ) {
+    constructor(
+        baseUrlProvider: suspend () -> String,
+        credentialsProvider: suspend () -> Pair<String, String>,
+    ) : this(baseUrlProvider, credentialsProvider, null, CLOSE_TIMEOUT_MILLIS)
+
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -236,12 +240,32 @@ class DashboardApi(
      * matched by request id rather than by arrival order.
      */
     private suspend fun <T> rpcSession(block: suspend (RpcSession) -> T): T {
-        // The session cookie does not carry the upgrade: the server checks a
-        // query credential on /api/ws and refuses the handshake with a plain
-        // 403 before any close code is visible. Browsers cannot set headers on
-        // a WebSocket upgrade either, which is why the dashboard mints a
-        // one-shot ticket for exactly this — 30 seconds, single use, so it is
-        // minted per socket rather than cached.
+        val transport = openSocket(
+            "The dashboard did not issue a WebSocket ticket, so projects cannot be " +
+                "reached. Sign in to the dashboard, or check that it runs with auth enabled.",
+        )
+        return try {
+            block(RpcSession(transport, json))
+        } finally {
+            withContext(NonCancellable) {
+                withTimeoutOrNull(cleanupTimeoutMillis) { transport.close() }
+            }
+        }
+    }
+
+    /**
+     * Opens the dashboard's JSON-RPC socket.
+     *
+     * The session cookie does not carry the upgrade: the server checks a query
+     * credential on /api/ws and refuses the handshake with a plain 403 before
+     * any close code is visible. Browsers cannot set headers on a WebSocket
+     * upgrade either, which is why the dashboard mints a one-shot ticket for
+     * exactly this — 30 seconds, single use, so it is minted per socket rather
+     * than cached. [noTicket] is what to say when there was none, since that is
+     * the fixable part of a failed handshake.
+     */
+    private suspend fun openSocket(noTicket: String): FrameTransport {
+        socketOpener?.let { return it() }
         val ticket = wsTicket()
         val target = buildString {
             append(url("/api/ws").replaceFirst("http", "ws"))
@@ -250,21 +274,10 @@ class DashboardApi(
         val session = try {
             client.webSocketSession(target)
         } catch (cause: Exception) {
-            // The handshake failure alone reads as a network fault. Say which
-            // credential was missing, since that is the fixable part.
-            if (ticket == null) {
-                throw DashboardAuthException(
-                    "The dashboard did not issue a WebSocket ticket, so projects cannot be " +
-                        "reached. Sign in to the dashboard, or check that it runs with auth enabled.",
-                )
-            }
+            if (ticket == null) throw DashboardAuthException(noTicket)
             throw cause
         }
-        return try {
-            block(RpcSession(session, json))
-        } finally {
-            runCatching { session.close() }
-        }
+        return WebSocketTransport(session)
     }
 
     /**
@@ -388,34 +401,29 @@ class DashboardApi(
         runtime: TurnRuntime = TurnRuntime.DEFAULT,
         /** Present on a turn spoken in a conversation. */
         voice: VoiceTurn? = null,
+        /**
+         * What cleanup achieved when the turn fails before it is running. The
+         * thrown error stays the original one; a restore that did not happen is
+         * reported here, separately, rather than replacing it.
+         */
+        onCleanup: (CleanupReport) -> Unit = {},
     ): SocketRun {
-        val ticket = wsTicket()
-        val target = buildString {
-            append(url("/api/ws").replaceFirst("http", "ws"))
-            ticket?.let { append("?ticket=").append(it) }
-        }
-        val ws = try {
-            client.webSocketSession(target)
-        } catch (cause: Exception) {
-            if (ticket == null) {
-                throw DashboardAuthException(
-                    "The dashboard did not issue a WebSocket ticket, so the conversation " +
-                        "cannot run over it.",
-                )
-            }
-            throw cause
-        }
-
-        val rpc = RpcSession(ws, json)
-        var liveId: String? = null
+        val transport = openSocket(
+            "The dashboard did not issue a WebSocket ticket, so the conversation cannot run over it.",
+        )
+        val rpc = RpcSession(transport, json)
+        // Holds the turn's gateway resources from the start, so a failure at any
+        // step below still closes what was opened and restores what was changed.
+        val live = LiveTurn(transport, rpc, cleanupTimeoutMillis)
         try {
             val prepared = prepareSocketTurn(
                 rpc = { method, params -> rpc.callRaw(method, params) },
                 storedSessionId = storedSessionId,
                 runtime = runtime,
                 voice = voice,
+                onLive = { live.liveId = it },
+                onRestorePlan = { live.restoreReasoning = it },
             )
-            val live = prepared.liveId.also { liveId = it }
 
             // Attachments go first, and each one is awaited: `image.attach_bytes`
             // stages the picture on the session, and `prompt.submit` sends
@@ -430,7 +438,7 @@ class DashboardApi(
                 rpc.call<JsonObject>(
                     "image.attach_bytes",
                     buildJsonObject {
-                        put("session_id", live)
+                        put("session_id", prepared.liveId)
                         // The data URL whole: the server reads the mime prefix off it.
                         put("content_base64", dataUrl)
                         put("filename", "attachment-${index + 1}.jpg")
@@ -438,38 +446,13 @@ class DashboardApi(
                 )
             }
 
-            val run = SocketRun(ws, json, live, restoreReasoning = prepared.restoreReasoning)
             // Fire and forget: the answer to prompt.submit is the event stream,
             // not its return value, and waiting for the reply would block the
             // reader.
-            ws.send(
-                Frame.Text(
-                    json.encodeToString(
-                        JsonObject.serializer(),
-                        buildJsonObject {
-                            put("jsonrpc", "2.0")
-                            put("id", 1)
-                            put("method", "prompt.submit")
-                            put("params", promptSubmitParams(live, text, voice))
-                        },
-                    ),
-                ),
-            )
-            return run
+            rpc.send("prompt.submit", promptSubmitParams(prepared.liveId, text, voice))
+            return SocketRun(transport, json, rpc, live, prepared.liveId)
         } catch (cause: Throwable) {
-            // A turn that fails before it is submitted leaves nothing running,
-            // but it did open a live session and a socket; both are the
-            // gateway's to reclaim and neither is released by an exception.
-            withContext(NonCancellable) {
-                liveId?.let { live ->
-                    runCatching {
-                        withTimeoutOrNull(CLOSE_TIMEOUT_MILLIS) {
-                            rpc.callRaw("session.close", buildJsonObject { put("session_id", live) })
-                        }
-                    }
-                }
-                runCatching { ws.close() }
-            }
+            onCleanup(live.finish())
             throw cause
         }
     }
@@ -520,61 +503,5 @@ class DashboardApi(
 /** The dashboard answered, but the RPC itself failed. */
 class GatewayRpcException(val code: Int, override val message: String) : Exception(message)
 
-/**
- * One open WebSocket, able to issue JSON-RPC calls on it.
- *
- * Frames that are not the reply being waited for are events — the same socket
- * carries the gateway's live broadcasts — and are skipped rather than treated
- * as protocol errors.
- */
-/** How long closing a live session may hold up the socket's release. */
+/** The bound on each cleanup send and each wait for its answer. */
 internal const val CLOSE_TIMEOUT_MILLIS = 3_000L
-
-internal class RpcSession(
-    private val session: DefaultClientWebSocketSession,
-    @PublishedApi internal val codec: Json,
-) {
-    private var nextId = 1
-
-    suspend inline fun <reified T> call(method: String, params: JsonObject): T =
-        decode(callRaw(method, params))
-
-    /** Exposed so the inline [call] can reach the private codec. */
-    inline fun <reified T> decode(element: JsonElement): T =
-        codec.decodeFromJsonElement(serializer(), element)
-
-    suspend fun callRaw(method: String, params: JsonObject): JsonElement {
-        val id = nextId++
-        session.send(
-            Frame.Text(
-                codec.encodeToString(
-                    JsonObject.serializer(),
-                    buildJsonObject {
-                        put("jsonrpc", "2.0")
-                        put("id", id)
-                        put("method", method)
-                        put("params", params)
-                    },
-                ),
-            ),
-        )
-
-        while (true) {
-            val frame = session.incoming.receive() as? Frame.Text ?: continue
-            val message = runCatching {
-                codec.parseToJsonElement(frame.readText()).jsonObject
-            }.getOrNull() ?: continue
-            val replyId = (message["id"] as? JsonPrimitive)?.content?.toIntOrNull() ?: continue
-            if (replyId != id) continue
-
-            (message["error"] as? JsonObject)?.let { error ->
-                throw GatewayRpcException(
-                    code = (error["code"] as? JsonPrimitive)?.content?.toIntOrNull() ?: -1,
-                    message = (error["message"] as? JsonPrimitive)?.content
-                        ?: "RPC $method failed",
-                )
-            }
-            return message["result"] ?: JsonObject(emptyMap())
-        }
-    }
-}

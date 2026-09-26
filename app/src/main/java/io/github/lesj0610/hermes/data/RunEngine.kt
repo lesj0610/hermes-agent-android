@@ -1,5 +1,6 @@
 package io.github.lesj0610.hermes.data
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import io.github.lesj0610.hermes.net.CleanupReport
 import io.github.lesj0610.hermes.net.DashboardApi
 import io.github.lesj0610.hermes.net.HermesApi
 import io.github.lesj0610.hermes.net.SocketRun
@@ -130,6 +132,11 @@ class RunEngine(
      * [voice] marks a turn spoken in a conversation: it is shaped for speech and
      * runs with whatever [effort] the caller chose for speech, and the socket
      * restores the session's level afterwards.
+     *
+     * Everything the turn does afterwards carries its number. Its events apply
+     * only while it is the current turn, and it ends exactly once — by its own
+     * terminal event or, when its stream stops without one, as a failure — so
+     * nothing left over from it can end or extend a later turn.
      */
     fun send(
         prompt: String,
@@ -146,6 +153,7 @@ class RunEngine(
             it.copy(
                 items = it.items + TranscriptItem.UserText(nextKey("u"), prompt, images),
                 error = null,
+                warning = null,
                 startedTurn = turn,
             )
         }
@@ -158,95 +166,146 @@ class RunEngine(
             val viaSocket = dashboard != null &&
                 runCatching { socketEnabled() }.getOrDefault(false)
             if (viaSocket) {
-                runSocket(prompt, images, TurnRuntime(model, provider, effort), voice)
+                runSocket(turn, prompt, images, TurnRuntime(model, provider, effort), voice)
                 return@launch
             }
 
-            val started = runCatching { api.startRun(prompt, _state.value.sessionId, model, provider, effort, images) }
-                .getOrElse { cause ->
-                    _state.update { it.copy(phase = RunPhase.Idle, error = cause.toUiError()).ended() }
-                    return@launch
-                }
-
-            _state.update {
-                it.copy(
-                    phase = RunPhase.Running(started.runId),
-                    runStartedAtMillis = System.currentTimeMillis(),
-                )
+            val started = try {
+                api.startRun(prompt, _state.value.sessionId, model, provider, effort, images)
+            } catch (cause: CancellationException) {
+                throw cause
+            } catch (cause: Exception) {
+                endTurn(turn, cause.toUiError(), asItem = false)
+                return@launch
             }
-            _signals.tryEmit(RunSignal.Started(started.runId))
-            consume(started.runId)
+            running(turn, started.runId)
+            consume(turn, started.runId)
         }
         return turn
+    }
+
+    /** [turn] is under way, unless it already ended or was superseded. */
+    private fun running(turn: Long, runId: String) {
+        var applied = false
+        _state.update { state ->
+            if (!state.isOpen(turn)) return@update state
+            applied = true
+            state.copy(phase = RunPhase.Running(runId), runStartedAtMillis = System.currentTimeMillis())
+        }
+        if (applied) _signals.tryEmit(RunSignal.Started(runId))
     }
 
     /**
      * Drives a turn over the event socket.
      *
-     * The live session is closed in a finally: it belongs to the gateway, and
+     * However the turn goes, [SocketRun.close] runs last: it restores what the
+     * turn changed and closes the live session, which belongs to the gateway —
      * one left open per turn accumulates there.
      */
     private suspend fun runSocket(
+        turn: Long,
         prompt: String,
         images: List<String>,
         runtime: TurnRuntime,
         voice: VoiceTurn?,
     ) {
         val api = dashboard ?: return
-        val run = runCatching { api.startSocketRun(_state.value.sessionId, prompt, images, runtime, voice) }
-            .getOrElse { cause ->
-                if (cause is kotlinx.coroutines.CancellationException) throw cause
-                _state.update { it.copy(phase = RunPhase.Idle, error = cause.toUiError()).ended() }
-                return
-            }
-        socketRun = run
-        _state.update {
-            it.copy(
-                phase = RunPhase.Running(run.liveSessionId),
-                runStartedAtMillis = System.currentTimeMillis(),
-            )
+        val run = try {
+            api.startSocketRun(_state.value.sessionId, prompt, images, runtime, voice, onCleanup = ::noteCleanup)
+        } catch (cause: CancellationException) {
+            throw cause
+        } catch (cause: Exception) {
+            endTurn(turn, cause.toUiError(), asItem = false)
+            return
         }
-        _signals.tryEmit(RunSignal.Started(run.liveSessionId))
+        socketRun = run
+        running(turn, run.liveSessionId)
         try {
-            runCatching { run.events().collect(::apply) }
-                .onFailure { cause ->
-                    if (cause is kotlinx.coroutines.CancellationException) throw cause
-                    _state.update {
-                        it.copy(
-                            phase = RunPhase.Idle,
-                            items = it.items.finishStreaming() +
-                                TranscriptItem.Failure(nextKey("e"), cause.toUiError()),
-                        ).ended()
-                    }
-                    _signals.tryEmit(RunSignal.Finished(run.liveSessionId, ok = false))
-                }
+            run.events().collect { apply(it, turn) }
+            // The stream stopped. A turn still open here stopped without its
+            // own ending: the socket closed under it.
+            endTurn(turn, UiError.Disconnected)
+        } catch (cause: CancellationException) {
+            throw cause
+        } catch (cause: Exception) {
+            endTurn(turn, cause.toUiError())
         } finally {
-            socketRun = null
-            runCatching { run.close() }
+            // Only this turn's own run is cleared: a later turn can start while
+            // this one is still closing, and its run has to stay reachable for
+            // Stop and for approvals.
+            if (socketRun === run) socketRun = null
+            noteCleanup(run.close())
         }
     }
 
-    private suspend fun consume(runId: String) {
-        runCatching {
-            api.runEvents(runId).collect(::apply)
-        }.onFailure { cause ->
-            if (cause is kotlinx.coroutines.CancellationException) throw cause
-            _state.update {
-                it.copy(
-                    phase = RunPhase.Idle,
-                    items = it.items.finishStreaming() +
-                        TranscriptItem.Failure(nextKey("e"), cause.toUiError()),
-                ).ended()
-            }
-            _signals.tryEmit(RunSignal.Finished(runId, ok = false))
+    private suspend fun consume(turn: Long, runId: String) {
+        try {
+            api.runEvents(runId).collect { apply(it, turn) }
+            endTurn(turn, UiError.Disconnected)
+        } catch (cause: CancellationException) {
+            throw cause
+        } catch (cause: Exception) {
+            endTurn(turn, cause.toUiError())
         }
+    }
+
+    /**
+     * Ends [turn] with [error] unless it has already ended: whichever path gets
+     * here first ends it, and every later one is a no-op. Only the current turn
+     * touches the transcript and the phase; an older one is just marked ended.
+     *
+     * [asItem] puts the failure in the transcript, where a turn that broke
+     * mid-reply shows it; otherwise it goes to the banner, for a turn that
+     * never started.
+     */
+    private fun endTurn(turn: Long, error: UiError, asItem: Boolean = true) {
+        var ended = false
+        _state.update { state ->
+            if (state.endedTurn >= turn) return@update state
+            ended = true
+            if (state.startedTurn != turn) return@update state.copy(endedTurn = turn)
+            state.copy(
+                phase = RunPhase.Idle,
+                runStartedAtMillis = null,
+                items = if (asItem) {
+                    state.items.finishStreaming() + TranscriptItem.Failure(nextKey("e"), error)
+                } else {
+                    state.items.finishStreaming()
+                },
+                error = if (asItem) state.error else error,
+                endedTurn = turn,
+            )
+        }
+        if (ended) _signals.tryEmit(RunSignal.Finished("", ok = false))
+    }
+
+    /**
+     * A turn's cleanup could not confirm the reasoning level was put back.
+     * Recorded apart from any error, which stays the one that ended the turn.
+     */
+    private fun noteCleanup(report: CleanupReport) {
+        if (report.restoreFailed) _state.update { it.copy(warning = UiError.ReasoningNotRestored) }
     }
 
     // ── event application ─────────────────────────────────────────────────
 
-    private fun apply(event: RunEvent) {
+    /** Applies [block] only while [turn] is the current, unfinished turn. */
+    private inline fun updateTurn(turn: Long, crossinline block: (ChatState) -> ChatState): Boolean {
+        var applied = false
+        _state.update { state ->
+            if (!state.isOpen(turn)) {
+                state
+            } else {
+                applied = true
+                block(state)
+            }
+        }
+        return applied
+    }
+
+    internal fun apply(event: RunEvent, turn: Long) {
         when (event) {
-            is RunEvent.MessageDelta -> appendDelta(event.delta)
+            is RunEvent.MessageDelta -> appendDelta(event.delta, turn)
 
             // Real reasoning, streamed. Appended into one block the way prose
             // is, so a long thought does not become a hundred cards.
@@ -254,7 +313,7 @@ class RunEngine(
             // is what closes it (finishStreaming) — the desktop's per-block
             // measure. Only an open block takes more tokens; a closed one means
             // this is a new thought.
-            is RunEvent.ReasoningDelta -> _state.update { current ->
+            is RunEvent.ReasoningDelta -> updateTurn(turn) { current ->
                 val last = current.items.lastOrNull()
                 val items = if (last is TranscriptItem.Reasoning && last.pending) {
                     current.items.dropLast(1) + last.copy(text = last.text + event.text)
@@ -284,7 +343,7 @@ class RunEngine(
             // It lands after the answer, so it is inserted *above* the reply
             // rather than appended: thinking that reads below its own
             // conclusion is the bug this once shipped as.
-            is RunEvent.ReasoningAvailable -> _state.update { current ->
+            is RunEvent.ReasoningAvailable -> updateTurn(turn) { current ->
                 val text = event.text.trim()
                 if (text.isEmpty()) {
                     current
@@ -297,7 +356,7 @@ class RunEngine(
                 }
             }
 
-            is RunEvent.ToolStarted -> _state.update {
+            is RunEvent.ToolStarted -> updateTurn(turn) {
                 val aim = toolAim(event.tool, event.args, fallback = event.preview)
                 it.copy(
                     items = it.items.finishStreaming() + TranscriptItem.ToolCall(
@@ -311,7 +370,7 @@ class RunEngine(
                 )
             }
 
-            is RunEvent.ToolCompleted -> _state.update { current ->
+            is RunEvent.ToolCompleted -> updateTurn(turn) { current ->
                 current.copy(items = current.items.updateLastTool(event.tool) { card ->
                     card.copy(
                         preview = event.preview ?: card.preview,
@@ -332,39 +391,39 @@ class RunEngine(
                     choices = event.choices,
                     smartDenied = event.smartDenied,
                 )
-                _state.update { current ->
+                val applied = updateTurn(turn) { current ->
                     current.copy(
                         items = current.items.finishStreaming().markLastToolAwaiting(),
                         phase = RunPhase.AwaitingApproval(event.runId.orEmpty(), approval),
                     )
                 }
-                _signals.tryEmit(RunSignal.ApprovalNeeded(approval))
+                if (applied) _signals.tryEmit(RunSignal.ApprovalNeeded(approval))
             }
 
             is RunEvent.ApprovalResponded -> {
-                _state.update { current ->
+                val applied = updateTurn(turn) { current ->
                     val runId = (current.phase as? RunPhase.AwaitingApproval)?.runId
                         ?: event.runId.orEmpty()
                     current.copy(phase = RunPhase.Running(runId))
                 }
-                _signals.tryEmit(RunSignal.ApprovalCleared)
+                if (applied) _signals.tryEmit(RunSignal.ApprovalCleared)
             }
 
             is RunEvent.Completed -> {
-                _state.update { current ->
+                val applied = updateTurn(turn) { current ->
                     current.copy(
                         // Only now: a `MEDIA:` line arrives a character at a
                         // time, and a path half-written is not a path.
                         items = current.items.finishStreaming().map { item ->
                             if (item is TranscriptItem.AssistantText && item.imagePaths.isEmpty()) {
                                 parseAttachmentRefs(item.text, ASSISTANT_MEDIA_DIRECTIVE)
-                                    .let { turn ->
-                                        if (turn.imagePaths.isEmpty()) {
+                                    .let { parsed ->
+                                        if (parsed.imagePaths.isEmpty()) {
                                             item
                                         } else {
                                             item.copy(
-                                                text = turn.text,
-                                                imagePaths = turn.imagePaths,
+                                                text = parsed.text,
+                                                imagePaths = parsed.imagePaths,
                                             )
                                         }
                                     }
@@ -375,16 +434,19 @@ class RunEngine(
                         phase = RunPhase.Idle,
                         runStartedAtMillis = null,
                         lastUsage = event.usage ?: current.lastUsage,
-                    ).ended()
+                        endedTurn = turn,
+                    )
                 }
-                _signals.tryEmit(RunSignal.Finished(event.runId.orEmpty(), ok = true))
-                // Fetch whatever that turn produced, the same pass a reopened
-                // session uses.
-                scope.launch { restoreAttachedImages() }
+                if (applied) {
+                    _signals.tryEmit(RunSignal.Finished(event.runId.orEmpty(), ok = true))
+                    // Fetch whatever that turn produced, the same pass a
+                    // reopened session uses.
+                    scope.launch { restoreAttachedImages() }
+                }
             }
 
             is RunEvent.Failed -> {
-                _state.update {
+                val applied = updateTurn(turn) {
                     it.copy(
                         items = it.items.finishStreaming() + TranscriptItem.Failure(
                             nextKey("e"),
@@ -393,20 +455,22 @@ class RunEngine(
                         ),
                         phase = RunPhase.Idle,
                         runStartedAtMillis = null,
-                    ).ended()
+                        endedTurn = turn,
+                    )
                 }
-                _signals.tryEmit(RunSignal.Finished(event.runId.orEmpty(), ok = false))
+                if (applied) _signals.tryEmit(RunSignal.Finished(event.runId.orEmpty(), ok = false))
             }
 
             is RunEvent.Cancelled -> {
-                _state.update {
+                val applied = updateTurn(turn) {
                     it.copy(
                         items = it.items.finishStreaming(),
                         phase = RunPhase.Idle,
                         runStartedAtMillis = null,
-                    ).ended()
+                        endedTurn = turn,
+                    )
                 }
-                _signals.tryEmit(RunSignal.Finished(event.runId.orEmpty(), ok = true))
+                if (applied) _signals.tryEmit(RunSignal.Finished(event.runId.orEmpty(), ok = true))
             }
 
             // A tenth event name from a newer server is ignored, not fatal.
@@ -414,9 +478,9 @@ class RunEngine(
         }
     }
 
-    private fun appendDelta(delta: String) {
+    private fun appendDelta(delta: String, turn: Long) {
         if (delta.isEmpty()) return
-        _state.update { current ->
+        updateTurn(turn) { current ->
             val last = current.items.lastOrNull()
             val items = if (last is TranscriptItem.AssistantText && last.streaming) {
                 current.items.dropLast(1) + last.copy(text = last.text + delta)
@@ -465,7 +529,7 @@ class RunEngine(
         }
     }
 
-    fun clearError() = _state.update { it.copy(error = null) }
+    fun clearError() = _state.update { it.copy(error = null, warning = null) }
 }
 
 /** What the notification layer reacts to. */
@@ -478,8 +542,8 @@ sealed interface RunSignal {
 
 // ── transcript helpers ────────────────────────────────────────────────────
 
-/** Marks the newest turn ended, whichever way it ended. */
-private fun ChatState.ended(): ChatState = copy(endedTurn = startedTurn)
+/** [turn] is the current turn and has not ended. */
+private fun ChatState.isOpen(turn: Long): Boolean = startedTurn == turn && endedTurn < turn
 
 private fun List<TranscriptItem>.updateLastTool(
     tool: String,

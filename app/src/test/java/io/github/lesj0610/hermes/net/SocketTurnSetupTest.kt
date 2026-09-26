@@ -100,15 +100,15 @@ class SocketTurnSetupTest {
 
     @Test
     fun `settings the session already has cost nothing`() = runBlocking {
-        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "custom:local", "xhigh") }
-        val prepared = prepareSocketTurn(gateway.rpc, "s1", TurnRuntime("Qwen", "custom:local", "xhigh"))
+        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "openrouter", "xhigh") }
+        val prepared = prepareSocketTurn(gateway.rpc, "s1", TurnRuntime("Qwen", "openrouter", "xhigh"))
         assertEquals(PreparedTurn("live-1", null), prepared)
         assertEquals(listOf("session.resume"), gateway.methods())
     }
 
     @Test
     fun `a different model and level are applied to the live id, model first`() = runBlocking {
-        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "custom:local", "xhigh") }
+        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "openrouter", "xhigh") }
         prepareSocketTurn(gateway.rpc, "s1", TurnRuntime("claude-opus-5", "anthropic", "low"))
         assertEquals(listOf("session.resume", "config.set", "config.set"), gateway.methods())
         val (_, model) = gateway.calls[1]
@@ -120,25 +120,8 @@ class SocketTurnSetupTest {
     }
 
     @Test
-    fun `a local model reported under the canonical custom name is not switched again`() = runBlocking {
-        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen3.8-Flash-Next", "custom:custom", "xhigh") }
-        prepareSocketTurn(
-            gateway.rpc, "s1", TurnRuntime("Qwen3.8-Flash-Next", "custom:local-(127.0.0.1:8088)", "xhigh"),
-        )
-        assertEquals(listOf("session.resume"), gateway.methods())
-    }
-
-    @Test
-    fun `a different model, or a different provider family, is still switched`() {
-        assertTrue(sameProvider("custom:custom", "custom:local-(127.0.0.1:8088)"))
-        assertTrue(sameProvider("anthropic", ""))
-        assertTrue(!sameProvider("custom:custom", "anthropic"))
-        assertTrue(!sameProvider("openrouter", "anthropic"))
-    }
-
-    @Test
     fun `after a model switch the level is applied even if it matched before`() = runBlocking {
-        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "custom:local", "low") }
+        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "openrouter", "low") }
         prepareSocketTurn(gateway.rpc, "s1", TurnRuntime("claude-opus-5", "anthropic", "low"))
         assertEquals(listOf("session.resume", "config.set", "config.set"), gateway.methods())
         assertEquals("low", gateway.stored.getValue("s1").reasoning)
@@ -146,7 +129,7 @@ class SocketTurnSetupTest {
 
     @Test
     fun `a spoken turn that switched model restores the app's level, not the stale one`() = runBlocking {
-        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "custom:local", "low") }
+        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "openrouter", "low") }
         val spoken = prepareSocketTurn(
             gateway.rpc, "s1", TurnRuntime("claude-opus-5", "anthropic", "none"), VoiceTurn(restoreReasoning = "medium"),
         )
@@ -157,11 +140,11 @@ class SocketTurnSetupTest {
     @Test
     fun `a refused setting ends the turn instead of running on the old model`() = runBlocking {
         val gateway = Gateway().apply {
-            stored["s1"] = Gateway.Runtime("Qwen", "custom:local", "xhigh")
+            stored["s1"] = Gateway.Runtime("Qwen", "openrouter", "xhigh")
             refuseModel = "unknown model"
         }
         try {
-            prepareSocketTurn(gateway.rpc, "s1", TurnRuntime("nope", "custom:local", "low"))
+            prepareSocketTurn(gateway.rpc, "s1", TurnRuntime("nope", "openrouter", "low"))
             fail("expected the refusal to propagate")
         } catch (expected: GatewayRpcException) {
             assertEquals("unknown model", expected.message)
@@ -173,7 +156,7 @@ class SocketTurnSetupTest {
     @Test
     fun `a model that needs confirmation is refused with the gateway's reason`() = runBlocking {
         val gateway = Gateway().apply {
-            stored["s1"] = Gateway.Runtime("Qwen", "custom:local", "xhigh")
+            stored["s1"] = Gateway.Runtime("Qwen", "openrouter", "xhigh")
             confirmModel = true
         }
         try {
@@ -187,19 +170,19 @@ class SocketTurnSetupTest {
     @Test
     fun `a new session takes the runtime at creation`() = runBlocking {
         val gateway = Gateway()
-        val prepared = prepareSocketTurn(gateway.rpc, null, TurnRuntime("Qwen", "custom:local", "medium"))
+        val prepared = prepareSocketTurn(gateway.rpc, null, TurnRuntime("Qwen", "openrouter", "medium"))
         assertEquals("live-1", prepared.liveId)
         assertEquals(listOf("session.create"), gateway.methods())
         val create = gateway.calls[0].second
         assertEquals("Qwen", create.field("model"))
-        assertEquals("custom:local", create.field("provider"))
+        assertEquals("openrouter", create.field("provider"))
         assertEquals("medium", create.field("reasoning_effort"))
     }
 
     @Test
     fun `typed, spoken, typed — the spoken level never outlives its turn`() = runBlocking {
-        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "custom:local", "xhigh") }
-        val typed = TurnRuntime("Qwen", "custom:local", "xhigh")
+        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "openrouter", "xhigh") }
+        val typed = TurnRuntime("Qwen", "openrouter", "xhigh")
 
         assertNull(prepareSocketTurn(gateway.rpc, "s1", typed).restoreReasoning)
 
@@ -222,21 +205,21 @@ class SocketTurnSetupTest {
     @Test
     fun `a restore that never arrived is repaired by the next typed turn`() = runBlocking {
         // The socket died before the spoken turn could put its level back.
-        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "custom:local", "none") }
-        prepareSocketTurn(gateway.rpc, "s1", TurnRuntime("Qwen", "custom:local", "xhigh"))
+        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "openrouter", "none") }
+        prepareSocketTurn(gateway.rpc, "s1", TurnRuntime("Qwen", "openrouter", "xhigh"))
         assertEquals("xhigh", gateway.stored.getValue("s1").reasoning)
     }
 
     @Test
     fun `a spoken turn with no reported level restores the app's own`() = runBlocking {
-        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "custom:local", "") }
+        val gateway = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "openrouter", "") }
         val spoken = prepareSocketTurn(
             gateway.rpc, "s1", TurnRuntime(reasoning = "none"), VoiceTurn(restoreReasoning = "medium"),
         )
         assertEquals("medium", spoken.restoreReasoning)
 
         // Left at "none" by a lost restore: back to the app's level, not to "none".
-        val left = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "custom:local", "none") }
+        val left = Gateway().apply { stored["s1"] = Gateway.Runtime("Qwen", "openrouter", "none") }
         val again = prepareSocketTurn(
             left.rpc, "s1", TurnRuntime(reasoning = "none"), VoiceTurn(restoreReasoning = "medium"),
         )
@@ -246,8 +229,8 @@ class SocketTurnSetupTest {
     @Test
     fun `two sessions are set through their own live ids`() = runBlocking {
         val gateway = Gateway().apply {
-            stored["a"] = Gateway.Runtime("Qwen", "custom:local", "xhigh")
-            stored["b"] = Gateway.Runtime("Qwen", "custom:local", "xhigh")
+            stored["a"] = Gateway.Runtime("Qwen", "openrouter", "xhigh")
+            stored["b"] = Gateway.Runtime("Qwen", "openrouter", "xhigh")
         }
         prepareSocketTurn(gateway.rpc, "a", TurnRuntime(reasoning = "none"), VoiceTurn(restoreReasoning = "xhigh"))
         prepareSocketTurn(gateway.rpc, "b", TurnRuntime(reasoning = "low"))

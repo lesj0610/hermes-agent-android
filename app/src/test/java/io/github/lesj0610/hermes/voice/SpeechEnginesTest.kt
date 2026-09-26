@@ -170,6 +170,55 @@ class SpeechOutTest {
     }
 
     @Test
+    fun `an engine chosen while sentences wait for the engine applies to the next reply`() {
+        val out = speaker()
+        out.begin(1)
+        out.enqueue(1, "첫 엔진.")
+        out.finish(1)
+        val first = engine()
+        out.configure(Locale.KOREA, 1f, 1f, "com.example.tts")
+
+        start(first)
+        assertEquals(listOf("첫 엔진."), shadowOf(first).spokenTextList)
+        assertEquals(listOf(1L), drained)
+        assertTrue(!shadowOf(first).isShutdown)
+
+        out.begin(2)
+        out.enqueue(2, "둘째 엔진.")
+        assertTrue(shadowOf(first).isShutdown)
+        assertTrue(engine() !== first)
+    }
+
+    @Test
+    fun `an engine chosen while a reply plays does not strand it`() {
+        val out = speaker()
+        out.begin(1)
+        out.enqueue(1, "첫 문장.")
+        start()
+        val first = engine()
+        out.configure(Locale.KOREA, 1f, 1f, "com.example.tts")
+        out.enqueue(1, "둘째 문장.")
+        out.finish(1)
+        idle()
+        assertEquals(listOf("첫 문장.", "둘째 문장."), shadowOf(first).spokenTextList)
+        assertEquals(listOf(1L), drained)
+        assertTrue(!shadowOf(first).isShutdown)
+    }
+
+    @Test
+    fun `an engine chosen after the last sentence applies at once`() {
+        val out = speaker()
+        out.begin(1)
+        out.enqueue(1, "끝.")
+        out.finish(1)
+        start()
+        assertEquals(listOf(1L), drained)
+        val first = engine()
+        out.configure(Locale.KOREA, 1f, 1f, "com.example.tts")
+        assertTrue(shadowOf(first).isShutdown)
+    }
+
+    @Test
     fun `an empty reply drains at once, asynchronously`() {
         val out = speaker()
         out.begin(3)

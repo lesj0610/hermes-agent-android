@@ -158,6 +158,8 @@
 
     <!-- Errors -->
     <string name="error_run_failed">The run failed.</string>
+    <string name="error_disconnected">The connection closed before the reply finished.</string>
+    <string name="error_reasoning_not_restored">Couldn’t confirm this conversation’s reasoning level was put back after the spoken turn. The next typed turn applies it again.</string>
     <string name="error_dismiss">Dismiss</string>
 
     <!-- Notifications -->

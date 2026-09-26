@@ -1,6 +1,8 @@
 package io.github.lesj0610.hermes.net
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -69,12 +71,20 @@ class TurnSetupException(message: String) : Exception(message)
  * model after the user picked another is the silent wrong answer this replaces.
  * Settings the session already has are skipped, so an ordinary turn costs the
  * same round trips it did before.
+ *
+ * Responsibility for cleanup is handed over as it arises, not at the end: the
+ * live id goes to [onLive] the moment the gateway returns it, and a spoken
+ * turn's restore target goes to [onRestorePlan] before the change is sent. A
+ * failure anywhere after that still leaves the caller able to close the session
+ * and put the level back.
  */
 internal suspend fun prepareSocketTurn(
     rpc: RpcCaller,
     storedSessionId: String?,
     runtime: TurnRuntime,
     voice: VoiceTurn? = null,
+    onLive: (String) -> Unit = {},
+    onRestorePlan: (String?) -> Unit = {},
 ): PreparedTurn {
     val model = runtime.model?.trim().orEmpty()
     val provider = runtime.provider?.trim().orEmpty()
@@ -97,12 +107,12 @@ internal suspend fun prepareSocketTurn(
     val openedObject = opened as? JsonObject
     val liveId = (openedObject?.get("session_id") as? JsonPrimitive)?.content?.trim().orEmpty()
     if (liveId.isEmpty()) throw GatewayRpcException(-1, "The gateway did not return a live session")
+    onLive(liveId)
     val info = openedObject?.get("info")?.let { element ->
         runCatching { setupJson.decodeFromJsonElement(SessionLiveInfo.serializer(), element) }.getOrNull()
     }
 
-    val switchModel = model.isNotEmpty() &&
-        (info == null || info.model != model || !sameProvider(info.provider, provider))
+    val switchModel = model.isNotEmpty() && !onPickedModel(rpc, liveId, info, model, provider)
     if (switchModel) {
         val result = rpc.call(
             "config.set",
@@ -134,42 +144,88 @@ internal suspend fun prepareSocketTurn(
     // one the level reported before it says nothing about the session now:
     // the level is applied regardless, and a spoken turn restores the app's own.
     val before = if (switchModel) "" else info?.reasoningEffort?.trim().orEmpty()
-    if (reasoning.isNotEmpty() && before != reasoning) {
-        rpc.call(
-            "config.set",
-            buildJsonObject {
-                put("session_id", liveId)
-                put("key", "reasoning")
-                put("value", reasoning)
-            },
-        )
-    }
 
-    // Only a spoken turn is undone, and only if it changed something. The level
-    // the session had is the one to return to; when the gateway did not report
-    // one, the app's own ordinary level stands in — the next typed turn applies
-    // it regardless.
+    // Only a spoken turn is undone. The level the session had is the one to
+    // return to; when the gateway did not report one, the app's own ordinary
+    // level stands in — the next typed turn applies it regardless. Planned
+    // before the change is sent: a change whose answer never arrives may still
+    // have been applied.
     val restore = voice?.let {
         val target = before.takeIf { value -> value.isNotEmpty() && value != reasoning }
             ?: it.restoreReasoning?.trim()?.takeIf { value -> value.isNotEmpty() }
         target?.takeIf { value -> reasoning.isNotEmpty() && value != reasoning }
     }
+    if (voice != null) onRestorePlan(restore)
+
+    if (reasoning.isNotEmpty() && before != reasoning) {
+        try {
+            rpc.call(
+                "config.set",
+                buildJsonObject {
+                    put("session_id", liveId)
+                    put("key", "reasoning")
+                    put("value", reasoning)
+                },
+            )
+        } catch (refused: GatewayRpcException) {
+            // Refused outright, so nothing changed and nothing needs restoring.
+            if (voice != null && before.isNotEmpty() && before != "none") onRestorePlan(null)
+            throw refused
+        }
+    }
     return PreparedTurn(liveId, restore)
 }
 
 /**
- * Whether the session's reported provider is the one the picker named.
+ * Whether the live session already runs [model] on the endpoint [provider]
+ * names.
  *
- * Custom endpoints come back under the gateway's canonical identity — derived
- * from the endpoint, e.g. `custom:custom` — which does not round-trip with the
- * picker's slug (`custom:local-(127.0.0.1:8088)`). Compared literally, every
- * turn on a local model re-sent the switch, and a switch re-reads the reasoning
- * level too. Between custom endpoints the model name is what tells them apart.
+ * For a fixed provider the reported name settles it. A custom endpoint does
+ * not: the gateway reports it under an identity canonicalised from the endpoint
+ * (`custom:custom`) that does not round-trip with the picker's slug
+ * (`custom:local-(127.0.0.1:8088)`), and two custom endpoints can serve the
+ * same model name. There the endpoint itself decides — `model.options` for the
+ * live session marks the row the agent is on, found by its URL, and lists every
+ * row's URL. Anything that cannot be confirmed counts as different, and the
+ * pick is applied explicitly.
  */
-internal fun sameProvider(reported: String, wanted: String): Boolean {
-    if (wanted.isEmpty() || reported == wanted) return true
-    return reported.substringBefore(':') == "custom" && wanted.substringBefore(':') == "custom"
+private suspend fun onPickedModel(
+    rpc: RpcCaller,
+    liveId: String,
+    info: SessionLiveInfo?,
+    model: String,
+    provider: String,
+): Boolean {
+    if (info == null || info.model != model) return false
+    if (provider.isEmpty()) return true
+    if (!isCustom(provider) && !isCustom(info.provider)) return info.provider == provider
+    return sameEndpoint(rpc, liveId, provider)
 }
+
+private fun isCustom(provider: String) = provider == "custom" || provider.startsWith("custom:")
+
+private suspend fun sameEndpoint(rpc: RpcCaller, liveId: String, provider: String): Boolean {
+    val options = try {
+        rpc.call("model.options", buildJsonObject { put("session_id", liveId) }) as? JsonObject
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        null
+    } ?: return false
+    val rows = (options["providers"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+    val current = rows.firstOrNull { (it["is_current"] as? JsonPrimitive)?.booleanOrNull == true } ?: return false
+    val picked = rows.firstOrNull { it.text("slug") == provider } ?: return false
+    // The gateway found the current row by the agent's URL; the picked row
+    // being that row is the endpoint confirmed.
+    if (picked === current) return true
+    val here = endpoint(current.text("api_url"))
+    return here.isNotEmpty() && here == endpoint(picked.text("api_url"))
+}
+
+private fun JsonObject.text(key: String): String =
+    (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
+
+private fun endpoint(url: String): String = url.trim().trimEnd('/').lowercase()
 
 /** The `prompt.submit` parameters for a turn, spoken or typed. */
 internal fun promptSubmitParams(liveId: String, text: String, voice: VoiceTurn?): JsonObject =

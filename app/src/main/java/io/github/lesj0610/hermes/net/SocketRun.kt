@@ -1,15 +1,7 @@
 package io.github.lesj0610.hermes.net
 
-import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
-import io.ktor.websocket.Frame
-import io.ktor.websocket.close
-import io.ktor.websocket.readText
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -30,34 +22,26 @@ import kotlinx.serialization.json.put
  * than from reading the server, which corrected two guesses that would have
  * shipped as bugs. See docs/ws-transcript-contract.md.
  */
-class SocketRun(
-    private val session: DefaultClientWebSocketSession,
+class SocketRun internal constructor(
+    private val transport: FrameTransport,
     private val json: Json,
+    private val rpc: RpcSession,
+    private val live: LiveTurn,
     /** The gateway's live session id, which is *not* the stored one. */
     val liveSessionId: String,
-    /**
-     * The reasoning level to put back when the turn is over — set only when a
-     * spoken turn switched thinking off. The level is stored on the session, so
-     * leaving it would hand the next typed turn, on any client, a thinking-off
-     * agent nobody asked for.
-     */
-    private val restoreReasoning: String? = null,
 ) {
-    private var nextId = 1_000
-
     /**
      * Frames for this turn, mapped onto the same events the HTTP path produces
      * so the transcript reducer does not care which transport ran.
+     *
+     * The flow ends after the turn's terminal event, or when the socket closes.
+     * A socket that closes first ends the flow with no terminal event at all;
+     * the caller sees the turn still open and ends it as a disconnection.
      */
     fun events(): Flow<RunEvent> = flow {
         while (true) {
-            val frame = try {
-                session.incoming.receive() as? Frame.Text ?: continue
-            } catch (_: ClosedReceiveChannelException) {
-                return@flow
-            }
-            val message = runCatching { json.parseToJsonElement(frame.readText()).jsonObject }
-                .getOrNull() ?: continue
+            val frame = transport.receive() ?: return@flow
+            val message = runCatching { json.parseToJsonElement(frame).jsonObject }.getOrNull() ?: continue
             if ((message["method"] as? JsonPrimitive)?.content != "event") continue
 
             val params = message["params"] as? JsonObject ?: continue
@@ -84,8 +68,8 @@ class SocketRun(
                         // `args` is an object; `args_text` is the same thing as
                         // JSON text, read when the object is absent.
                         args = payload["args"] as? JsonObject
-                            ?: payload.str("args_text")?.let { text ->
-                                runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
+                            ?: payload.str("args_text")?.let { argsText ->
+                                runCatching { json.parseToJsonElement(argsText).jsonObject }.getOrNull()
                             },
                     ),
                 )
@@ -143,7 +127,7 @@ class SocketRun(
     }
 
     suspend fun respondToApproval(choice: String) {
-        send(
+        rpc.send(
             "approval.respond",
             buildJsonObject {
                 put("session_id", liveSessionId)
@@ -154,86 +138,19 @@ class SocketRun(
 
     /**
      * Stops the turn. The socket's own verb: the HTTP stop route knows runs by
-     * the ids `/v1/runs` hands out, and a live session id is not one of them, so
-     * Stop on a socket turn used to fail while the turn ran on.
+     * the ids `/v1/runs` hands out, and a live session id is not one of them.
+     * The answer is the event stream's `message.complete`, not this reply.
      */
     suspend fun interrupt() {
-        send("session.interrupt", buildJsonObject { put("session_id", liveSessionId) })
+        rpc.send("session.interrupt", buildJsonObject { put("session_id", liveSessionId) })
     }
 
     /**
-     * Ends the turn's hold on the gateway: restores anything the turn changed,
-     * then closes the live session and the socket.
-     *
-     * Runs to completion even when the caller was cancelled — a stopped turn is
-     * exactly when the session must still be put back — but each step is
-     * bounded, so a dead socket cannot hold the caller up.
+     * Gives the turn back: restores anything it changed, then closes the live
+     * session and the socket — the same cleanup every other ending uses. Safe
+     * to call more than once; the report says what is known to have happened.
      */
-    suspend fun close() {
-        withContext(NonCancellable) {
-            restoreReasoning?.let { level ->
-                // Awaited before the close: sent together, the gateway may
-                // process the close first and the restore would land on a
-                // session that no longer exists.
-                runCatching {
-                    request(
-                        "config.set",
-                        buildJsonObject {
-                            put("session_id", liveSessionId)
-                            put("key", "reasoning")
-                            put("value", level)
-                        },
-                    )
-                }
-            }
-            // The live session is the gateway's, not ours to leave running.
-            runCatching {
-                request("session.close", buildJsonObject { put("session_id", liveSessionId) })
-            }
-            runCatching { session.close() }
-        }
-    }
-
-    private suspend fun send(method: String, params: JsonObject): Int {
-        val id = nextId++
-        session.send(
-            Frame.Text(
-                json.encodeToString(
-                    JsonObject.serializer(),
-                    buildJsonObject {
-                        put("jsonrpc", "2.0")
-                        put("id", id)
-                        put("method", method)
-                        put("params", params)
-                    },
-                ),
-            ),
-        )
-        return id
-    }
-
-    /**
-     * Sends [method] and waits for its reply, for the steps after the event
-     * stream has finished. Frames that are not the reply — late events, the
-     * answer to `prompt.submit` — are skipped. Null on timeout or a closed socket.
-     */
-    private suspend fun request(method: String, params: JsonObject): JsonObject? {
-        val id = send(method, params)
-        return withTimeoutOrNull(CLOSE_TIMEOUT_MILLIS) {
-            var reply: JsonObject? = null
-            while (reply == null) {
-                val frame = try {
-                    session.incoming.receive()
-                } catch (_: ClosedReceiveChannelException) {
-                    break
-                }
-                val text = (frame as? Frame.Text)?.readText() ?: continue
-                val message = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull() ?: continue
-                if ((message["id"] as? JsonPrimitive)?.content?.toIntOrNull() == id) reply = message
-            }
-            reply
-        }
-    }
+    suspend fun close(): CleanupReport = live.finish()
 }
 
 private fun JsonObject.str(key: String): String? =

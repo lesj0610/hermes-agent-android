@@ -62,7 +62,7 @@ Hermes Agent(이하 "앱")는 에스제이상사(SJ Trading, 이하 "회사")가
 
 ### 7. 개인정보 처리의 위탁
 
-회사는 문의 메일을 받기 위해 Google LLC가 제공하는 무료 Gmail(개인용 Google 계정)을 Google 서비스 약관에 따라 이용합니다. 이 계정에는 회사와 Google이 따로 맺은 개인정보 처리 계약이 없으며, Google은 Google 서비스 약관과 [Google 개인정보처리방침](https://policies.google.com/privacy?hl=ko)에 따라 계정에 들어온 메일을 처리합니다. 그 밖에 회사가 개인정보 처리를 맡기는 곳은 없습니다. Gmail에 보관되는 정보와 보관 국가는 9절에 적었습니다.
+회사는 문의 메일을 받는 데 Google LLC의 Gmail을 이용합니다. Gmail에 보관되는 정보와 보관 위치는 9절에 적었습니다.
 
 ### 8. 민감정보·고유식별정보·가명정보
 
@@ -90,7 +90,7 @@ Hermes Agent(이하 "앱")는 에스제이상사(SJ Trading, 이하 "회사")가
 
 ### 10. 개인정보의 파기
 
-- 문의 메일: 답변을 마치면 받은 메일과 첨부파일, 문의 내용이 인용된 보낸 답장을 Gmail에서 삭제하고 휴지통까지 비웁니다. 삭제한 메일이 Google의 시스템에서 완전히 지워지기까지는 [Google 데이터 보관 정책](https://policies.google.com/technologies/retention?hl=ko)에 따라 보통 약 2개월이 걸리고 암호화된 백업에는 최대 6개월 남을 수 있으며, 회사가 이 기간을 앞당길 수는 없습니다.
+- 문의 메일: 답변을 마치면 받은 메일과 첨부파일, 문의 내용이 인용된 보낸 답장을 회사 계정에서 즉시 삭제하고 휴지통까지 비웁니다. Google 시스템에 남은 데이터의 삭제에는 [Google 데이터 보관 정책](https://policies.google.com/technologies/retention?hl=ko)에 따른 별도의 정책과 기간이 적용됩니다.
 - 앱 데이터: 안드로이드 설정에서 앱 데이터를 삭제하거나 앱을 삭제하면 기기의 앱 전용 데이터가 삭제됩니다. 앱 데이터는 클라우드 백업과 기기 간 이전에서 제외되어 백업되거나 새 기기로 옮겨지지 않습니다.
 - 앱을 삭제해도 이용자가 지정한 서버에 저장된 대화나 음성 인식·합성 서비스가 보관하는 데이터는 지워지지 않습니다. 이런 데이터의 삭제는 해당 서버 운영자나 서비스 제공자에게 요청해야 합니다.
 
@@ -191,7 +191,7 @@ We do not sell or share personal information, and we do not use it for advertisi
 
 ### Service providers
 
-We receive emails through a free Gmail account (a personal Google Account) provided by Google LLC under the Google Terms of Service. There is no separate data processing agreement between us and Google for this account; Google processes the mail it holds under the Google Terms of Service and the [Google Privacy Policy](https://policies.google.com/privacy?hl=en). We do not have anyone else process personal information for us. What Gmail keeps, and where, is described below.
+We use Gmail, provided by Google LLC, to receive emails. What Gmail keeps, and where, is described under "Outside services and international transfers".
 
 ### Outside services and international transfers
 
@@ -215,7 +215,7 @@ The services below are run by their providers, not by us, and their own privacy 
 
 ### Deleting information
 
-- Emails you send us: as soon as we have answered, we delete the email, its attachments and our replies that quote it from Gmail, and empty the trash. Under the [Google data retention policy](https://policies.google.com/technologies/retention?hl=en), deleted mail usually takes about two months to be removed from Google's systems and can remain in encrypted backups for up to six months; we cannot shorten this.
+- Emails you send us: as soon as we have answered, we delete the email, its attachments and our replies that quote it from our account at once, and empty the trash. Removing what remains in Google's systems is subject to Google's own policy and timelines under the [Google data retention policy](https://policies.google.com/technologies/retention?hl=en).
 - App data: clearing the app's data in Android settings or uninstalling the app deletes the app's private data on your device. The app's data is excluded from cloud backup and device-to-device transfer, so it is neither backed up nor moved to a new device.
 - Uninstalling the app does not delete conversations stored on your server or data kept by speech recognition or text-to-speech services. To delete those, ask that server's operator or the service provider.
 

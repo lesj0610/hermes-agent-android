@@ -564,6 +564,126 @@ class SpeechInTest {
         assertEquals(listOf(session to SpeechIn.Event.Failed(VoiceFault.Recognizer, 5)), events)
     }
 
+    /** Everything a recognizer can still report after it failed or was replaced. */
+    private fun speakUpLate(stale: SpeechRecognizer) {
+        shadowOf(stale).triggerOnReadyForSpeech(Bundle())
+        shadowOf(stale).triggerOnPartialResults(results("늦은 결과"))
+        shadowOf(stale).triggerOnRmsChanged(10f)
+        shadowOf(stale).triggerOnEndOfSpeech()
+    }
+
+    @Test
+    fun `a recognizer that failed never reaches the session opened again for it`() {
+        val input = SpeechIn(context)
+        val session = input.start(Locale.KOREA) { id, event -> events += id to event }
+        idle()
+        val first = newest()
+        shadowOf(first).triggerOnError(11)
+        // While the session waits to open again,
+        speakUpLate(first)
+        assertEquals(0f, input.level.value)
+        settle()
+        val second = newest()
+        assertNotSame(first, second)
+        // once the new recognizer is open,
+        speakUpLate(first)
+        assertEquals(0f, input.level.value)
+        assertEquals(emptyList<Pair<Long, SpeechIn.Event>>(), events)
+
+        // and while it hears speech.
+        shadowOf(second).triggerOnReadyForSpeech(Bundle())
+        shadowOf(second).triggerOnRmsChanged(4f)
+        val level = input.level.value
+        assertTrue(level > 0f)
+        speakUpLate(first)
+        shadowOf(first).triggerOnResults(results("늦은 결과"))
+        assertEquals(level, input.level.value)
+
+        shadowOf(second).triggerOnPartialResults(results("새"))
+        shadowOf(second).triggerOnResults(results("새 결과"))
+        shadowOf(second).triggerOnError(7)
+        assertEquals(
+            listOf(
+                session to SpeechIn.Event.Ready,
+                session to SpeechIn.Event.Partial("새"),
+                session to SpeechIn.Event.Final("새 결과"),
+            ),
+            events,
+        )
+    }
+
+    @Test
+    fun `an on-device recognizer handed over to the default one never reaches the session again`() {
+        val input = SpeechIn(context)
+        confirmOnDevice(input)
+        val session = input.start(Locale.KOREA) { id, event -> events += id to event }
+        settle()
+        val local = newest()
+        assertTrue(onDevice(local))
+        shadowOf(local).triggerOnError(13)
+        speakUpLate(local)
+        assertEquals(0f, input.level.value)
+        settle()
+        val fallback = newest()
+        assertTrue(!onDevice(fallback))
+        shadowOf(fallback).triggerOnRmsChanged(4f)
+        val level = input.level.value
+        assertTrue(level > 0f)
+        speakUpLate(local)
+        shadowOf(local).triggerOnResults(results("늦은 결과"))
+        assertEquals(level, input.level.value)
+        shadowOf(fallback).triggerOnResults(results("기본 인식기"))
+        assertEquals(listOf(session to SpeechIn.Event.Final("기본 인식기")), events)
+    }
+
+    @Test
+    fun `a recognizer replaced by a new session never reaches it`() {
+        val input = SpeechIn(context)
+        val old = input.start(Locale.KOREA) { id, event -> events += id to event }
+        idle()
+        val first = newest()
+        shadowOf(first).triggerOnReadyForSpeech(Bundle())
+        val session = input.start(Locale.KOREA) { id, event -> events += id to event }
+        settle()
+        val second = newest()
+        assertNotSame(first, second)
+        shadowOf(second).triggerOnReadyForSpeech(Bundle())
+        shadowOf(second).triggerOnRmsChanged(4f)
+        val level = input.level.value
+        assertTrue(level > 0f)
+        // The replaced recognizer never ended: its closing callbacks come late.
+        speakUpLate(first)
+        shadowOf(first).triggerOnResults(results("늦은 결과"))
+        shadowOf(first).triggerOnError(5)
+        assertEquals(level, input.level.value)
+        shadowOf(second).triggerOnResults(results("새 결과"))
+        assertEquals(
+            listOf(
+                old to SpeechIn.Event.Ready,
+                session to SpeechIn.Event.Ready,
+                session to SpeechIn.Event.Final("새 결과"),
+            ),
+            events,
+        )
+    }
+
+    @Test
+    fun `a session cancelled while it waits to open again hears nothing from the recognizer that failed`() {
+        val input = SpeechIn(context)
+        input.start(Locale.KOREA) { id, event -> events += id to event }
+        idle()
+        val first = newest()
+        shadowOf(first).triggerOnError(11)
+        input.cancel()
+        speakUpLate(first)
+        shadowOf(first).triggerOnResults(results("늦은 결과"))
+        settle()
+        assertSame(first, newest())
+        assertTrue(!input.listening)
+        assertEquals(0f, input.level.value)
+        assertEquals(emptyList<Pair<Long, SpeechIn.Event>>(), events)
+    }
+
     @Test
     fun `a session ends once, even when the recognizer follows its result with an error`() {
         val input = SpeechIn(context)

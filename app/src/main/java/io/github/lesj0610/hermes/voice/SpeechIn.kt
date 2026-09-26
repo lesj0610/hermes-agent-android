@@ -32,10 +32,11 @@ import java.util.Locale
  * audio away, and says so.
  *
  * Every session gets an id, carried by each event. [start] and [cancel] retire
- * the previous session, and its late callbacks — a result from a recognizer
- * that was already stopped — are dropped here rather than reaching the draft or
- * the conversation. A session ends once: a second closing callback from the same
- * recognizer is dropped too.
+ * the previous session, and a session opened again after a failure retires the
+ * recognizer that failed: only the recognizer a session currently owns reaches
+ * the draft, the conversation or the level meter, so a late callback from one
+ * already stopped or replaced is dropped here. A session ends once: a second
+ * closing callback from the same recognizer is dropped too.
  *
  * A recognizer is not opened within [SETTLE_MILLIS] of closing the last one, and
  * one that fails before it is ready is opened again, once: a recognition service
@@ -229,55 +230,62 @@ class SpeechIn(private val context: Context) {
         var started = false
         var ended = false
 
-        fun deliver(event: Event) {
-            if (id == session) listener(id, event)
-        }
+        // Whether this recognizer is still the one session [id] listens to. A
+        // session that ended, or was opened again after this one failed, leaves
+        // it behind, and nothing it reports afterwards reaches the caller or
+        // the meter.
+        fun owned() = recognizer === engine && id == session
 
         fun retire() {
             if (recognizer === engine) {
                 recognizer = null
                 closedAt = SystemClock.uptimeMillis()
+                _level.value = 0f
             }
             runCatching { engine.destroy() }
-            _level.value = 0f
         }
 
         engine.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
+                if (!owned()) return
                 started = true
-                deliver(Event.Ready)
+                listener(id, Event.Ready)
             }
 
             override fun onRmsChanged(rmsdB: Float) {
                 // Roughly -2…10 dB from the platform recognizer; a meter only.
-                if (id == session) _level.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
+                if (owned()) _level.value = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
             }
 
             override fun onEndOfSpeech() {
+                if (!owned()) return
                 _level.value = 0f
-                deliver(Event.EndOfSpeech)
+                listener(id, Event.EndOfSpeech)
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
+                if (!owned()) return
                 started = true
-                firstResult(partialResults)?.let { deliver(Event.Partial(it)) }
+                firstResult(partialResults)?.let { listener(id, Event.Partial(it)) }
             }
 
             override fun onResults(results: Bundle?) {
                 if (ended) return
                 ended = true
-                if (id != session) return retire()
-                val text = firstResult(results)
+                val current = owned()
                 retire()
-                deliver(if (text == null) Event.Silence else Event.Final(text))
+                if (!current) return
+                val text = firstResult(results)
+                listener(id, if (text == null) Event.Silence else Event.Final(text))
             }
 
             override fun onError(error: Int) {
                 // Some recognizers follow an empty result with "no speech".
                 if (ended) return
                 ended = true
-                if (id != session) return retire()
+                val current = owned()
                 retire()
+                if (!current) return
                 if (!started && stopped != id) {
                     // It never got going, most often because the service was
                     // still closing the session before: once more, the same
@@ -295,7 +303,7 @@ class SpeechIn(private val context: Context) {
                         return
                     }
                 }
-                deliver(eventFor(error))
+                listener(id, eventFor(error))
             }
 
             override fun onBeginningOfSpeech() = Unit

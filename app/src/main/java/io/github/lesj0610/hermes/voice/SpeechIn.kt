@@ -21,15 +21,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
 
 /**
- * The phone's own speech recognizer, kept on the device.
+ * The phone's own speech recognizer, asked to stay on the device.
  *
  * Which one is chosen among the recognition services the phone carries
  * ([service], listed by [recognizers]) — Google's everywhere, Samsung's on a
  * Samsung — or left to the device: its on-device recognizer once that has
  * confirmed the language is installed, its default recognizer otherwise. Every
- * request asks for offline recognition only ([RecognizerIntent.EXTRA_PREFER_OFFLINE]);
- * a recognizer without the language on the device fails rather than sending
- * audio away, and says so.
+ * request asks for offline recognition ([RecognizerIntent.EXTRA_PREFER_OFFLINE]),
+ * but a recognizer may ignore that and use the network; only the on-device
+ * recognizer is known to keep audio on the phone.
  *
  * Every session gets an id, carried by each event. [start] and [cancel] retire
  * the previous session, and a session opened again after a failure retires the
@@ -296,7 +296,8 @@ class SpeechIn(private val context: Context) {
                     }
                     // The on-device recognizer does not serve this language after
                     // all, or will not start: the device's default one takes over,
-                    // still offline only. Only a language answer is remembered.
+                    // still asked to work offline. Only a language answer is
+                    // remembered.
                     if (source == Source.OnDevice && (error in LANGUAGE_MISSING || error in NOT_STARTED)) {
                         if (error in LANGUAGE_MISSING) onDevice[locale.language] = OnDevice.Unavailable
                         open(id, locale, Source.Default, listener, retried)
@@ -354,7 +355,8 @@ class SpeechIn(private val context: Context) {
         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
-        // Offline engines only, despite the name: audio stays on the phone.
+        // Asks for offline engines only, despite the name. A recognizer may
+        // still use the network: this is a request, not a guarantee.
         putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
     }
 

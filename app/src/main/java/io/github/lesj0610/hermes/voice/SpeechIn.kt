@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognitionService
 import android.speech.RecognitionSupport
@@ -32,7 +34,12 @@ import java.util.Locale
  * Every session gets an id, carried by each event. [start] and [cancel] retire
  * the previous session, and its late callbacks — a result from a recognizer
  * that was already stopped — are dropped here rather than reaching the draft or
- * the conversation.
+ * the conversation. A session ends once: a second closing callback from the same
+ * recognizer is dropped too.
+ *
+ * A recognizer is not opened within [SETTLE_MILLIS] of closing the last one, and
+ * one that fails before it is ready is opened again, once: a recognition service
+ * still closing one session drops the next.
  *
  * Main thread only: SpeechRecognizer requires it, and its callbacks arrive there.
  */
@@ -54,6 +61,18 @@ class SpeechIn(private val context: Context) {
     private var recognizer: SpeechRecognizer? = null
     private var session = 0L
     private val onDevice = HashMap<String, OnDevice>()
+    private val main = Handler(Looper.getMainLooper())
+
+    /** When a recognizer was last closed, on the uptime clock. */
+    private var closedAt: Long? = null
+
+    /** The session waiting for the last recognizer to finish closing; see [open]. */
+    private var waiting: Waiting? = null
+
+    /** The session [stop] was asked for. */
+    private var stopped = 0L
+
+    private class Waiting(val id: Long, val listener: (Long, Event) -> Unit, val go: Runnable)
 
     /** The chosen recognition service, a flattened component; empty leaves it to the device. */
     var service = ""
@@ -65,7 +84,7 @@ class SpeechIn(private val context: Context) {
 
     val available: Boolean get() = SpeechRecognizer.isRecognitionAvailable(context)
 
-    val listening: Boolean get() = recognizer != null
+    val listening: Boolean get() = recognizer != null || waiting != null
 
     /** The recognition services installed on the device, as (flattened component, label), by label. */
     fun recognizers(): List<Pair<String, String>> {
@@ -85,7 +104,7 @@ class SpeechIn(private val context: Context) {
         val id = ++session
         val source = chosen()?.let(Source::Service)
             ?: if (onDeviceStatus(locale) == OnDevice.Installed) Source.OnDevice else Source.Default
-        begin(id, locale, source, listener)
+        open(id, locale, source, listener, retried = false)
         return id
     }
 
@@ -108,16 +127,26 @@ class SpeechIn(private val context: Context) {
     /** Stops listening; what was heard so far still comes back as a result. */
     fun stop() {
         checkMain()
+        stopped = session
         recognizer?.stopListening()
+        // A session still waiting to open has heard nothing.
+        waiting?.let { held ->
+            main.removeCallbacks(held.go)
+            waiting = null
+            if (held.id == session) held.listener(held.id, Event.Silence)
+        }
     }
 
     /** Stops and discards: no result follows. */
     fun cancel() {
         checkMain()
         session++
+        waiting?.let { main.removeCallbacks(it.go) }
+        waiting = null
         recognizer?.let { engine ->
             runCatching { engine.cancel() }
             runCatching { engine.destroy() }
+            closedAt = SystemClock.uptimeMillis()
         }
         recognizer = null
         _level.value = 0f
@@ -158,9 +187,32 @@ class SpeechIn(private val context: Context) {
         val probe = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
         runCatching { probe.triggerModelDownload(intent(locale)) }
         probe.destroy()
+        closedAt = SystemClock.uptimeMillis()
     }
 
-    private fun begin(id: Long, locale: Locale, source: Source, listener: (Long, Event) -> Unit) {
+    /**
+     * Begins [id] on [source] once the recognizer closed last has had
+     * [SETTLE_MILLIS] to go. A recognition service still closing one session
+     * drops the next one it is asked to open ("Connection to speech recognition
+     * service lost"), and a conversation listening again the moment silence ends
+     * a session lands in exactly that gap; on a phone the service was seen closing
+     * within 40 ms of the next open.
+     */
+    private fun open(id: Long, locale: Locale, source: Source, listener: (Long, Event) -> Unit, retried: Boolean) {
+        val wait = closedAt?.let { it + SETTLE_MILLIS - SystemClock.uptimeMillis() } ?: 0L
+        if (wait <= 0L) {
+            begin(id, locale, source, listener, retried)
+            return
+        }
+        val go = Runnable {
+            waiting = null
+            if (id == session) begin(id, locale, source, listener, retried)
+        }
+        waiting = Waiting(id, listener, go)
+        main.postDelayed(go, wait)
+    }
+
+    private fun begin(id: Long, locale: Locale, source: Source, listener: (Long, Event) -> Unit, retried: Boolean) {
         val engine = runCatching {
             when {
                 source is Source.Service -> SpeechRecognizer.createSpeechRecognizer(context, source.component)
@@ -174,21 +226,25 @@ class SpeechIn(private val context: Context) {
             return
         }
         recognizer = engine
-        var heardAnything = false
+        var started = false
+        var ended = false
 
         fun deliver(event: Event) {
             if (id == session) listener(id, event)
         }
 
         fun retire() {
-            if (recognizer === engine) recognizer = null
+            if (recognizer === engine) {
+                recognizer = null
+                closedAt = SystemClock.uptimeMillis()
+            }
             runCatching { engine.destroy() }
             _level.value = 0f
         }
 
         engine.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
-                heardAnything = true
+                started = true
                 deliver(Event.Ready)
             }
 
@@ -203,11 +259,13 @@ class SpeechIn(private val context: Context) {
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
-                heardAnything = true
+                started = true
                 firstResult(partialResults)?.let { deliver(Event.Partial(it)) }
             }
 
             override fun onResults(results: Bundle?) {
+                if (ended) return
+                ended = true
                 if (id != session) return retire()
                 val text = firstResult(results)
                 retire()
@@ -215,15 +273,27 @@ class SpeechIn(private val context: Context) {
             }
 
             override fun onError(error: Int) {
+                // Some recognizers follow an empty result with "no speech".
+                if (ended) return
+                ended = true
                 if (id != session) return retire()
                 retire()
-                // An on-device recognizer that turns out not to serve this
-                // language falls back to the device's default one, once,
-                // without the caller seeing a failure — still offline only.
-                if (source == Source.OnDevice && !heardAnything && error in ON_DEVICE_FALLBACK) {
-                    onDevice[locale.language] = OnDevice.Unavailable
-                    begin(id, locale, Source.Default, listener)
-                    return
+                if (!started && stopped != id) {
+                    // It never got going, most often because the service was
+                    // still closing the session before: once more, the same
+                    // recognizer, without the caller seeing a failure.
+                    if (error in NOT_STARTED && !retried) {
+                        open(id, locale, source, listener, retried = true)
+                        return
+                    }
+                    // The on-device recognizer does not serve this language after
+                    // all, or will not start: the device's default one takes over,
+                    // still offline only. Only a language answer is remembered.
+                    if (source == Source.OnDevice && (error in LANGUAGE_MISSING || error in NOT_STARTED)) {
+                        if (error in LANGUAGE_MISSING) onDevice[locale.language] = OnDevice.Unavailable
+                        open(id, locale, Source.Default, listener, retried)
+                        return
+                    }
                 }
                 deliver(eventFor(error))
             }
@@ -256,12 +326,14 @@ class SpeechIn(private val context: Context) {
                     }
                     onDevice[locale.language] = status
                     probe.destroy()
+                    closedAt = SystemClock.uptimeMillis()
                     done(status)
                 }
 
                 override fun onError(error: Int) {
                     onDevice[locale.language] = OnDevice.Unknown
                     probe.destroy()
+                    closedAt = SystemClock.uptimeMillis()
                     done(OnDevice.Unknown)
                 }
             },
@@ -283,6 +355,9 @@ class SpeechIn(private val context: Context) {
     }
 
     private companion object {
+        /** How long a closed recognizer is given before the next one opens. */
+        const val SETTLE_MILLIS = 400L
+
         // Codes by number: several were only named in later API levels.
         const val ERROR_NETWORK_TIMEOUT = 1
         const val ERROR_NETWORK = 2
@@ -298,9 +373,10 @@ class SpeechIn(private val context: Context) {
         const val ERROR_LANGUAGE_NOT_SUPPORTED = 12
         const val ERROR_LANGUAGE_UNAVAILABLE = 13
 
-        val ON_DEVICE_FALLBACK = setOf(
-            ERROR_CLIENT, ERROR_SERVER_DISCONNECTED, ERROR_LANGUAGE_NOT_SUPPORTED, ERROR_LANGUAGE_UNAVAILABLE,
-        )
+        /** A recognizer failing with these before it was ready never got going. */
+        val NOT_STARTED = setOf(ERROR_CLIENT, ERROR_RECOGNIZER_BUSY, ERROR_SERVER_DISCONNECTED)
+
+        val LANGUAGE_MISSING = setOf(ERROR_LANGUAGE_NOT_SUPPORTED, ERROR_LANGUAGE_UNAVAILABLE)
 
         fun eventFor(error: Int): Event = when (error) {
             ERROR_SPEECH_TIMEOUT, ERROR_NO_MATCH -> Event.Silence

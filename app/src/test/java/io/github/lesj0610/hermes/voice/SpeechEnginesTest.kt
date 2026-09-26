@@ -14,7 +14,9 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -26,6 +28,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowSpeechRecognizer
 import org.robolectric.shadows.ShadowTextToSpeech
 import org.robolectric.util.ReflectionHelpers
+import java.time.Duration
 import java.util.Locale
 
 /**
@@ -254,10 +257,27 @@ class SpeechInTest {
     }
 
     private fun latest() = shadowOf(ShadowSpeechRecognizer.getLatestSpeechRecognizer())
+    private fun newest(): SpeechRecognizer = ShadowSpeechRecognizer.getLatestSpeechRecognizer()
 
     // The platform recognizer hands its commands to the main looper; they run
     // before the (simulated) service can answer.
     private fun idle() = shadowOf(Looper.getMainLooper()).idle()
+
+    // Past the pause a closed recognizer is given before the next one opens.
+    private fun settle() = shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+
+    private fun onDevice(recognizer: SpeechRecognizer): Boolean = ReflectionHelpers.getField(recognizer, "mOnDevice")
+
+    private fun confirmOnDevice(input: SpeechIn) {
+        ShadowSpeechRecognizer.setIsOnDeviceRecognitionAvailable(true)
+        input.refreshOnDevice(Locale.KOREA) {}
+        idle()
+        latest().triggerSupportResult(
+            RecognitionSupport.Builder().setInstalledOnDeviceLanguages(listOf("ko-KR")).build(),
+        )
+        idle()
+        assertEquals(SpeechIn.OnDevice.Installed, input.onDeviceStatus(Locale.KOREA))
+    }
 
     @Test
     fun `partial results come first, then the final one`() {
@@ -292,10 +312,10 @@ class SpeechInTest {
         idle()
         latest().triggerOnError(7)
         input.start(Locale.KOREA) { _, event -> events += 0L to event }
-        idle()
+        settle()
         latest().triggerOnError(9)
         input.start(Locale.KOREA) { _, event -> events += 0L to event }
-        idle()
+        settle()
         latest().triggerOnError(2)
         assertEquals(
             listOf(
@@ -322,16 +342,146 @@ class SpeechInTest {
 
         // Left to the device, a confirmed on-device recognizer is what runs.
         val session = input.start(Locale.KOREA) { id, event -> events += id to event }
-        idle()
-        val local = latest()
+        settle()
+        val local = newest()
+        assertTrue(onDevice(local))
         // The on-device recognizer turns out not to serve the language.
-        local.triggerOnError(13)
-        idle()
+        shadowOf(local).triggerOnError(13)
+        settle()
         assertEquals(emptyList<Pair<Long, SpeechIn.Event>>(), events)
         assertEquals(SpeechIn.OnDevice.Unavailable, input.onDeviceStatus(Locale.KOREA))
+        assertTrue(!onDevice(newest()))
 
         latest().triggerOnResults(results("기본 인식기"))
         assertEquals(listOf(session to SpeechIn.Event.Final("기본 인식기")), events)
+    }
+
+    // Seen on a phone: the conversation listened again the moment silence
+    // ended a session, the service was still closing it, and the new session
+    // was dropped ("Connection to speech recognition service lost").
+    @Test
+    fun `listening again right after a session waits for the recognizer to close`() {
+        val input = SpeechIn(context)
+        input.start(Locale.KOREA) { id, event -> events += id to event }
+        idle()
+        val first = newest()
+        shadowOf(first).triggerOnResults(results(""))
+        val session = input.start(Locale.KOREA) { id, event -> events += id to event }
+        idle()
+        assertTrue(input.listening)
+        assertSame(first, newest())
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100))
+        assertSame(first, newest())
+
+        settle()
+        assertNotSame(first, newest())
+        latest().triggerOnResults(results("다시 듣기"))
+        assertEquals(SpeechIn.Event.Final("다시 듣기"), events.last().second)
+        assertEquals(session, events.last().first)
+    }
+
+    @Test
+    fun `a session waiting to open is heard as silence when stopped, and never opens`() {
+        val input = SpeechIn(context)
+        input.start(Locale.KOREA) { id, event -> events += id to event }
+        idle()
+        val first = newest()
+        shadowOf(first).triggerOnResults(results(""))
+        val session = input.start(Locale.KOREA) { id, event -> events += id to event }
+        input.stop()
+        assertEquals(session to SpeechIn.Event.Silence, events.last())
+        assertTrue(!input.listening)
+        settle()
+        assertSame(first, newest())
+    }
+
+    @Test
+    fun `a session waiting to open that is cancelled never opens`() {
+        val input = SpeechIn(context)
+        input.start(Locale.KOREA) { id, event -> events += id to event }
+        idle()
+        val first = newest()
+        shadowOf(first).triggerOnResults(results(""))
+        input.start(Locale.KOREA) { id, event -> events += id to event }
+        input.cancel()
+        assertTrue(!input.listening)
+        settle()
+        assertSame(first, newest())
+        assertEquals(1, events.size)
+    }
+
+    @Test
+    fun `a recognizer that fails before it is ready opens again, once, and the caller sees no failure`() {
+        val input = SpeechIn(context)
+        val session = input.start(Locale.KOREA) { id, event -> events += id to event }
+        idle()
+        val first = newest()
+        shadowOf(first).triggerOnError(11)
+        assertEquals(emptyList<Pair<Long, SpeechIn.Event>>(), events)
+        assertTrue(input.listening)
+        settle()
+        val second = newest()
+        assertNotSame(first, second)
+        shadowOf(second).triggerOnReadyForSpeech(Bundle())
+        shadowOf(second).triggerOnResults(results("다시 연 인식기"))
+        assertEquals(
+            listOf(session to SpeechIn.Event.Ready, session to SpeechIn.Event.Final("다시 연 인식기")),
+            events,
+        )
+    }
+
+    @Test
+    fun `a recognizer that fails to start twice says so`() {
+        val input = SpeechIn(context)
+        val session = input.start(Locale.KOREA) { id, event -> events += id to event }
+        idle()
+        latest().triggerOnError(11)
+        settle()
+        latest().triggerOnError(11)
+        settle()
+        assertEquals(listOf(session to SpeechIn.Event.Failed(VoiceFault.Server, 11)), events)
+        assertTrue(!input.listening)
+    }
+
+    @Test
+    fun `an on-device recognizer that will not start hands over without forgetting the language`() {
+        val input = SpeechIn(context)
+        confirmOnDevice(input)
+        val session = input.start(Locale.KOREA) { id, event -> events += id to event }
+        settle()
+        assertTrue(onDevice(newest()))
+        latest().triggerOnError(11)
+        settle()
+        assertTrue(onDevice(newest()))
+        latest().triggerOnError(5)
+        settle()
+        assertTrue(!onDevice(newest()))
+        assertEquals(SpeechIn.OnDevice.Installed, input.onDeviceStatus(Locale.KOREA))
+        latest().triggerOnResults(results("기본 인식기"))
+        assertEquals(listOf(session to SpeechIn.Event.Final("기본 인식기")), events)
+    }
+
+    @Test
+    fun `a recognizer stopped before it was ready is not opened again`() {
+        val input = SpeechIn(context)
+        val session = input.start(Locale.KOREA) { id, event -> events += id to event }
+        idle()
+        val first = newest()
+        input.stop()
+        shadowOf(first).triggerOnError(5)
+        settle()
+        assertSame(first, newest())
+        assertEquals(listOf(session to SpeechIn.Event.Failed(VoiceFault.Recognizer, 5)), events)
+    }
+
+    @Test
+    fun `a session ends once, even when the recognizer follows its result with an error`() {
+        val input = SpeechIn(context)
+        val session = input.start(Locale.KOREA) { id, event -> events += id to event }
+        idle()
+        latest().triggerOnResults(results(""))
+        latest().triggerOnError(7)
+        assertEquals(listOf(session to SpeechIn.Event.Silence), events)
     }
 
     private fun installRecognizer(pkg: String, label: String): ComponentName {

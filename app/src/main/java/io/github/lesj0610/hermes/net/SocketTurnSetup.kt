@@ -1,8 +1,6 @@
 package io.github.lesj0610.hermes.net
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -60,6 +58,12 @@ internal data class PreparedTurn(
 class TurnSetupException(message: String) : Exception(message)
 
 /**
+ * The conversation is held: a setting an earlier turn sent may still land on
+ * the live session this turn was handed. Nothing was sent to it.
+ */
+class ConversationHeldException(message: String) : Exception(message)
+
+/**
  * Brings a live session to the runtime the turn asked for, then hands it back.
  *
  * Every setting goes to the LIVE id. `config.set` on a stored id answers "session
@@ -84,14 +88,15 @@ internal suspend fun prepareSocketTurn(
     runtime: TurnRuntime,
     voice: VoiceTurn? = null,
     onLive: (String) -> Unit = {},
+    /** The stored conversation the live session belongs to: the one resumed, or the one just created. */
+    onStored: (String) -> Unit = {},
     onRestorePlan: (String?) -> Unit = {},
     /**
-     * Send the reasoning level even when the session reports it already. Set
-     * when the previous turn's restore went out and its outcome is unknown: the
-     * reported level cannot be trusted, and the latest explicit setting should
-     * be this turn's.
+     * A live session an earlier turn's unanswered setting addressed, released
+     * because the gateway no longer lists it. A resume must then hand out
+     * another; handed this one back, the turn stops before sending anything.
      */
-    forceReasoning: Boolean = false,
+    heldLiveId: String? = null,
 ): PreparedTurn {
     val model = runtime.model?.trim().orEmpty()
     val provider = runtime.provider?.trim().orEmpty()
@@ -124,12 +129,22 @@ internal suspend fun prepareSocketTurn(
     val openedObject = opened as? JsonObject
     val liveId = (openedObject?.get("session_id") as? JsonPrimitive)?.content?.trim().orEmpty()
     if (liveId.isEmpty()) throw GatewayRpcException(-1, "The gateway did not return a live session")
+    if (liveId == heldLiveId) {
+        throw ConversationHeldException("The gateway handed back the live session this conversation is held on")
+    }
     onLive(liveId)
+    val created = storedSessionId.isNullOrBlank()
+    val storedId = if (created) {
+        (openedObject?.get("stored_session_id") as? JsonPrimitive)?.content?.trim().orEmpty()
+    } else {
+        storedSessionId.orEmpty()
+    }
+    if (storedId.isNotEmpty()) onStored(storedId)
     val info = openedObject?.get("info")?.let { element ->
         runCatching { setupJson.decodeFromJsonElement(SessionLiveInfo.serializer(), element) }.getOrNull()
     }
 
-    val switchModel = model.isNotEmpty() && !onPickedModel(rpc, liveId, info, model, provider)
+    val switchModel = model.isNotEmpty() && !onPickedModel(info, model, provider, created)
     if (switchModel) {
         val result = rpc.call(
             "config.set",
@@ -174,7 +189,7 @@ internal suspend fun prepareSocketTurn(
     }
     if (voice != null) onRestorePlan(restore)
 
-    if (reasoning.isNotEmpty() && (before != reasoning || forceReasoning)) {
+    if (reasoning.isNotEmpty() && before != reasoning) {
         try {
             rpc.call(
                 "config.set",
@@ -212,83 +227,27 @@ private suspend fun resume(rpc: RpcCaller, storedId: String, eager: Boolean): Js
 private const val RESUME_FAILED = 5000
 
 /**
- * Whether the live session already runs [model] on the endpoint [provider]
- * names. Anything short of a confirmation counts as different, and the pick is
- * applied explicitly.
+ * Whether the live session is already known to run [model] on the route
+ * [provider] names. Anything short of that counts as different, and the pick
+ * is applied explicitly.
  *
- * With its agent built, the session reports the picker row it routes by, so an
- * exact match confirms it. Nothing else does: an agent not built yet reports no
- * provider, and bare `custom` is the class every custom endpoint resolves to,
- * not a row. Two custom rows can still be aliases of one endpoint, which only
- * their URLs settle: see [sameEndpoint].
+ * A session this turn created took the pick at creation, by name, and echoes
+ * it back. A fixed provider's reported name is its route — empty until the
+ * agent is built. A custom endpoint's is not: the gateway recovers the name
+ * from the endpoint URL, lowercased whole, so endpoints whose paths differ in
+ * case report the same one, and a session can report the very row picked while
+ * running on another. So a custom pick is applied on every turn; resolved by
+ * name, it routes to the row picked.
  */
-private suspend fun onPickedModel(
-    rpc: RpcCaller,
-    liveId: String,
-    info: SessionLiveInfo?,
-    model: String,
-    provider: String,
-): Boolean {
+private fun onPickedModel(info: SessionLiveInfo?, model: String, provider: String, created: Boolean): Boolean {
     if (info == null || info.model != model) return false
     if (provider.isEmpty()) return true
-    val reported = info.provider
-    if (reported.isEmpty() || reported == "custom") return false
-    if (reported == provider) return true
-    if (!isCustom(provider) || !isCustom(reported)) return false
-    return sameEndpoint(rpc, liveId, reported, provider)
+    if (created) return info.provider == provider
+    if (isCustom(provider) || isCustom(info.provider)) return false
+    return info.provider == provider
 }
 
 private fun isCustom(provider: String) = provider == "custom" || provider.startsWith("custom:")
-
-/**
- * Whether the custom row [provider] points at the same URL as the row the
- * session is on, per `model.options` for the live session, which lists every
- * row's URL.
- *
- * Its current mark follows the session's identity once the agent is built, and
- * the profile default before; it is used only where it agrees with the identity
- * the session itself reports ([reported]).
- */
-private suspend fun sameEndpoint(rpc: RpcCaller, liveId: String, reported: String, provider: String): Boolean {
-    val options = try {
-        rpc.call("model.options", buildJsonObject { put("session_id", liveId) }) as? JsonObject
-    } catch (cancelled: CancellationException) {
-        throw cancelled
-    } catch (_: Exception) {
-        null
-    } ?: return false
-    val rows = (options["providers"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
-    val current = rows.firstOrNull { (it["is_current"] as? JsonPrimitive)?.booleanOrNull == true } ?: return false
-    if (current.text("slug") != reported) return false
-    val picked = rows.firstOrNull { it.text("slug") == provider } ?: return false
-    val here = endpoint(current.text("api_url")) ?: return false
-    return here == endpoint(picked.text("api_url"))
-}
-
-private fun JsonObject.text(key: String): String =
-    (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
-
-/**
- * An endpoint URL reduced only by what cannot change the endpoint: the scheme
- * and host are case-insensitive, a default port is the same as none, and a
- * trailing slash on the path is not a different resource. The path and query
- * keep their case — `/TenantA/v1` and `/tenanta/v1` can be different services —
- * and anything that does not parse is not comparable at all.
- */
-internal fun endpoint(url: String): String? {
-    val uri = runCatching { java.net.URI(url.trim()) }.getOrNull() ?: return null
-    val scheme = uri.scheme?.lowercase() ?: return null
-    val host = uri.host?.lowercase() ?: return null
-    val port = when {
-        uri.port == -1 -> ""
-        scheme == "http" && uri.port == 80 -> ""
-        scheme == "https" && uri.port == 443 -> ""
-        else -> ":${uri.port}"
-    }
-    val path = uri.rawPath.orEmpty().trimEnd('/')
-    val query = uri.rawQuery?.let { "?$it" }.orEmpty()
-    return "$scheme://$host$port$path$query"
-}
 
 /** The `prompt.submit` parameters for a turn, spoken or typed. */
 internal fun promptSubmitParams(liveId: String, text: String, voice: VoiceTurn?): JsonObject =

@@ -663,6 +663,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun dismissError() = graph.runEngine.clearError()
 
+    fun recheckHold() = graph.runEngine.recheckHold()
+
     fun saveServer(host: String, port: Int, token: String) {
         viewModelScope.launch {
             graph.settings.setServer(host, port, token)

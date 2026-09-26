@@ -47,6 +47,7 @@ fun uiErrorText(error: UiError): String = when (error) {
     UiError.RunFailed -> stringResource(R.string.error_run_failed)
     UiError.Disconnected -> stringResource(R.string.error_disconnected)
     UiError.ReasoningNotRestored -> stringResource(R.string.error_reasoning_not_restored)
+    UiError.ConversationHeld -> stringResource(R.string.error_conversation_held)
     is UiError.Raw -> error.text
 }
 

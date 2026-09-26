@@ -23,17 +23,20 @@ import java.io.IOException
  *
  * And the agent build, which decides what a session reports. A fresh resume
  * builds only when asked (`eager_build`); otherwise the first submit builds.
- * Until then the session reports its model and nothing of its route, and
- * `model.options` marks the profile default as current (`_fallback_session_info`,
- * `_model_picker_context`). Once built, a custom endpoint is reported under the
- * first configured row whose URL matches with the gateway's own normalisation —
- * lowercased whole, so paths differing only in case collide there — or under
- * the row an explicit switch named, or as bare `custom` when no row matches; and
- * `model.options` marks the row whose slug is that identity, by URL only for
- * bare `custom` (`canonical_custom_identity`, `endpoint_is_current`).
+ * Until then the session reports its model and nothing of its route
+ * (`_fallback_session_info`). Once built, a custom endpoint is reported under
+ * the first configured row whose URL matches with the gateway's own
+ * normalisation — lowercased whole, so paths differing only in case collide
+ * there — or under the row an explicit switch named, or as bare `custom` when
+ * no row matches (`canonical_custom_identity`).
  *
- * Faults are injected by name: refuse a request, hold its reply, fail the
- * client's send, end the stream early, or make a stored runtime unbuildable.
+ * `session.active_list` lists the live sessions without attaching to any.
+ * [reap] ends every live session no other client holds, as the orphan reaper
+ * does once its grace has passed; one in [heldElsewhere] stays.
+ *
+ * Faults are injected by name: refuse a request, hold its reply, delay the
+ * request itself, fail the client's send, end the stream early, or make a
+ * stored runtime unbuildable.
  */
 internal class FakeGateway {
     data class Runtime(
@@ -68,7 +71,7 @@ internal class FakeGateway {
     )
     var configReasoning = "xhigh"
 
-    /** The profile's default provider, which an unbuilt session's `model.options` marks as current. */
+    /** The profile's default provider, which a session created without one runs on. */
     var configProvider = "custom"
 
     /** Stored sessions whose runtime cannot be built — a provider since removed, say. */
@@ -85,9 +88,18 @@ internal class FakeGateway {
     /** "method" or "config.set:key" → how many times to refuse it, and with what. */
     val refuse = mutableMapOf<String, MutableList<String>>()
 
-    /** "method" or "config.set:key" → how many of its replies to hold back. */
+    /** "method" or "config.set:key" → how many of its replies to hold back. Applied at once; only the answer waits. */
     val hold = mutableMapOf<String, Int>()
     private val held = mutableListOf<Pair<Connection, String>>()
+
+    /**
+     * "method" or "config.set:key" → how many of its requests the gateway gets
+     * to only later: neither applied nor answered until [applyDelayed]. Unlike
+     * [hold], the effect itself waits — as a request queued behind a slow one
+     * does, which the gateway still carries out after the client has given up.
+     */
+    val delayApply = mutableMapOf<String, Int>()
+    private val delayed = mutableListOf<Pair<Connection, JsonObject>>()
 
     /** A request whose client-side send fails, as a socket dying at that moment would. */
     var failSendOf: String? = null
@@ -103,9 +115,12 @@ internal class FakeGateway {
         refuse.getOrPut(name) { mutableListOf() } += message
     }
 
+    /** Live sessions another client — the desktop with the chat open — keeps attached. */
+    val heldElsewhere = mutableSetOf<String>()
+
     /** The orphan reaper's grace has passed: live sessions nobody holds are gone. */
     fun reap() {
-        live.clear()
+        live.keys.retainAll(heldElsewhere)
     }
 
     /** Another client — the desktop with the chat open — resumed [storedId] without building it. */
@@ -113,6 +128,13 @@ internal class FakeGateway {
         "live-${++nextLive}".also { live[it] = Live(storedId, stored.getValue(storedId).copyOf(), built = false) }
 
     fun isBuilt(liveId: String): Boolean = live.getValue(liveId).built
+
+    /** The gateway gets to the delayed requests now: each is applied, and answered if its socket is still open. */
+    fun applyDelayed() {
+        val pending = delayed.toList()
+        delayed.clear()
+        pending.forEach { (connection, request) -> process(connection, request) }
+    }
 
     /** Sends every held reply, in the order they were held. */
     fun releaseHeld() {
@@ -147,6 +169,8 @@ internal class FakeGateway {
 
         override suspend fun receive(): String? = toClient.receiveCatching().getOrNull()
 
+        override val isOpen: Boolean get() = !closed
+
         override suspend fun close() {
             if (hangClose) kotlinx.coroutines.awaitCancellation()
             end()
@@ -175,11 +199,27 @@ internal class FakeGateway {
     }
 
     private fun handle(connection: Connection, request: JsonObject) {
-        val id = request["id"]
         val method = request.str("method")
         val params = request["params"] as? JsonObject ?: buildJsonObject { }
         calls += Call(connection.id, method, params)
-        val name = if (method == "config.set") "config.set:${params.str("key")}" else method
+        val name = nameOf(method, params)
+        val waiting = delayApply[name] ?: 0
+        if (waiting > 0) {
+            delayApply[name] = waiting - 1
+            delayed += connection to request
+            return
+        }
+        process(connection, request)
+    }
+
+    private fun nameOf(method: String, params: JsonObject) =
+        if (method == "config.set") "config.set:${params.str("key")}" else method
+
+    private fun process(connection: Connection, request: JsonObject) {
+        val id = request["id"]
+        val method = request.str("method")
+        val params = request["params"] as? JsonObject ?: buildJsonObject { }
+        val name = nameOf(method, params)
 
         fun reply(result: JsonObject) = buildJsonObject {
             put("jsonrpc", "2.0")
@@ -239,27 +279,16 @@ internal class FakeGateway {
                 })
             }
             "config.set" -> configSet(params, ::reply, ::error)
-            "model.options" -> {
-                val session = live[params.str("session_id")]
-                    ?: return connection.push(error(4001, "no such session"))
-                val identity = if (session.built) session.runtime.identity else configProvider
-                val endpoint = if (session.built) session.runtime.endpoint else endpointOf(configProvider)
-                val current = rows.firstOrNull { row ->
-                    row.slug == identity ||
-                        (identity == "custom" && row.apiUrl.isNotEmpty() && normal(row.apiUrl) == normal(endpoint))
-                }
-                reply(buildJsonObject {
-                    put("providers", buildJsonArray {
-                        rows.forEach { row ->
-                            add(buildJsonObject {
-                                put("slug", row.slug)
-                                put("api_url", row.apiUrl)
-                                put("is_current", row === current)
-                            })
-                        }
-                    })
+            "session.active_list" -> reply(buildJsonObject {
+                put("sessions", buildJsonArray {
+                    live.forEach { (liveId, session) ->
+                        add(buildJsonObject {
+                            put("id", liveId)
+                            put("session_key", session.storedId)
+                        })
+                    }
                 })
-            }
+            })
             "image.attach_bytes", "approval.respond" -> reply(buildJsonObject { })
             "session.close" -> {
                 closedLive += params.str("session_id")

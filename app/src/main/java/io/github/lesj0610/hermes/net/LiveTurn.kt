@@ -27,17 +27,40 @@ sealed interface StepOutcome {
 data class CleanupReport(
     /** Null when the turn changed nothing that needed putting back. */
     val restore: StepOutcome?,
+    /**
+     * A change this turn sent to the live session — the restore, or a setting
+     * or attachment during setup — went out and its answer was never read. The
+     * gateway may still carry it out, after whatever the next turn sets: a
+     * timeout is not proof it was dropped.
+     */
+    val unsettled: Boolean = false,
 ) {
     /** A restore was needed and is not known to have happened. */
     val restoreFailed: Boolean get() = restore != null && restore != StepOutcome.Done
+}
+
+/** A turn given back: what its cleanup achieved, and what it leaves the next turn to wait on. */
+class Cleanup internal constructor(
+    val report: CleanupReport,
+    /** The live session the turn ran on, when the gateway named one. */
+    val liveId: String?,
+    /** The stored conversation that live session belongs to, when known. */
+    val storedId: String?,
+    private val kept: LiveTurn?,
+) {
+    /** The socket stays open for the answers to [CleanupReport.unsettled] changes; see [settle]. */
+    val awaitingAnswer: Boolean get() = kept != null
 
     /**
-     * The restore went out but its outcome is unknown: it may still be applied
-     * later, after whatever the next turn sets. A timeout is not proof the
-     * gateway dropped the request.
+     * Reads the kept socket until every unanswered change has been answered,
+     * for at most [giveUpMillis], then closes it. True only when every one
+     * was: the gateway has dealt with them all and none can land later.
      */
-    val restoreUnknown: Boolean get() = restore == StepOutcome.TimedOut || restore is StepOutcome.Unreachable
+    suspend fun settle(giveUpMillis: Long): Boolean = kept?.settle(giveUpMillis) ?: !report.unsettled
 }
+
+/** Requests that change the live session a later turn runs on. */
+internal val SESSION_CHANGES = setOf("config.set", "image.attach_bytes")
 
 /**
  * The gateway-side resources one turn holds, and the one way to give them back.
@@ -56,10 +79,16 @@ data class CleanupReport(
  * release: the gateway reaps a live session no client holds once its orphan
  * grace (20 s by default) has passed, and not while a turn is still running.
  *
- * [finish] runs once (later calls answer the same report), is never cancelled,
- * and bounds every send and every wait by [timeoutMillis]. Its report says what
- * is known; a timed-out or unreachable step is not reported as done, because
- * the gateway's state after it is not known.
+ * Except when a change went out unanswered. Its answer can only arrive on the
+ * socket it went out on, and the gateway works through one socket's requests
+ * in order, so an open socket is kept for [Cleanup.settle] to hear it out:
+ * that answer is the proof it will not land later. Closed, only the live
+ * session's end can show that.
+ *
+ * [finish] runs once (later calls answer the same cleanup), is never
+ * cancelled, and bounds every send and every wait by [timeoutMillis]. Its
+ * report says what is known; a timed-out or unreachable step is not reported
+ * as done, because the gateway's state after it is not known.
  */
 internal class LiveTurn(
     private val transport: FrameTransport,
@@ -70,14 +99,17 @@ internal class LiveTurn(
     var liveId: String? = null
 
     @Volatile
+    var storedId: String? = null
+
+    @Volatile
     var restoreReasoning: String? = null
 
     private val lock = Mutex()
-    private var report: CleanupReport? = null
+    private var cleanup: Cleanup? = null
 
-    suspend fun finish(): CleanupReport = withContext(NonCancellable) {
+    suspend fun finish(): Cleanup = withContext(NonCancellable) {
         lock.withLock {
-            report ?: run {
+            cleanup ?: run {
                 val live = liveId
                 val restore = live?.let { id ->
                     restoreReasoning?.let { level ->
@@ -93,10 +125,28 @@ internal class LiveTurn(
                         }
                     }
                 }
-                withTimeoutOrNull(timeoutMillis) { runCatching { transport.close() } }
-                CleanupReport(restore).also { report = it }
+                val unsettled = live != null && rpc.awaiting(SESSION_CHANGES)
+                val keep = unsettled && transport.isOpen
+                if (!keep) closeTransport()
+                Cleanup(CleanupReport(restore, unsettled), live, storedId, if (keep) this@LiveTurn else null)
+                    .also { cleanup = it }
             }
         }
+    }
+
+    /** See [Cleanup.settle]. */
+    suspend fun settle(giveUpMillis: Long): Boolean = try {
+        withTimeoutOrNull(giveUpMillis) { rpc.awaitAnswers(SESSION_CHANGES) } ?: false
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        false
+    } finally {
+        withContext(NonCancellable) { closeTransport() }
+    }
+
+    private suspend fun closeTransport() {
+        withTimeoutOrNull(timeoutMillis) { runCatching { transport.close() } }
     }
 
     private suspend fun step(request: suspend () -> Unit): StepOutcome = try {

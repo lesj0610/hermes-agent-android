@@ -54,7 +54,7 @@ class SocketRun internal constructor(
             val frame = transport.receive() ?: return@flow
             val message = runCatching { json.parseToJsonElement(frame).jsonObject }.getOrNull() ?: continue
             if ((message["method"] as? JsonPrimitive)?.content != "event") {
-                val id = (message["id"] as? JsonPrimitive)?.content?.toIntOrNull() ?: continue
+                val id = rpc.noteAnswer(message) ?: continue
                 val error = message["error"] as? JsonObject
                 if (error == null) {
                     interrupts.remove(id)
@@ -175,11 +175,13 @@ class SocketRun internal constructor(
     }
 
     /**
-     * Gives the turn back: restores anything it changed, then closes the live
-     * session and the socket — the same cleanup every other ending uses. Safe
-     * to call more than once; the report says what is known to have happened.
+     * Gives the turn back: restores anything it changed and closes the socket
+     * — unless a change is still unanswered, when it stays open for
+     * [Cleanup.settle]. The same cleanup every other ending uses; the live
+     * session is left to the gateway. Safe to call more than once; the report
+     * says what is known to have happened.
      */
-    suspend fun close(): CleanupReport = live.finish()
+    suspend fun close(): Cleanup = live.finish()
 }
 
 private fun JsonObject.str(key: String): String? =

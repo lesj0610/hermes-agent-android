@@ -48,6 +48,7 @@ class Graph(context: Context) {
         // Only where a dashboard is actually configured; the socket lives on
         // that server, not on the gateway.
         socketEnabled = { settings.current().dashboardConfigured },
+        holdStore = PreferencesHoldStore(appContext),
     )
 
     companion object {

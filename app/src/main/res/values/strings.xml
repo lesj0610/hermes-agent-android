@@ -159,7 +159,13 @@
     <!-- Errors -->
     <string name="error_run_failed">The run failed.</string>
     <string name="error_disconnected">The connection closed before the reply finished.</string>
-    <string name="error_reasoning_not_restored">Couldn’t confirm this conversation’s reasoning level was put back after the spoken turn. The next typed turn applies it again.</string>
+    <string name="error_reasoning_not_restored">This conversation’s reasoning level wasn’t put back after the spoken turn. The next typed turn applies it again.</string>
+    <string name="error_conversation_held">Not sent. This conversation is on hold until a setting an earlier turn sent can no longer take effect.</string>
+    <string name="held_awaiting">On hold: the gateway hasn’t answered a setting an earlier turn sent, and could still apply it over the next turn’s. Waiting for that answer.</string>
+    <string name="held_until_released">On hold: a setting an earlier turn sent was never answered, and could still take effect over the next turn’s. This conversation reopens once its active session on the gateway has ended.</string>
+    <string name="held_still_open">On hold: the gateway still has this conversation’s active session open — perhaps another device has the conversation open. Close it there; the app keeps checking.</string>
+    <string name="held_check_failed">On hold: couldn’t reach the gateway to check whether this conversation’s active session has ended. The app keeps trying.</string>
+    <string name="held_check">Check again</string>
     <string name="error_dismiss">Dismiss</string>
 
     <!-- Notifications -->

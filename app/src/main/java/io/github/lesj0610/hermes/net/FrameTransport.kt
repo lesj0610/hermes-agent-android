@@ -5,6 +5,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -28,6 +29,9 @@ internal interface FrameTransport {
     suspend fun receive(): String?
 
     suspend fun close()
+
+    /** Neither closed nor seen to have ended: an answer can still arrive. */
+    val isOpen: Boolean
 }
 
 /**
@@ -41,8 +45,19 @@ class GatewayTimeoutException(message: String) : Exception(message)
 
 /** [FrameTransport] over a Ktor client WebSocket. Non-text frames are skipped. */
 internal class WebSocketTransport(private val session: DefaultClientWebSocketSession) : FrameTransport {
+    @Volatile
+    private var ended = false
+
+    override val isOpen: Boolean get() = !ended
+
     override suspend fun send(text: String) {
-        session.send(Frame.Text(text))
+        try {
+            session.send(Frame.Text(text))
+        } catch (closed: ClosedSendChannelException) {
+            // Refused before it was queued: it never went out.
+            ended = true
+            throw java.io.IOException("The dashboard socket is closed", closed)
+        }
     }
 
     override suspend fun receive(): String? {
@@ -50,6 +65,7 @@ internal class WebSocketTransport(private val session: DefaultClientWebSocketSes
             val frame = try {
                 session.incoming.receive()
             } catch (_: ClosedReceiveChannelException) {
+                ended = true
                 return null
             }
             if (frame is Frame.Text) return frame.readText()
@@ -57,6 +73,7 @@ internal class WebSocketTransport(private val session: DefaultClientWebSocketSes
     }
 
     override suspend fun close() {
+        ended = true
         runCatching { session.close() }
     }
 }
@@ -66,6 +83,10 @@ internal class WebSocketTransport(private val session: DefaultClientWebSocketSes
  *
  * Replies are matched by id; frames that are not the reply — events, answers
  * to fire-and-forget requests — are skipped while waiting.
+ *
+ * A request [callRaw] sent stays unanswered until its answer is read, whoever
+ * reads it. A wait given up — timed out, cancelled — does not answer it: the
+ * gateway may still carry it out, and only its answer says it has.
  */
 internal class RpcSession(
     private val transport: FrameTransport,
@@ -81,12 +102,20 @@ internal class RpcSession(
         codec.decodeFromJsonElement(serializer(), element)
 
     suspend fun callRaw(method: String, params: JsonObject): JsonElement {
-        val id = send(method, params)
+        val id = reserve()
+        unanswered[id] = method
+        try {
+            send(method, params, id)
+        } catch (notSent: java.io.IOException) {
+            // Refused by the socket itself, so it never went out.
+            unanswered.remove(id)
+            throw notSent
+        }
         while (true) {
             val text = transport.receive()
                 ?: throw SocketClosedException("The dashboard socket closed during $method")
             val message = runCatching { codec.parseToJsonElement(text).jsonObject }.getOrNull() ?: continue
-            val replyId = (message["id"] as? JsonPrimitive)?.content?.toIntOrNull() ?: continue
+            val replyId = noteAnswer(message) ?: continue
             if (replyId != id) continue
 
             (message["error"] as? JsonObject)?.let { error ->
@@ -101,6 +130,34 @@ internal class RpcSession(
 
     /** An id for a request about to be sent, known before its answer can arrive. */
     fun reserve(): Int = nextId.getAndIncrement()
+
+    /** Requests [callRaw] sent whose answer has not been read, by id. */
+    private val unanswered = java.util.concurrent.ConcurrentHashMap<Int, String>()
+
+    /** Whether a request for one of [methods] went out and its answer has not been read. */
+    fun awaiting(methods: Set<String>): Boolean = unanswered.values.any { it in methods }
+
+    /**
+     * Reads until every request for one of [methods] has been answered. False
+     * when the socket ends first: those answers can no longer arrive, and
+     * whether the gateway acted on the requests stays unknown.
+     */
+    suspend fun awaitAnswers(methods: Set<String>): Boolean {
+        while (awaiting(methods)) {
+            val text = transport.receive() ?: return false
+            runCatching { codec.parseToJsonElement(text).jsonObject }.getOrNull()?.let(::noteAnswer)
+        }
+        return true
+    }
+
+    /** A frame read anywhere: when it answers a request, that request is answered. Its id, if it is an answer. */
+    fun noteAnswer(message: JsonObject): Int? {
+        // The gateway's own requests to the client carry an id too, and a method.
+        if (message["method"] != null) return null
+        val id = (message["id"] as? JsonPrimitive)?.content?.toIntOrNull() ?: return null
+        unanswered.remove(id)
+        return id
+    }
 
     /**
      * Sends a request without waiting for its reply, and answers its id. For

@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -14,7 +15,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import io.github.lesj0610.hermes.net.CleanupReport
+import io.github.lesj0610.hermes.net.Cleanup
+import io.github.lesj0610.hermes.net.ConversationHeldException
 import io.github.lesj0610.hermes.net.DashboardApi
 import io.github.lesj0610.hermes.net.HermesApi
 import io.github.lesj0610.hermes.net.SocketRun
@@ -45,6 +47,8 @@ class RunEngine(
      */
     private val dashboard: DashboardApi? = null,
     private val socketEnabled: suspend () -> Boolean = { false },
+    /** Keeps held conversations across restarts of the app; see [holds]. */
+    private val holdStore: HoldStore = HoldStore.InMemory(),
 ) {
     private val _state = MutableStateFlow(ChatState())
     val state: StateFlow<ChatState> = _state.asStateFlow()
@@ -61,12 +65,23 @@ class RunEngine(
     private var socketRun: SocketRun? = null
 
     /**
-     * The last spoken turn's restore went out and its outcome is unknown, so it
-     * may still land on the live session later. The next socket turn sends its
-     * own level even if the session reports it already.
+     * Conversations held, by stored session id; see [HeldConversation].
+     *
+     * A turn whose cleanup leaves a change unanswered cannot say whether the
+     * gateway will still apply it, and the next turn is handed the same live
+     * session. Resending a setting proves nothing about a request still
+     * queued, and neither does any fixed wait, so a held conversation takes no
+     * turn until there is proof: the answer, read on the socket kept open for
+     * it ([Cleanup.settle]), or the live session gone from the gateway's list —
+     * after which that id resolves to nothing there, and the conversation is
+     * handed a new live session. Other conversations are not held.
      */
-    @Volatile
-    private var restoreUnknown = false
+    private val holds = MutableStateFlow(holdStore.load().mapValues { (_, liveId) -> HeldConversation(liveId) })
+    private val holdLock = Any()
+    private var checker: Job? = null
+
+    /** Released because its live session ended: the next resume must not hand that session back. */
+    private val endedLive = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /**
      * Held by a socket turn from its first request to the end of its cleanup.
@@ -80,6 +95,12 @@ class RunEngine(
      */
     private val gatewayTurn = Mutex()
 
+    init {
+        // Held when the app last ran: whatever socket was waiting for an answer
+        // went with the process, so only the live session's end releases these.
+        if (holds.value.isNotEmpty()) scheduleChecks()
+    }
+
     private fun nextKey(prefix: String): String = "$prefix-${keySeq.incrementAndGet()}"
 
     // ── session switching ─────────────────────────────────────────────────
@@ -91,8 +112,13 @@ class RunEngine(
         // Every turn so far counts as ended: whatever was waiting on one from the
         // previous session must not wait on into this one.
         val last = turnSeq.get()
-        _state.value = ChatState(sessionId = sessionId, startedTurn = last, endedTurn = last)
+        val held = synchronized(holdLock) {
+            sessionId?.let { holds.value[it] }.also { held ->
+                _state.value = ChatState(sessionId = sessionId, startedTurn = last, endedTurn = last, held = held)
+            }
+        }
         if (sessionId == null) return
+        if (held != null) scope.launch { checkHold(sessionId, held.liveId) }
 
         runCatching { api.messages(sessionId) }
             .onSuccess { stored -> _state.update { it.copy(items = storedToTranscript(stored, ::nextKey)) } }
@@ -169,6 +195,11 @@ class RunEngine(
         voice: VoiceTurn? = null,
     ): Long? {
         if ((prompt.isBlank() && images.isEmpty()) || _state.value.isBusy) return null
+        val sessionId = _state.value.sessionId
+        if (sessionId != null && holds.value[sessionId] != null) {
+            recheckHold()
+            return null
+        }
 
         val turn = turnSeq.incrementAndGet()
         _state.update {
@@ -188,7 +219,7 @@ class RunEngine(
             val viaSocket = dashboard != null &&
                 runCatching { socketEnabled() }.getOrDefault(false)
             if (viaSocket) {
-                runSocket(turn, prompt, images, TurnRuntime(model, provider, effort), voice)
+                runSocket(turn, sessionId, prompt, images, TurnRuntime(model, provider, effort), voice)
                 return@launch
             }
 
@@ -221,40 +252,58 @@ class RunEngine(
      * Drives a turn over the event socket.
      *
      * However the turn goes, [SocketRun.close] runs last: it restores what the
-     * turn changed and closes the live session, which belongs to the gateway —
-     * one left open per turn accumulates there.
+     * turn changed and gives the socket back. The live session stays with the
+     * gateway, which other clients may share.
      */
     private suspend fun runSocket(
         turn: Long,
+        sessionId: String?,
         prompt: String,
         images: List<String>,
         runtime: TurnRuntime,
         voice: VoiceTurn?,
-    ) = gatewayTurn.withLock { runSocketLocked(turn, prompt, images, runtime, voice) }
+    ) = gatewayTurn.withLock { runSocketLocked(turn, sessionId, prompt, images, runtime, voice) }
 
     private suspend fun runSocketLocked(
         turn: Long,
+        sessionId: String?,
         prompt: String,
         images: List<String>,
         runtime: TurnRuntime,
         voice: VoiceTurn?,
     ) {
         val api = dashboard ?: return
-        val force = restoreUnknown
+        // Under the lock: a hold left by the cleanup this turn waited for is seen here.
+        if (sessionId != null) {
+            val hold = holds.value[sessionId]
+            if (hold != null && !checkHold(sessionId, hold.liveId)) {
+                endTurn(turn, UiError.ConversationHeld, asItem = false)
+                return
+            }
+        }
+        val endedLiveId = sessionId?.let { endedLive[it] }
         val run = try {
             api.startSocketRun(
-                _state.value.sessionId, prompt, images, runtime, voice,
-                onCleanup = ::noteCleanup,
-                forceReasoning = force,
+                sessionId, prompt, images, runtime, voice,
+                onCleanup = { noteCleanup(sessionId, it) },
+                heldLiveId = endedLiveId,
             )
         } catch (cause: CancellationException) {
             throw cause
+        } catch (held: ConversationHeldException) {
+            // Released as gone, yet handed back: held again until it really is.
+            if (sessionId != null && endedLiveId != null) {
+                setHold(sessionId, HeldConversation(endedLiveId, check = HoldCheck.StillOpen))
+                scheduleChecks()
+            }
+            endTurn(turn, UiError.ConversationHeld, asItem = false)
+            return
         } catch (cause: Exception) {
             endTurn(turn, cause.toUiError(), asItem = false)
             return
         }
-        // This turn's own level went out after whatever an earlier restore did.
-        if (force && runtime.reasoning?.isNotBlank() == true) restoreUnknown = false
+        // Handed a new live session: the ended one is behind this conversation.
+        if (sessionId != null && endedLiveId != null) endedLive.remove(sessionId, endedLiveId)
         socketRun = run
         running(turn, run.liveSessionId)
         try {
@@ -271,7 +320,7 @@ class RunEngine(
             // this one is still closing, and its run has to stay reachable for
             // Stop and for approvals.
             if (socketRun === run) socketRun = null
-            noteCleanup(run.close())
+            noteCleanup(sessionId, run.close())
         }
     }
 
@@ -317,12 +366,108 @@ class RunEngine(
     }
 
     /**
-     * A turn's cleanup could not confirm the reasoning level was put back.
+     * What a turn's cleanup left: a change still unanswered holds its
+     * conversation; a restore known not to have happened is a warning.
      * Recorded apart from any error, which stays the one that ended the turn.
      */
-    private fun noteCleanup(report: CleanupReport) {
-        if (report.restoreUnknown) restoreUnknown = true
-        if (report.restoreFailed) _state.update { it.copy(warning = UiError.ReasoningNotRestored) }
+    private fun noteCleanup(sessionId: String?, cleanup: Cleanup) {
+        val key = cleanup.storedId ?: sessionId
+        val liveId = cleanup.liveId
+        if (cleanup.report.unsettled && key != null && liveId != null) {
+            hold(key, liveId, cleanup)
+            return
+        }
+        if (cleanup.report.restoreFailed) _state.update { it.copy(warning = UiError.ReasoningNotRestored) }
+    }
+
+    // ── held conversations ────────────────────────────────────────────────
+
+    private fun hold(key: String, liveId: String, cleanup: Cleanup) {
+        setHold(key, HeldConversation(liveId, awaitingAnswer = cleanup.awaitingAnswer))
+        if (!cleanup.awaitingAnswer) {
+            scheduleChecks()
+            return
+        }
+        scope.launch {
+            if (cleanup.settle(SETTLE_GIVE_UP_MILLIS)) {
+                // Answered: the gateway has dealt with it, and nothing of that
+                // turn is left to land.
+                updateHold(key, liveId) { null }
+            } else {
+                // No answer can come now — the socket ended, or was given up on
+                // and closed so the gateway can let the session go. Only that
+                // session's end releases the hold.
+                updateHold(key, liveId) { it.copy(awaitingAnswer = false) }
+                scheduleChecks()
+            }
+        }
+    }
+
+    private fun setHold(key: String, hold: HeldConversation?) {
+        synchronized(holdLock) {
+            holds.update { if (hold == null) it - key else it + (key to hold) }
+            holdStore.save(holds.value.mapValues { it.value.liveId })
+            _state.update { if (it.sessionId == key) it.copy(held = hold) else it }
+        }
+    }
+
+    /** Changes [key]'s hold only while it is still the one on [liveId]. */
+    private fun updateHold(key: String, liveId: String, change: (HeldConversation) -> HeldConversation?) {
+        synchronized(holdLock) {
+            val current = holds.value[key]?.takeIf { it.liveId == liveId } ?: return
+            setHold(key, change(current))
+        }
+    }
+
+    /**
+     * Looks for [liveId] among the gateway's live sessions and releases [key]
+     * when it is not there. True when released.
+     */
+    private suspend fun checkHold(key: String, liveId: String): Boolean {
+        val dashboard = dashboard ?: return false
+        val open = dashboard.liveSessionOpen(liveId)
+        if (open == false) {
+            synchronized(holdLock) {
+                if (holds.value[key]?.liveId != liveId) return false
+                endedLive[key] = liveId
+                setHold(key, null)
+            }
+            return true
+        }
+        updateHold(key, liveId) { it.copy(check = if (open == true) HoldCheck.StillOpen else HoldCheck.Unreachable) }
+        return false
+    }
+
+    /**
+     * Looks again at every hold no socket is waiting on, now and then less
+     * often: the gateway lets a live session go some time after its last
+     * client does, and not at all while one keeps it. The delays say when to
+     * look, never that it is safe.
+     */
+    private fun scheduleChecks() {
+        if (dashboard == null) return
+        synchronized(holdLock) {
+            checker?.cancel()
+            checker = scope.launch {
+                var wait = HOLD_FIRST_CHECK_MILLIS
+                while (true) {
+                    delay(wait)
+                    val due = synchronized(holdLock) {
+                        if (holds.value.isEmpty()) return@launch
+                        holds.value.filterValues { !it.awaitingAnswer }
+                    }
+                    due.forEach { (key, hold) -> checkHold(key, hold.liveId) }
+                    wait = (wait * 2).coerceAtMost(HOLD_MAX_CHECK_MILLIS)
+                }
+            }
+        }
+    }
+
+    /** Looks now whether the open conversation's hold can be released. */
+    fun recheckHold() {
+        val key = _state.value.sessionId ?: return
+        val hold = holds.value[key] ?: return
+        scope.launch { checkHold(key, hold.liveId) }
     }
 
     // ── event application ─────────────────────────────────────────────────
@@ -625,6 +770,17 @@ internal fun Throwable.toUiError(): UiError = when (this) {
     else -> message?.takeIf { it.isNotBlank() }?.let(UiError::Raw)
         ?: UiError.Raw(this::class.simpleName.orEmpty())
 }
+
+/**
+ * How long a socket kept for an unanswered change is read before it is closed.
+ * Closing it lets the gateway reap the live session, the other proof.
+ */
+internal const val SETTLE_GIVE_UP_MILLIS = 60_000L
+
+/** The first look for a held conversation's live session: a little past the gateway's 20 s orphan grace. */
+internal const val HOLD_FIRST_CHECK_MILLIS = 25_000L
+
+internal const val HOLD_MAX_CHECK_MILLIS = 300_000L
 
 /**
  * How many past turns get their pictures fetched when a session opens.

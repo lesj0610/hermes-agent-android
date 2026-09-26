@@ -145,7 +145,13 @@
 
     <string name="error_run_failed">실행이 실패했습니다.</string>
     <string name="error_disconnected">응답이 끝나기 전에 연결이 끊겼습니다.</string>
-    <string name="error_reasoning_not_restored">음성 턴 뒤 이 대화의 추론 수준을 되돌렸는지 확인하지 못했습니다. 다음 입력 턴에서 다시 적용됩니다.</string>
+    <string name="error_reasoning_not_restored">음성 턴 뒤 이 대화의 추론 수준을 되돌리지 못했습니다. 다음 입력 턴에서 다시 적용됩니다.</string>
+    <string name="error_conversation_held">보내지 않았습니다. 이전 턴이 보낸 설정이 더는 적용될 수 없다고 확인될 때까지 이 대화는 보류됩니다.</string>
+    <string name="held_awaiting">보류 중: 이전 턴이 보낸 설정에 게이트웨이가 아직 답하지 않았고, 다음 턴 설정 위에 뒤늦게 적용될 수 있습니다. 그 답을 기다리는 중입니다.</string>
+    <string name="held_until_released">보류 중: 이전 턴이 보낸 설정의 답을 받지 못해 다음 턴 설정 위에 뒤늦게 적용될 수 있습니다. 게이트웨이에서 이 대화의 활성 세션이 끝나면 다시 열립니다.</string>
+    <string name="held_still_open">보류 중: 게이트웨이가 이 대화의 활성 세션을 아직 열어 두고 있습니다. 다른 기기에서 이 대화를 열어 두었다면 닫아 주세요. 앱이 계속 확인합니다.</string>
+    <string name="held_check_failed">보류 중: 이 대화의 활성 세션이 끝났는지 게이트웨이에 확인하지 못했습니다. 앱이 계속 시도합니다.</string>
+    <string name="held_check">다시 확인</string>
     <string name="error_dismiss">닫기</string>
 
     <string name="notif_channel_approvals">승인 요청</string>

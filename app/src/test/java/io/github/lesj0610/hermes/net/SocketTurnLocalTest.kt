@@ -2,14 +2,12 @@ package io.github.lesj0610.hermes.net
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -30,7 +28,7 @@ class SocketTurnLocalTest {
         // Built, the gateway reports the local endpoint under its named row.
         stored["s1"] = FakeGateway.Runtime("Qwen", endpointOf("custom"), "xhigh", LOCAL)
     }
-    private val reports = mutableListOf<CleanupReport>()
+    private val cleanups = mutableListOf<Cleanup>()
 
     private fun api(timeout: Long = CLEANUP_TIMEOUT) =
         DashboardApi({ "http://dashboard.invalid" }, { "user" to "pass" }, { gateway.open() }, timeout, SETUP_TIMEOUT)
@@ -42,9 +40,9 @@ class SocketTurnLocalTest {
         runtime: TurnRuntime = quiet,
         voice: VoiceTurn? = spoken,
         images: List<String> = emptyList(),
-        force: Boolean = false,
+        heldLiveId: String? = null,
     ): SocketRun = api().startSocketRun(
-        "s1", "안녕", images, runtime, voice, onCleanup = { reports += it }, forceReasoning = force,
+        "s1", "안녕", images, runtime, voice, onCleanup = { cleanups += it }, heldLiveId = heldLiveId,
     )
 
     private suspend fun SocketRun.drain(): List<RunEvent> {
@@ -66,7 +64,7 @@ class SocketTurnLocalTest {
         }
         assertEquals(listOf("session.resume", "config.set:reasoning"), gateway.methods())
         // Refused outright: the level never changed, so nothing is put back.
-        assertEquals(CleanupReport(restore = null), reports.single())
+        assertEquals(CleanupReport(restore = null), cleanups.single().report)
         assertTrue(gateway.connections.single().closed)
         assertTrue(gateway.closedLive.isEmpty())
     }
@@ -84,12 +82,12 @@ class SocketTurnLocalTest {
             listOf("session.resume", "config.set:reasoning", "image.attach_bytes", "config.set:reasoning"),
             gateway.methods(),
         )
-        assertEquals(CleanupReport(StepOutcome.Done), reports.single())
+        assertEquals(CleanupReport(StepOutcome.Done), cleanups.single().report)
         assertEquals("xhigh", gateway.liveRuntime("live-1")!!.reasoning)
     }
 
     @Test
-    fun `a submit that cannot be sent is cleaned up only as far as the socket allows`() = runTest {
+    fun `a restore the socket refuses to send is known not to have happened`() = runTest {
         gateway.failSendOf = "prompt.submit"
         try {
             start()
@@ -97,14 +95,16 @@ class SocketTurnLocalTest {
         } catch (expected: IOException) {
             assertEquals("send failed: prompt.submit", expected.message)
         }
-        val report = reports.single()
+        val report = cleanups.single().report
+        // Refused by the socket before it went out: not applied, and never will be.
         assertTrue(report.restore is StepOutcome.Unreachable)
-        assertTrue(report.restoreUnknown)
+        assertTrue(report.restoreFailed)
+        assertFalse(report.unsettled)
         assertEquals("none", gateway.liveRuntime("live-1")!!.reasoning)
     }
 
     @Test
-    fun `cancelled mid-setup, the level is still put back`() = runTest {
+    fun `cancelled mid-setup, the level is put back and the unanswered one heard out`() = runTest {
         gateway.hold["config.set:reasoning"] = 1
         val job = launch {
             try {
@@ -121,6 +121,13 @@ class SocketTurnLocalTest {
             listOf("session.resume", "config.set:reasoning", "config.set:reasoning"),
             gateway.methods(),
         )
+        // The first change's answer was never read, so the socket stays for it.
+        val cleanup = cleanups.single()
+        assertTrue(cleanup.report.unsettled)
+        assertTrue(cleanup.awaitingAnswer)
+        assertFalse(gateway.connections.single().closed)
+        gateway.releaseHeld()
+        assertTrue(cleanup.settle(CLEANUP_TIMEOUT))
         assertTrue(gateway.connections.single().closed)
     }
 
@@ -133,6 +140,8 @@ class SocketTurnLocalTest {
         } catch (expected: GatewayTimeoutException) {
             assertTrue(expected.message.orEmpty().contains("session.resume"))
         }
+        // No live session was named, so nothing was changed on one.
+        assertFalse(cleanups.single().report.unsettled)
         assertTrue(gateway.connections.single().closed)
     }
 
@@ -184,13 +193,14 @@ class SocketTurnLocalTest {
     }
 
     @Test
-    fun `a stream that ends early ends the flow, and cleanup admits what it cannot know`() = runTest {
+    fun `a stream that ends early ends the flow, and the restore that could not go out is reported`() = runTest {
         gateway.script = FakeGateway.Script.EndEarly
         val run = start()
         assertEquals(listOf<RunEvent>(RunEvent.MessageDelta(null, null, "안녕")), run.drain())
-        val report = run.close()
+        val report = run.close().report
         assertTrue(report.restore is StepOutcome.Unreachable)
         assertTrue(report.restoreFailed)
+        assertFalse(report.unsettled)
     }
 
     // ── cleanup outcomes ─────────────────────────────────────────────────
@@ -200,23 +210,41 @@ class SocketTurnLocalTest {
         val run = start()
         run.drain()
         gateway.refuseNext("config.set:reasoning", "restore refused")
-        assertEquals(CleanupReport(StepOutcome.Refused("restore refused")), run.close())
+        assertEquals(CleanupReport(StepOutcome.Refused("restore refused")), run.close().report)
     }
 
     @Test
-    fun `a restore that never answers times out within the bound`() = runTest {
+    fun `a restore that never answers times out, and its socket is kept for the answer`() = runTest {
         val run = start()
         run.drain()
         gateway.hold["config.set:reasoning"] = 1
         val before = currentTime
-        val report = run.close()
-        assertEquals(StepOutcome.TimedOut, report.restore)
-        assertTrue(report.restoreUnknown)
+        val cleanup = run.close()
+        assertEquals(CleanupReport(StepOutcome.TimedOut, unsettled = true), cleanup.report)
+        assertEquals("live-1", cleanup.liveId)
+        assertEquals("s1", cleanup.storedId)
         assertTrue(currentTime - before <= CLEANUP_TIMEOUT * 2)
-        // Closing twice answers the same report and sends nothing more.
+        assertTrue(cleanup.awaitingAnswer)
+        assertFalse(gateway.connections.single().closed)
+        // Closing twice answers the same cleanup and sends nothing more.
         val sent = gateway.calls.size
-        assertEquals(report, run.close())
+        assertTrue(cleanup === run.close())
         assertEquals(sent, gateway.calls.size)
+        // The answer arrives late: every change is accounted for, and only then is the socket let go.
+        gateway.releaseHeld()
+        assertTrue(cleanup.settle(CLEANUP_TIMEOUT))
+        assertTrue(gateway.connections.single().closed)
+    }
+
+    @Test
+    fun `an answer that never comes is given up on, the socket closed, and nothing claimed`() = runTest {
+        val run = start()
+        run.drain()
+        gateway.delayApply["config.set:reasoning"] = 1
+        val cleanup = run.close()
+        assertTrue(cleanup.awaitingAnswer)
+        assertFalse(cleanup.settle(CLEANUP_TIMEOUT))
+        assertTrue(gateway.connections.single().closed)
     }
 
     @Test
@@ -225,7 +253,7 @@ class SocketTurnLocalTest {
         run.drain()
         gateway.hangClose = true
         val before = currentTime
-        assertEquals(CleanupReport(StepOutcome.Done), run.close())
+        assertEquals(CleanupReport(StepOutcome.Done), run.close().report)
         assertTrue(currentTime - before <= CLEANUP_TIMEOUT * 2)
     }
 
@@ -233,43 +261,41 @@ class SocketTurnLocalTest {
     fun `a typed turn restores nothing and never tears the live session down`() = runTest {
         val run = start(TurnRuntime(reasoning = "xhigh"), voice = null)
         run.drain()
-        assertEquals(CleanupReport(restore = null), run.close())
+        assertEquals(CleanupReport(restore = null), run.close().report)
         assertFalse(gateway.methods().contains("config.set:reasoning"))
         assertFalse(gateway.methods().contains("session.close"))
-    }
-
-    @Test
-    fun `a forced level is sent even when the session already reports it`() = runTest {
-        val run = start(TurnRuntime(reasoning = "xhigh"), voice = null, force = true)
-        run.drain()
-        assertEquals(listOf("session.resume", "config.set:reasoning", "prompt.submit"), gateway.methods())
     }
 
     // ── what the session reports ─────────────────────────────────────────
 
     @Test
-    fun `a fresh resume has the agent built first, so the reported row confirms the pick`() = runTest {
-        start(TurnRuntime("Qwen", LOCAL, "xhigh"), voice = null).drain()
+    fun `a fresh resume has the agent built first and leaves the history to HTTP`() = runTest {
+        start(TurnRuntime(reasoning = "xhigh"), voice = null).drain()
         val resume = gateway.calls.first().params
         assertEquals("true", (resume["eager_build"] as JsonPrimitive).content)
         assertEquals("true", (resume["omit_messages"] as JsonPrimitive).content)
+        // Built, the reported level is the session's: nothing to change.
         assertEquals(listOf("session.resume", "prompt.submit"), gateway.methods())
     }
 
     @Test
-    fun `a live session whose agent is not built yet is switched explicitly, not taken for the default`() = runTest {
-        // The desktop has the chat open, unbuilt; the session is headed for the
-        // lab endpoint while `model.options` would mark the profile default.
-        gateway.configProvider = LOCAL
-        gateway.stored["s1"] = FakeGateway.Runtime("Qwen", gateway.endpointOf("custom:lab"), "xhigh", "custom:lab")
+    fun `a fixed provider the session reports is not switched again`() = runTest {
+        gateway.stored["s1"] = FakeGateway.Runtime("claude-opus-5", "", "xhigh", "anthropic")
+        start(TurnRuntime("claude-opus-5", "anthropic", "xhigh"), voice = null).drain()
+        assertEquals(listOf("session.resume", "prompt.submit"), gateway.methods())
+    }
+
+    @Test
+    fun `a live session whose agent is not built yet is switched explicitly`() = runTest {
+        // The desktop has the chat open, unbuilt: it reports no route at all.
+        gateway.stored["s1"] = FakeGateway.Runtime("claude-opus-5", "", "xhigh", "anthropic")
         val held = gateway.openLive("s1")
-        start(TurnRuntime("Qwen", LOCAL, "xhigh"), voice = null).drain()
-        // Reused as it was, reporting no route: nothing confirmed, all applied.
+        start(TurnRuntime("claude-opus-5", "anthropic", "xhigh"), voice = null).drain()
         assertEquals(
             listOf("session.resume", "config.set:model", "config.set:reasoning", "prompt.submit"),
             gateway.methods(),
         )
-        assertEquals(gateway.endpointOf(LOCAL), gateway.liveRuntime(held)!!.endpoint)
+        assertEquals(held, (gateway.calls[1].params["session_id"] as JsonPrimitive).content)
     }
 
     @Test
@@ -297,68 +323,90 @@ class SocketTurnLocalTest {
     }
 
     @Test
-    fun `bare custom names no endpoint and confirms nothing`() = runTest {
-        gateway.stored["s1"] = FakeGateway.Runtime("Qwen", "http://10.0.0.7:9000/v1", "xhigh", "custom")
-        start(TurnRuntime("Qwen", "custom", "xhigh"), voice = null).drain()
-        assertEquals(
-            listOf("session.resume", "config.set:model", "config.set:reasoning", "prompt.submit"),
-            gateway.methods(),
-        )
+    fun `a turn handed back the live session it is held on stops before sending anything`() = runTest {
+        try {
+            start(TurnRuntime("Qwen", LOCAL, "low"), voice = null, heldLiveId = "live-1")
+            fail("expected the turn to stop")
+        } catch (expected: ConversationHeldException) {
+        }
+        assertEquals(listOf("session.resume"), gateway.methods())
+        assertTrue(gateway.connections.single().closed)
+        assertEquals("xhigh", gateway.liveRuntime("live-1")!!.reasoning)
     }
 
-    // ── custom endpoint identity ─────────────────────────────────────────
+    // ── custom endpoints: the pick is sent every turn ─────────────────────
 
     @Test
-    fun `the same model on another custom endpoint is switched to it`() = runTest {
-        start(TurnRuntime("Qwen", "custom:lab", "xhigh"), voice = null).drain()
-        // The switch re-reads the level from config, so the level is applied after it.
-        assertEquals(
-            listOf("session.resume", "model.options", "config.set:model", "config.set:reasoning", "prompt.submit"),
-            gateway.methods(),
-        )
-        assertEquals(gateway.endpointOf("custom:lab"), gateway.liveRuntime("live-1")!!.endpoint)
-    }
+    fun `a session reporting the very row picked while on another endpoint is still switched`() = runTest {
+        // Only tenant B is configured; the session runs on /TenantA/v1, which
+        // the gateway, lowercasing whole URLs, reports as tenant B.
+        gateway.rows = listOf(FakeGateway.Row("custom:tenant-b", "http://10.0.0.9:8000/tenanta/v1"))
+        val tenantA = "http://10.0.0.9:8000/TenantA/v1"
+        gateway.stored["s1"] = FakeGateway.Runtime("Qwen", tenantA, "xhigh", gateway.identityOf(tenantA))
+        assertEquals("custom:tenant-b", gateway.stored.getValue("s1").identity)
 
-    @Test
-    fun `another name for the endpoint the session is on is not switched`() = runTest {
-        // Scheme and host case and a trailing slash cannot change the endpoint.
-        gateway.rows += FakeGateway.Row("custom:home", "HTTP://127.0.0.1:8088/v1/")
-        start(TurnRuntime("Qwen", "custom:home", "xhigh"), voice = null).drain()
-        assertEquals(listOf("session.resume", "model.options", "prompt.submit"), gateway.methods())
-    }
-
-    @Test
-    fun `endpoints whose paths differ only in case are different endpoints`() = runTest {
-        gateway.rows = listOf(
-            FakeGateway.Row("custom:tenant-a", "http://10.0.0.9:8000/TenantA/v1"),
-            FakeGateway.Row("custom:tenant-b", "http://10.0.0.9:8000/tenanta/v1"),
-        )
-        gateway.stored["s1"] = FakeGateway.Runtime("Qwen", "http://10.0.0.9:8000/TenantA/v1", "xhigh", "custom:tenant-a")
         start(TurnRuntime("Qwen", "custom:tenant-b", "xhigh"), voice = null).drain()
         assertEquals(
-            listOf("session.resume", "model.options", "config.set:model", "config.set:reasoning", "prompt.submit"),
+            listOf("session.resume", "config.set:model", "config.set:reasoning", "prompt.submit"),
             gateway.methods(),
         )
         assertEquals("http://10.0.0.9:8000/tenanta/v1", gateway.liveRuntime("live-1")!!.endpoint)
     }
 
     @Test
-    fun `an alias that cannot be confirmed is applied explicitly`() = runTest {
-        gateway.rows += FakeGateway.Row("custom:home", "http://127.0.0.1:8088/v1")
-        gateway.refuseNext("model.options", "unavailable")
-        start(TurnRuntime("Qwen", "custom:home", "xhigh"), voice = null).drain()
-        assertTrue(gateway.methods().contains("config.set:model"))
+    fun `the same model on another custom endpoint is switched to it`() = runTest {
+        start(TurnRuntime("Qwen", "custom:lab", "xhigh"), voice = null).drain()
+        // The switch re-reads the level from config, so the level is applied after it.
+        assertEquals(
+            listOf("session.resume", "config.set:model", "config.set:reasoning", "prompt.submit"),
+            gateway.methods(),
+        )
+        assertEquals(gateway.endpointOf("custom:lab"), gateway.liveRuntime("live-1")!!.endpoint)
     }
 
     @Test
-    fun `endpoint comparison folds only what cannot change the endpoint`() {
-        assertEquals(endpoint("http://127.0.0.1:8088/v1"), endpoint("HTTP://127.0.0.1:8088/v1/"))
-        assertEquals(endpoint("http://host/v1"), endpoint("http://host:80/v1"))
-        assertEquals(endpoint("https://Host/v1"), endpoint("https://host:443/v1"))
-        assertFalse(endpoint("http://host/TenantA/v1") == endpoint("http://host/tenanta/v1"))
-        assertFalse(endpoint("http://host/v1?key=A") == endpoint("http://host/v1?key=a"))
-        assertNull(endpoint("not a url"))
-        assertNull(endpoint(""))
+    fun `the row the session reports is applied again all the same`() = runTest {
+        start(TurnRuntime("Qwen", LOCAL, "xhigh"), voice = null).drain()
+        assertEquals(
+            listOf("session.resume", "config.set:model", "config.set:reasoning", "prompt.submit"),
+            gateway.methods(),
+        )
+        assertEquals(
+            "Qwen --provider $LOCAL --session",
+            (gateway.calls[1].params["value"] as JsonPrimitive).content,
+        )
+    }
+
+    @Test
+    fun `another name for the endpoint the session is on is applied explicitly`() = runTest {
+        gateway.rows += FakeGateway.Row("custom:home", "HTTP://127.0.0.1:8088/v1/")
+        start(TurnRuntime("Qwen", "custom:home", "xhigh"), voice = null).drain()
+        assertEquals(
+            listOf("session.resume", "config.set:model", "config.set:reasoning", "prompt.submit"),
+            gateway.methods(),
+        )
+        assertEquals("custom:home", gateway.liveRuntime("live-1")!!.identity)
+    }
+
+    @Test
+    fun `endpoints whose paths differ only in case are switched between`() = runTest {
+        gateway.rows = listOf(
+            FakeGateway.Row("custom:tenant-a", "http://10.0.0.9:8000/TenantA/v1"),
+            FakeGateway.Row("custom:tenant-b", "http://10.0.0.9:8000/tenanta/v1"),
+        )
+        gateway.stored["s1"] = FakeGateway.Runtime("Qwen", "http://10.0.0.9:8000/TenantA/v1", "xhigh", "custom:tenant-a")
+        start(TurnRuntime("Qwen", "custom:tenant-b", "xhigh"), voice = null).drain()
+        assertEquals("http://10.0.0.9:8000/tenanta/v1", gateway.liveRuntime("live-1")!!.endpoint)
+    }
+
+    @Test
+    fun `bare custom is applied like any other custom pick`() = runTest {
+        gateway.stored["s1"] = FakeGateway.Runtime("Qwen", "http://10.0.0.7:9000/v1", "xhigh", "custom")
+        start(TurnRuntime("Qwen", "custom", "xhigh"), voice = null).drain()
+        assertEquals(
+            listOf("session.resume", "config.set:model", "config.set:reasoning", "prompt.submit"),
+            gateway.methods(),
+        )
     }
 
     private companion object {

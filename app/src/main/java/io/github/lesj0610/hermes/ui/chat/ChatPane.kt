@@ -72,6 +72,8 @@ import io.github.lesj0610.hermes.core.Attachments
 import io.github.lesj0610.hermes.core.REASONING_SCALE
 import io.github.lesj0610.hermes.core.ReasoningEffort
 import io.github.lesj0610.hermes.data.ChatState
+import io.github.lesj0610.hermes.data.HeldConversation
+import io.github.lesj0610.hermes.data.HoldCheck
 import io.github.lesj0610.hermes.data.RunPhase
 import io.github.lesj0610.hermes.data.TranscriptBlock
 import io.github.lesj0610.hermes.data.TranscriptItem
@@ -110,6 +112,8 @@ fun ChatPane(
     onStop: () -> Unit,
     onDismissError: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Looks again whether a held conversation can be released; see [ChatState.held]. */
+    onRecheckHold: () -> Unit = {},
     /**
      * The per-turn runtime controls. Defaulted so the previews and screenshot
      * harness can render a transcript without standing up a picker.
@@ -245,6 +249,32 @@ fun ChatPane(
             HorizontalDivider(color = colors.line)
         }
 
+        // A held conversation says why it takes no turn, and what releases it.
+        state.held?.let { held ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(colors.panel)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = heldText(held),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.awaiting,
+                    modifier = Modifier.weight(1f),
+                )
+                // Waiting on the answer itself, there is nothing to look at yet.
+                if (!held.awaitingAnswer) {
+                    TextButton(onClick = onRecheckHold) {
+                        Text(stringResource(R.string.held_check))
+                    }
+                }
+            }
+            HorizontalDivider(color = colors.line)
+        }
+
         // Blocks, not items: a transcript of nothing but silent calls draws
         // nothing, and an empty list must not offer a jump to index -1.
         if (blocks.isEmpty()) {
@@ -314,6 +344,7 @@ fun ChatPane(
             // action button back into Send, and a disabled box could not.
             enabled = true,
             busy = state.isBusy,
+            held = state.held != null,
             stopping = state.phase is RunPhase.Stopping,
             onStop = onStop,
             onSend = onSend,
@@ -532,6 +563,8 @@ private fun EmptyTranscript(modifier: Modifier = Modifier) {
 private fun Composer(
     enabled: Boolean,
     busy: Boolean,
+    /** The conversation takes no turn: nothing is sent or started, and a draft stays. */
+    held: Boolean,
     stopping: Boolean,
     onStop: () -> Unit,
     onSend: (String, List<String>) -> Unit,
@@ -1026,9 +1059,10 @@ private fun Composer(
                         else -> onToggleConversation()
                     }
                 },
-                // Only a stop already in flight is inert; everything else is
-                // actionable.
-                enabled = !(busy && !hasDraft && stopping),
+                // A stop already in flight is inert, and so is anything a held
+                // conversation cannot take — a Stop for a turn still running
+                // excepted.
+                enabled = !(busy && !hasDraft && stopping) && !(held && (hasDraft || !busy)),
                 colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = if (filled) {
                         MaterialTheme.colorScheme.primary
@@ -1208,3 +1242,13 @@ private fun AttachmentChip(
         }
     }
 }
+
+@Composable
+private fun heldText(held: HeldConversation): String = stringResource(
+    when {
+        held.awaitingAnswer -> R.string.held_awaiting
+        held.check == HoldCheck.StillOpen -> R.string.held_still_open
+        held.check == HoldCheck.Unreachable -> R.string.held_check_failed
+        else -> R.string.held_until_released
+    },
+)

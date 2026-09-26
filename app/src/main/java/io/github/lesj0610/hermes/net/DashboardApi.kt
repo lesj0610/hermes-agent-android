@@ -21,12 +21,14 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -382,6 +384,30 @@ class DashboardApi internal constructor(
         }
 
     /**
+     * Whether the gateway still holds live session [liveId]; null when it could
+     * not tell.
+     *
+     * Read from the process's live list, which attaches to nothing. A resume
+     * would reattach the session, and a session a client holds is never let go
+     * — each look would restart the wait for it to end. The list includes a
+     * session no client holds that has not been reaped yet: that one can still
+     * be resumed, so it still counts.
+     */
+    suspend fun liveSessionOpen(liveId: String): Boolean? {
+        val result = try {
+            withTimeoutOrNull(setupTimeoutMillis) {
+                rpcSession { it.callRaw("session.active_list", buildJsonObject { }) }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        val rows = (result as? JsonObject)?.get("sessions") as? JsonArray ?: return null
+        return rows.any { ((it as? JsonObject)?.get("id") as? JsonPrimitive)?.content == liveId }
+    }
+
+    /**
      * Starts a turn on the gateway's event socket and hands back the live run.
      *
      * The socket stays open for the turn: this is the one call that holds it
@@ -405,12 +431,13 @@ class DashboardApi internal constructor(
         voice: VoiceTurn? = null,
         /**
          * What cleanup achieved when the turn fails before it is running. The
-         * thrown error stays the original one; a restore that did not happen is
-         * reported here, separately, rather than replacing it.
+         * thrown error stays the original one; a restore that did not happen,
+         * or a change left unanswered, is reported here, separately, rather
+         * than replacing it.
          */
-        onCleanup: (CleanupReport) -> Unit = {},
-        /** The previous turn's restore has an unknown outcome; see [prepareSocketTurn]. */
-        forceReasoning: Boolean = false,
+        onCleanup: (Cleanup) -> Unit = {},
+        /** A live session this turn must not run on; see [prepareSocketTurn]. */
+        heldLiveId: String? = null,
     ): SocketRun {
         val transport = openSocket(
             "The dashboard did not issue a WebSocket ticket, so the conversation cannot run over it.",
@@ -433,8 +460,9 @@ class DashboardApi internal constructor(
                 runtime = runtime,
                 voice = voice,
                 onLive = { live.liveId = it },
+                onStored = { live.storedId = it },
                 onRestorePlan = { live.restoreReasoning = it },
-                forceReasoning = forceReasoning,
+                heldLiveId = heldLiveId,
             )
 
             // Attachments go first, and each one is awaited: `image.attach_bytes`

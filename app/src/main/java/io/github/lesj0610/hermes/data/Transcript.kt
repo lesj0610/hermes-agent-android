@@ -123,10 +123,13 @@ sealed interface UiError {
 
     /**
      * A spoken turn switched thinking off on the session, and putting the
-     * previous level back could not be confirmed. The next typed turn from this
-     * app applies its level again.
+     * previous level back did not happen — the restore never went out, or was
+     * refused. The next typed turn from this app applies its level again.
      */
     data object ReasoningNotRestored : UiError
+
+    /** A turn was not sent: its conversation is held; see [HeldConversation]. */
+    data object ConversationHeld : UiError
 
     /** Server- or platform-authored text, shown as-is. */
     data class Raw(val text: String) : UiError
@@ -154,6 +157,8 @@ data class ChatState(
      */
     val startedTurn: Long = 0,
     val endedTurn: Long = 0,
+    /** Set while this conversation takes no turn; see [HeldConversation]. */
+    val held: HeldConversation? = null,
 ) {
     /**
      * A turn is in progress: running on the gateway, or sent and still being
@@ -163,6 +168,32 @@ data class ChatState(
     val isBusy: Boolean get() = phase !is RunPhase.Idle || startedTurn > endedTurn
     val pendingApproval: PendingApproval?
         get() = (phase as? RunPhase.AwaitingApproval)?.approval
+}
+
+/**
+ * A conversation that takes no turn yet: a change an earlier turn sent to its
+ * live session was never answered, and the gateway may still apply it — over
+ * whatever the next turn sets, since the next turn is handed the same live
+ * session. It reopens only on proof the change cannot land: its answer, or
+ * that live session gone.
+ */
+data class HeldConversation(
+    /** The live session the unanswered change addressed. */
+    val liveId: String,
+    /** The socket it went out on is still open, waiting for its answer. */
+    val awaitingAnswer: Boolean = false,
+    /** What the last look at the gateway's live sessions found. */
+    val check: HoldCheck = HoldCheck.NotYet,
+)
+
+enum class HoldCheck {
+    NotYet,
+
+    /** The gateway still holds that live session — another client may have it open. */
+    StillOpen,
+
+    /** The gateway could not be asked. */
+    Unreachable,
 }
 
 /**

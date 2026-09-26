@@ -18,6 +18,7 @@ import kotlinx.coroutines.sync.withLock
 import io.github.lesj0610.hermes.net.Cleanup
 import io.github.lesj0610.hermes.net.ConversationHeldException
 import io.github.lesj0610.hermes.net.DashboardApi
+import io.github.lesj0610.hermes.net.GatewayTarget
 import io.github.lesj0610.hermes.net.HermesApi
 import io.github.lesj0610.hermes.net.SocketRun
 import io.github.lesj0610.hermes.net.HermesUnauthorizedException
@@ -65,7 +66,7 @@ class RunEngine(
     private var socketRun: SocketRun? = null
 
     /**
-     * Conversations held, by stored session id; see [HeldConversation].
+     * Conversations held, by gateway and stored session id; see [HeldConversation].
      *
      * A turn whose cleanup leaves a change unanswered cannot say whether the
      * gateway will still apply it, and the next turn is handed the same live
@@ -75,13 +76,33 @@ class RunEngine(
      * it ([Cleanup.settle]), or the live session gone from the gateway's list —
      * after which that id resolves to nothing there, and the conversation is
      * handed a new live session. Other conversations are not held.
+     *
+     * The proof has to come from the gateway the hold was set on. Another
+     * gateway never saw that live session, so its list proves nothing, and a
+     * hold on one is not looked for while another is configured.
      */
-    private val holds = MutableStateFlow(holdStore.load().mapValues { (_, liveId) -> HeldConversation(liveId) })
+    private val holds = MutableStateFlow(
+        holdStore.load().associate { stored ->
+            HoldKey(stored.gateway, stored.sessionId) to HeldConversation(
+                stored.liveId,
+                check = if (stored.gateway == null) HoldCheck.UnknownServer else HoldCheck.NotYet,
+            )
+        },
+    )
     private val holdLock = Any()
     private var checker: Job? = null
 
-    /** Released because its live session ended: the next resume must not hand that session back. */
-    private val endedLive = java.util.concurrent.ConcurrentHashMap<String, String>()
+    /** Released because its live session ended: the next resume there must not hand that session back. */
+    private val endedLive = java.util.concurrent.ConcurrentHashMap<HoldKey, String>()
+
+    /**
+     * Counts conversations opened. A turn hands the conversation it created
+     * its stored id only while that conversation is still the one open.
+     */
+    private var openConversation = 0L
+
+    /** The gateway the open conversation is on, as far as the app knows. */
+    private var openGateway: String? = null
 
     /**
      * Held by a socket turn from its first request to the end of its cleanup.
@@ -112,13 +133,16 @@ class RunEngine(
         // Every turn so far counts as ended: whatever was waiting on one from the
         // previous session must not wait on into this one.
         val last = turnSeq.get()
+        val gateway = currentGateway()
         val held = synchronized(holdLock) {
-            sessionId?.let { holds.value[it] }.also { held ->
+            openConversation++
+            openGateway = gateway
+            sessionId?.let(::holdFor).also { held ->
                 _state.value = ChatState(sessionId = sessionId, startedTurn = last, endedTurn = last, held = held)
             }
         }
         if (sessionId == null) return
-        if (held != null) scope.launch { checkHold(sessionId, held.liveId) }
+        if (held != null) recheckHold()
 
         runCatching { api.messages(sessionId) }
             .onSuccess { stored -> _state.update { it.copy(items = storedToTranscript(stored, ::nextKey)) } }
@@ -196,10 +220,12 @@ class RunEngine(
     ): Long? {
         if ((prompt.isBlank() && images.isEmpty()) || _state.value.isBusy) return null
         val sessionId = _state.value.sessionId
-        if (sessionId != null && holds.value[sessionId] != null) {
+        // Held on any gateway: not knowing which the next turn reaches, refuse.
+        if (sessionId != null && holds.value.keys.any { it.sessionId == sessionId }) {
             recheckHold()
             return null
         }
+        val conversation = synchronized(holdLock) { openConversation }
 
         val turn = turnSeq.incrementAndGet()
         _state.update {
@@ -219,7 +245,7 @@ class RunEngine(
             val viaSocket = dashboard != null &&
                 runCatching { socketEnabled() }.getOrDefault(false)
             if (viaSocket) {
-                runSocket(turn, sessionId, prompt, images, TurnRuntime(model, provider, effort), voice)
+                runSocket(turn, conversation, sessionId, prompt, images, TurnRuntime(model, provider, effort), voice)
                 return@launch
             }
 
@@ -257,15 +283,17 @@ class RunEngine(
      */
     private suspend fun runSocket(
         turn: Long,
+        conversation: Long,
         sessionId: String?,
         prompt: String,
         images: List<String>,
         runtime: TurnRuntime,
         voice: VoiceTurn?,
-    ) = gatewayTurn.withLock { runSocketLocked(turn, sessionId, prompt, images, runtime, voice) }
+    ) = gatewayTurn.withLock { runSocketLocked(turn, conversation, sessionId, prompt, images, runtime, voice) }
 
     private suspend fun runSocketLocked(
         turn: Long,
+        conversation: Long,
         sessionId: String?,
         prompt: String,
         images: List<String>,
@@ -273,27 +301,37 @@ class RunEngine(
         voice: VoiceTurn?,
     ) {
         val api = dashboard ?: return
-        // Under the lock: a hold left by the cleanup this turn waited for is seen here.
-        if (sessionId != null) {
-            val hold = holds.value[sessionId]
-            if (hold != null && !checkHold(sessionId, hold.liveId)) {
-                endTurn(turn, UiError.ConversationHeld, asItem = false)
-                return
-            }
+        // Fixed here: the hold is looked at, and the whole turn runs, against
+        // this gateway, whatever the settings become meanwhile.
+        val target = try {
+            api.currentTarget()
+        } catch (cause: CancellationException) {
+            throw cause
+        } catch (cause: Exception) {
+            endTurn(turn, cause.toUiError(), asItem = false)
+            return
         }
-        val endedLiveId = sessionId?.let { endedLive[it] }
+        // Under the lock: a hold left by the cleanup this turn waited for is seen here.
+        if (sessionId != null && !released(sessionId, target)) {
+            endTurn(turn, UiError.ConversationHeld, asItem = false)
+            return
+        }
+        val endedKey = sessionId?.let { HoldKey(target.identity, it) }
+        val endedLiveId = endedKey?.let { endedLive[it] }
         val run = try {
             api.startSocketRun(
                 sessionId, prompt, images, runtime, voice,
                 onCleanup = { noteCleanup(sessionId, it) },
                 heldLiveId = endedLiveId,
+                target = target,
+                onCreated = { adopt(conversation, target.identity, it) },
             )
         } catch (cause: CancellationException) {
             throw cause
         } catch (held: ConversationHeldException) {
             // Released as gone, yet handed back: held again until it really is.
-            if (sessionId != null && endedLiveId != null) {
-                setHold(sessionId, HeldConversation(endedLiveId, check = HoldCheck.StillOpen))
+            if (endedKey != null && endedLiveId != null) {
+                setHold(endedKey, HeldConversation(endedLiveId, check = HoldCheck.StillOpen))
                 scheduleChecks()
             }
             endTurn(turn, UiError.ConversationHeld, asItem = false)
@@ -303,7 +341,7 @@ class RunEngine(
             return
         }
         // Handed a new live session: the ended one is behind this conversation.
-        if (sessionId != null && endedLiveId != null) endedLive.remove(sessionId, endedLiveId)
+        if (endedKey != null && endedLiveId != null) endedLive.remove(endedKey, endedLiveId)
         socketRun = run
         running(turn, run.liveSessionId)
         try {
@@ -371,18 +409,32 @@ class RunEngine(
      * Recorded apart from any error, which stays the one that ended the turn.
      */
     private fun noteCleanup(sessionId: String?, cleanup: Cleanup) {
-        val key = cleanup.storedId ?: sessionId
+        val stored = cleanup.storedId ?: sessionId
         val liveId = cleanup.liveId
-        if (cleanup.report.unsettled && key != null && liveId != null) {
-            hold(key, liveId, cleanup)
+        if (cleanup.report.unsettled && stored != null && liveId != null) {
+            hold(HoldKey(cleanup.gateway, stored), liveId, cleanup)
             return
         }
         if (cleanup.report.restoreFailed) _state.update { it.copy(warning = UiError.ReasoningNotRestored) }
     }
 
+    /**
+     * The conversation this turn created now has a stored id. It is handed
+     * over only while that conversation is still the one open and has no id
+     * yet — a creation answered after the user moved on touches nothing — so
+     * the next turn resumes it, and a hold on it shows here.
+     */
+    internal fun adopt(conversation: Long, gateway: String, storedId: String) {
+        synchronized(holdLock) {
+            if (conversation != openConversation || _state.value.sessionId != null) return
+            openGateway = gateway
+            _state.update { it.copy(sessionId = storedId, held = holdFor(storedId)) }
+        }
+    }
+
     // ── held conversations ────────────────────────────────────────────────
 
-    private fun hold(key: String, liveId: String, cleanup: Cleanup) {
+    private fun hold(key: HoldKey, liveId: String, cleanup: Cleanup) {
         setHold(key, HeldConversation(liveId, awaitingAnswer = cleanup.awaitingAnswer))
         if (!cleanup.awaitingAnswer) {
             scheduleChecks()
@@ -390,8 +442,8 @@ class RunEngine(
         }
         scope.launch {
             if (cleanup.settle(SETTLE_GIVE_UP_MILLIS)) {
-                // Answered: the gateway has dealt with it, and nothing of that
-                // turn is left to land.
+                // Answered on the socket it went out on: the gateway has dealt
+                // with it, and nothing of that turn is left to land.
                 updateHold(key, liveId) { null }
             } else {
                 // No answer can come now — the socket ended, or was given up on
@@ -403,16 +455,26 @@ class RunEngine(
         }
     }
 
-    private fun setHold(key: String, hold: HeldConversation?) {
+    /** The hold [sessionId] shows: on the open gateway, else one with no gateway recorded, else on another. */
+    private fun holdFor(sessionId: String): HeldConversation? {
+        val mine = holds.value.filterKeys { it.sessionId == sessionId }
+        return mine[HoldKey(openGateway, sessionId)] ?: mine[HoldKey(null, sessionId)] ?: mine.values.firstOrNull()
+    }
+
+    /** Applies [change] to the holds, records them, and shows the open conversation's. */
+    private fun changeHolds(change: (Map<HoldKey, HeldConversation>) -> Map<HoldKey, HeldConversation>) {
         synchronized(holdLock) {
-            holds.update { if (hold == null) it - key else it + (key to hold) }
-            holdStore.save(holds.value.mapValues { it.value.liveId })
-            _state.update { if (it.sessionId == key) it.copy(held = hold) else it }
+            holds.update(change)
+            holdStore.save(holds.value.map { (key, hold) -> StoredHold(key.gateway, key.sessionId, hold.liveId) })
+            _state.update { state -> state.sessionId?.let { state.copy(held = holdFor(it)) } ?: state }
         }
     }
 
+    private fun setHold(key: HoldKey, hold: HeldConversation?) =
+        changeHolds { if (hold == null) it - key else it + (key to hold) }
+
     /** Changes [key]'s hold only while it is still the one on [liveId]. */
-    private fun updateHold(key: String, liveId: String, change: (HeldConversation) -> HeldConversation?) {
+    private fun updateHold(key: HoldKey, liveId: String, change: (HeldConversation) -> HeldConversation?) {
         synchronized(holdLock) {
             val current = holds.value[key]?.takeIf { it.liveId == liveId } ?: return
             setHold(key, change(current))
@@ -420,12 +482,35 @@ class RunEngine(
     }
 
     /**
-     * Looks for [liveId] among the gateway's live sessions and releases [key]
-     * when it is not there. True when released.
+     * Looks for [key]'s live session on the gateway at [target] — fixed when
+     * the look began, so a change of settings meanwhile cannot redirect it —
+     * and releases the hold when that gateway no longer lists it. True when
+     * released.
+     *
+     * A hold on another gateway is not looked for at all. One recorded with no
+     * gateway is not released by a list without it, since it may be another
+     * gateway's; found in the list, it is that gateway's from then on.
      */
-    private suspend fun checkHold(key: String, liveId: String): Boolean {
+    private suspend fun checkHold(key: HoldKey, target: GatewayTarget): Boolean {
         val dashboard = dashboard ?: return false
-        val open = dashboard.liveSessionOpen(liveId)
+        val liveId = holds.value[key]?.liveId ?: return true
+        val gateway = target.identity
+        if (key.gateway != null && key.gateway != gateway) {
+            updateHold(key, liveId) { it.copy(check = HoldCheck.OtherServer) }
+            return false
+        }
+        if (key.gateway == null) {
+            when (dashboard.liveSessionOpen(liveId, target, sessionKey = key.sessionId)) {
+                true -> changeHolds { all ->
+                    val current = all[key]?.takeIf { it.liveId == liveId } ?: return@changeHolds all
+                    all - key + (HoldKey(gateway, key.sessionId) to current.copy(check = HoldCheck.StillOpen))
+                }
+                false -> updateHold(key, liveId) { it.copy(check = HoldCheck.UnknownServer) }
+                null -> updateHold(key, liveId) { it.copy(check = HoldCheck.Unreachable) }
+            }
+            return false
+        }
+        val open = dashboard.liveSessionOpen(liveId, target)
         if (open == false) {
             synchronized(holdLock) {
                 if (holds.value[key]?.liveId != liveId) return false
@@ -436,6 +521,23 @@ class RunEngine(
         }
         updateHold(key, liveId) { it.copy(check = if (open == true) HoldCheck.StillOpen else HoldCheck.Unreachable) }
         return false
+    }
+
+    /** Looks at every hold on [sessionId] through [target]; true when none is left. */
+    private suspend fun released(sessionId: String, target: GatewayTarget): Boolean {
+        holds.value.keys.filter { it.sessionId == sessionId }.forEach { checkHold(it, target) }
+        return holds.value.keys.none { it.sessionId == sessionId }
+    }
+
+    /** The configured gateway's identity, or null when it cannot be read. */
+    private suspend fun currentGateway(): String? = currentTargetOrNull()?.identity
+
+    private suspend fun currentTargetOrNull(): GatewayTarget? = try {
+        dashboard?.currentTarget()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        null
     }
 
     /**
@@ -454,20 +556,24 @@ class RunEngine(
                     delay(wait)
                     val due = synchronized(holdLock) {
                         if (holds.value.isEmpty()) return@launch
-                        holds.value.filterValues { !it.awaitingAnswer }
+                        holds.value.filterValues { !it.awaitingAnswer }.keys
                     }
-                    due.forEach { (key, hold) -> checkHold(key, hold.liveId) }
+                    currentTargetOrNull()?.let { target -> due.forEach { checkHold(it, target) } }
                     wait = (wait * 2).coerceAtMost(HOLD_MAX_CHECK_MILLIS)
                 }
             }
         }
     }
 
-    /** Looks now whether the open conversation's hold can be released. */
+    /** Looks now whether the open conversation's holds can be released, through the gateway configured now. */
     fun recheckHold() {
-        val key = _state.value.sessionId ?: return
-        val hold = holds.value[key] ?: return
-        scope.launch { checkHold(key, hold.liveId) }
+        val sessionId = _state.value.sessionId ?: return
+        val keys = holds.value.keys.filter { it.sessionId == sessionId }
+        if (keys.isEmpty()) return
+        scope.launch {
+            val target = currentTargetOrNull() ?: return@launch
+            keys.forEach { checkHold(it, target) }
+        }
     }
 
     // ── event application ─────────────────────────────────────────────────
@@ -734,6 +840,9 @@ class RunEngine(
 
     fun clearError() = _state.update { it.copy(error = null, warning = null) }
 }
+
+/** A hold's record key: the gateway it was set on (null when not recorded) and the stored session. */
+internal data class HoldKey(val gateway: String?, val sessionId: String)
 
 /** What the notification layer reacts to. */
 sealed interface RunSignal {

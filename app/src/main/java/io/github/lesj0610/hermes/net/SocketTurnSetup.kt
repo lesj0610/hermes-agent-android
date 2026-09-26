@@ -88,8 +88,11 @@ internal suspend fun prepareSocketTurn(
     runtime: TurnRuntime,
     voice: VoiceTurn? = null,
     onLive: (String) -> Unit = {},
-    /** The stored conversation the live session belongs to: the one resumed, or the one just created. */
-    onStored: (String) -> Unit = {},
+    /**
+     * The stored conversation the live session belongs to — the one resumed,
+     * or, `created`, the one this call just made — before anything is set.
+     */
+    onStored: (storedId: String, created: Boolean) -> Unit = { _, _ -> },
     onRestorePlan: (String?) -> Unit = {},
     /**
      * A live session an earlier turn's unanswered setting addressed, released
@@ -139,7 +142,7 @@ internal suspend fun prepareSocketTurn(
     } else {
         storedSessionId.orEmpty()
     }
-    if (storedId.isNotEmpty()) onStored(storedId)
+    if (storedId.isNotEmpty()) onStored(storedId, created)
     val info = openedObject?.get("info")?.let { element ->
         runCatching { setupJson.decodeFromJsonElement(SessionLiveInfo.serializer(), element) }.getOrNull()
     }

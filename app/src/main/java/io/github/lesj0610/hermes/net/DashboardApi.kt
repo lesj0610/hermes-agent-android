@@ -61,8 +61,8 @@ class DashboardRateLimitedException(override val message: String) : Exception(me
 class DashboardApi internal constructor(
     private val baseUrlProvider: suspend () -> String,
     private val credentialsProvider: suspend () -> Pair<String, String>,
-    /** Opens the event socket. Replaced in tests by an in-process gateway. */
-    private val socketOpener: (suspend () -> FrameTransport)?,
+    /** Opens the event socket to the dashboard at the given address. Replaced in tests by in-process gateways. */
+    private val socketOpener: (suspend (String) -> FrameTransport)?,
     /** The bound on each cleanup send and wait. */
     private val cleanupTimeoutMillis: Long,
     /** The bound on each setup request — resume, a setting, an attachment, the submit. */
@@ -96,21 +96,30 @@ class DashboardApi internal constructor(
     /** Serialises logins so a burst of parallel 401s cannot fire several at once. */
     private val loginMutex = Mutex()
 
-    private suspend fun url(path: String): String {
-        val base = baseUrlProvider().trimEnd('/')
-        return if (path.startsWith("/")) "$base$path" else "$base/$path"
+    /** [path] on the dashboard at [base], or at the configured address. */
+    private suspend fun url(path: String, base: String? = null): String {
+        val root = (base ?: baseUrlProvider()).trimEnd('/')
+        return if (path.startsWith("/")) "$root$path" else "$root/$path"
     }
+
+    /**
+     * The configured dashboard as it is now, fixed for work that must not
+     * follow a change of settings halfway: what a turn, or a look at the live
+     * sessions, started against is where all of it goes.
+     */
+    internal suspend fun currentTarget(): GatewayTarget =
+        GatewayTarget(baseUrlProvider().trimEnd('/'), credentialsProvider())
 
     suspend fun login() {
         loginMutex.withLock { doLogin() }
     }
 
-    private suspend fun doLogin() {
-        val (username, password) = credentialsProvider()
+    private suspend fun doLogin(target: GatewayTarget? = null) {
+        val (username, password) = target?.credentials ?: credentialsProvider()
         if (username.isBlank() || password.isBlank()) {
             throw DashboardAuthException("No dashboard credentials configured")
         }
-        val response = client.post(url("/auth/password-login")) {
+        val response = client.post(url("/auth/password-login", target?.baseUrl)) {
             contentType(ContentType.Application.Json)
             setBody(PasswordLoginRequest(username = username, password = password))
         }
@@ -136,10 +145,18 @@ class DashboardApi internal constructor(
      * The retry is deliberately not a loop — see the class note about the
      * server-side login rate limit.
      */
-    private suspend fun <T> authed(call: suspend () -> HttpResponse, decode: suspend HttpResponse.() -> T): T {
+    private suspend fun <T> authed(call: suspend () -> HttpResponse, decode: suspend HttpResponse.() -> T): T =
+        authedAt(null, call, decode)
+
+    /** [authed], logging in to [target] rather than to whatever is configured by then. */
+    private suspend fun <T> authedAt(
+        target: GatewayTarget?,
+        call: suspend () -> HttpResponse,
+        decode: suspend HttpResponse.() -> T,
+    ): T {
         var response = call()
         if (response.status == HttpStatusCode.Unauthorized) {
-            loginMutex.withLock { doLogin() }
+            loginMutex.withLock { doLogin(target) }
             response = call()
         }
         if (!response.status.isSuccess()) {
@@ -243,10 +260,13 @@ class DashboardApi internal constructor(
      * emits unrelated events on the same socket throughout, so replies are
      * matched by request id rather than by arrival order.
      */
-    private suspend fun <T> rpcSession(block: suspend (RpcSession) -> T): T {
+    private suspend fun <T> rpcSession(block: suspend (RpcSession) -> T): T = rpcSessionAt(currentTarget(), block)
+
+    private suspend fun <T> rpcSessionAt(target: GatewayTarget, block: suspend (RpcSession) -> T): T {
         val transport = openSocket(
             "The dashboard did not issue a WebSocket ticket, so projects cannot be " +
                 "reached. Sign in to the dashboard, or check that it runs with auth enabled.",
+            target,
         )
         return try {
             block(RpcSession(transport, json))
@@ -268,15 +288,15 @@ class DashboardApi internal constructor(
      * than cached. [noTicket] is what to say when there was none, since that is
      * the fixable part of a failed handshake.
      */
-    private suspend fun openSocket(noTicket: String): FrameTransport {
-        socketOpener?.let { return it() }
-        val ticket = wsTicket()
-        val target = buildString {
-            append(url("/api/ws").replaceFirst("http", "ws"))
+    private suspend fun openSocket(noTicket: String, target: GatewayTarget): FrameTransport {
+        socketOpener?.let { return it(target.baseUrl) }
+        val ticket = wsTicket(target)
+        val address = buildString {
+            append(url("/api/ws", target.baseUrl).replaceFirst("http", "ws"))
             ticket?.let { append("?ticket=").append(it) }
         }
         val session = try {
-            client.webSocketSession(target)
+            client.webSocketSession(address)
         } catch (cause: Exception) {
             if (ticket == null) throw DashboardAuthException(noTicket)
             throw cause
@@ -291,8 +311,8 @@ class DashboardApi internal constructor(
      * dashboard authenticates the socket with its own process token instead,
      * which no external client is given.
      */
-    private suspend fun wsTicket(): String? = runCatching {
-        authed({ client.post(url("/api/auth/ws-ticket")) }) { body<WsTicketResponse>().ticket }
+    private suspend fun wsTicket(target: GatewayTarget): String? = runCatching {
+        authedAt(target, { client.post(url("/api/auth/ws-ticket", target.baseUrl)) }) { body<WsTicketResponse>().ticket }
     }.getOrNull()?.takeIf { it.isNotBlank() }
 
     suspend fun projects(): ProjectsPayload =
@@ -384,19 +404,21 @@ class DashboardApi internal constructor(
         }
 
     /**
-     * Whether the gateway still holds live session [liveId]; null when it could
-     * not tell.
+     * Whether the gateway at [target] still holds live session [liveId]; null
+     * when it could not tell.
      *
      * Read from the process's live list, which attaches to nothing. A resume
      * would reattach the session, and a session a client holds is never let go
      * — each look would restart the wait for it to end. The list includes a
      * session no client holds that has not been reaped yet: that one can still
-     * be resumed, so it still counts.
+     * be resumed, so it still counts. Asked of [target] only, whatever the
+     * settings say by the time the answer comes. With [sessionKey], a listing
+     * counts only if it belongs to that stored session.
      */
-    suspend fun liveSessionOpen(liveId: String): Boolean? {
+    internal suspend fun liveSessionOpen(liveId: String, target: GatewayTarget, sessionKey: String? = null): Boolean? {
         val result = try {
             withTimeoutOrNull(setupTimeoutMillis) {
-                rpcSession { it.callRaw("session.active_list", buildJsonObject { }) }
+                rpcSessionAt(target) { it.callRaw("session.active_list", buildJsonObject { }) }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -404,7 +426,11 @@ class DashboardApi internal constructor(
             null
         } ?: return null
         val rows = (result as? JsonObject)?.get("sessions") as? JsonArray ?: return null
-        return rows.any { ((it as? JsonObject)?.get("id") as? JsonPrimitive)?.content == liveId }
+        return rows.any { row ->
+            val fields = row as? JsonObject
+            (fields?.get("id") as? JsonPrimitive)?.content == liveId &&
+                (sessionKey == null || (fields?.get("session_key") as? JsonPrimitive)?.content == sessionKey)
+        }
     }
 
     /**
@@ -417,7 +443,7 @@ class DashboardApi internal constructor(
      * answers with a different id than it was given — passing the stored id
      * onward is how `session.compress` earned a "session not found".
      */
-    suspend fun startSocketRun(
+    internal suspend fun startSocketRun(
         storedSessionId: String?,
         text: String,
         images: List<String> = emptyList(),
@@ -438,14 +464,23 @@ class DashboardApi internal constructor(
         onCleanup: (Cleanup) -> Unit = {},
         /** A live session this turn must not run on; see [prepareSocketTurn]. */
         heldLiveId: String? = null,
+        /** The dashboard this turn runs against, fixed by the caller; the configured one when absent. */
+        target: GatewayTarget? = null,
+        /**
+         * The stored id of a conversation this turn created, the moment the
+         * gateway names it — before anything after the creation can fail.
+         */
+        onCreated: (String) -> Unit = {},
     ): SocketRun {
+        val pinned = target ?: currentTarget()
         val transport = openSocket(
             "The dashboard did not issue a WebSocket ticket, so the conversation cannot run over it.",
+            pinned,
         )
         val rpc = RpcSession(transport, json)
         // Holds the turn's gateway resources from the start, so a failure at any
         // step below still closes what was opened and restores what was changed.
-        val live = LiveTurn(transport, rpc, cleanupTimeoutMillis)
+        val live = LiveTurn(transport, rpc, cleanupTimeoutMillis, pinned.identity)
         try {
             // Every setup request is bounded. A setup that hangs would hold the
             // turn open with nothing to stop, so no answer in time is a failure —
@@ -460,7 +495,10 @@ class DashboardApi internal constructor(
                 runtime = runtime,
                 voice = voice,
                 onLive = { live.liveId = it },
-                onStored = { live.storedId = it },
+                onStored = { storedId, created ->
+                    live.storedId = storedId
+                    if (created) onCreated(storedId)
+                },
                 onRestorePlan = { live.restoreReasoning = it },
                 heldLiveId = heldLiveId,
             )
@@ -550,6 +588,37 @@ class GatewayRpcException(val code: Int, override val message: String) : Excepti
 
 /** The bound on each cleanup send and each wait for its answer. */
 internal const val CLOSE_TIMEOUT_MILLIS = 3_000L
+
+/**
+ * A dashboard as one piece of work found it: its address, and the credentials
+ * for it. Held in memory for that work only; [identity] is what is recorded.
+ */
+internal class GatewayTarget(val baseUrl: String, val credentials: Pair<String, String>) {
+    val identity: String get() = gatewayIdentity(baseUrl)
+}
+
+/**
+ * Which gateway a dashboard address reaches, for keeping records apart by
+ * server. Nothing secret: credentials in the address, its query and its
+ * fragment are left out. Scheme and host are case-insensitive and a default
+ * port is the same as none; the path is kept as written.
+ */
+internal fun gatewayIdentity(baseUrl: String): String {
+    val trimmed = baseUrl.trim()
+    val uri = runCatching { java.net.URI(trimmed) }.getOrNull()
+    val scheme = uri?.scheme?.lowercase()
+    val host = uri?.host?.lowercase()
+    if (uri == null || scheme == null || host == null) {
+        return trimmed.substringBefore('#').substringBefore('?').substringAfterLast('@').trimEnd('/')
+    }
+    val port = when {
+        uri.port == -1 -> ""
+        scheme == "http" && uri.port == 80 -> ""
+        scheme == "https" && uri.port == 443 -> ""
+        else -> ":${uri.port}"
+    }
+    return "$scheme://$host$port${uri.rawPath.orEmpty().trimEnd('/')}"
+}
 
 /**
  * The bound on each setup request. Generous: a model switch builds an agent,

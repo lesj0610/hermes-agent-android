@@ -1249,6 +1249,8 @@ private fun heldText(held: HeldConversation): String = stringResource(
         held.awaitingAnswer -> R.string.held_awaiting
         held.check == HoldCheck.StillOpen -> R.string.held_still_open
         held.check == HoldCheck.Unreachable -> R.string.held_check_failed
+        held.check == HoldCheck.OtherServer -> R.string.held_other_server
+        held.check == HoldCheck.UnknownServer -> R.string.held_unknown_server
         else -> R.string.held_until_released
     },
 )

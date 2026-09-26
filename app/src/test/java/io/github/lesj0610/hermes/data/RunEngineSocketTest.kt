@@ -41,11 +41,23 @@ class RunEngineSocketTest {
     private val gateway = FakeGateway().apply {
         stored["s1"] = FakeGateway.Runtime("Qwen", endpointOf("custom"), "xhigh", identityOf(endpointOf("custom")))
     }
+
+    /** A second gateway, for a dashboard setting changed to point elsewhere. */
+    private val other = FakeGateway()
+
+    /** The dashboard address the settings hold right now. */
+    private var dashboardUrl = GATEWAY_A
     private val scopes = mutableListOf<CoroutineScope>()
+
+    private fun gatewayAt(base: String) = when (base) {
+        GATEWAY_A -> gateway
+        GATEWAY_B -> other
+        else -> error("no gateway at $base")
+    }
 
     private fun engine(scope: CoroutineScope, holdStore: HoldStore): RunEngine {
         val dashboard = DashboardApi(
-            { "http://dashboard.invalid" }, { "u" to "p" }, { gateway.open() }, CLEANUP_TIMEOUT, SETUP_TIMEOUT,
+            { dashboardUrl }, { "u" to "p" }, { base -> gatewayAt(base).open() }, CLEANUP_TIMEOUT, SETUP_TIMEOUT,
         )
         // The HTTP route is never meant to be reached here. Failing before any
         // I/O keeps reopening a session inside virtual time: waiting on a real
@@ -380,7 +392,7 @@ class RunEngineSocketTest {
         val store = HoldStore.InMemory()
         val first = opened(store)
         spokenTurnWithDelayedRestore(first, dropSocket = true)
-        assertEquals(mapOf("s1" to "live-1"), store.load())
+        assertEquals(listOf(StoredHold(GATEWAY_A, "s1", "live-1")), store.load())
         scopes.forEach { it.cancel() }
 
         // The app starts again: the conversation is still held.
@@ -394,6 +406,168 @@ class RunEngineSocketTest {
         runCurrent()
         assertNull(again.state.value.held)
         assertTrue(store.load().isEmpty())
+    }
+
+    // ── a new conversation ───────────────────────────────────────────────
+
+    @Test
+    fun `a new conversation's first turn creates it, and the next resumes it`() = engineTest {
+        val engine = opened()
+        engine.openSession(null)
+        engine.send("첫 번째", null, null, "xhigh")!!
+        runCurrent()
+        assertEquals("new-1", engine.state.value.sessionId)
+
+        engine.send("두 번째", null, null, "xhigh")!!
+        runCurrent()
+        assertEquals(
+            listOf("session.create", "session.resume"),
+            gateway.methods().filter { it == "session.create" || it == "session.resume" },
+        )
+        assertEquals("new-1", (gateway.calls.single { it.method == "session.resume" }.params["session_id"] as JsonPrimitive).content)
+        assertEquals("live-1", gateway.calls.last { it.method == "prompt.submit" }.params.let { (it["session_id"] as JsonPrimitive).content })
+    }
+
+    @Test
+    fun `a created conversation whose setting goes unanswered is held on the screen it was made on`() = engineTest {
+        val engine = opened()
+        engine.openSession(null)
+        gateway.hold["config.set:reasoning"] = 1
+        engine.send("첫 번째", null, null, "low")!!
+        runCurrent()
+        // Handed over the moment it was created, before the setting failed.
+        assertEquals("new-1", engine.state.value.sessionId)
+
+        advanceTimeBy(SETUP_TIMEOUT + 1)
+        runCurrent()
+        val held = engine.state.value.held!!
+        assertEquals("live-1", held.liveId)
+        assertTrue(held.awaitingAnswer)
+        val before = acting().size
+        assertNull(engine.send("두 번째", null, null, "low"))
+        runCurrent()
+        assertEquals(before, acting().size)
+    }
+
+    @Test
+    fun `a created conversation's late restore holds the screen it was made on`() = engineTest {
+        val engine = opened()
+        engine.openSession(null)
+        gateway.script = FakeGateway.Script.Hold
+        engine.send("첫 번째", null, null, "none", voice = spoken)!!
+        runCurrent()
+        assertEquals("new-1", engine.state.value.sessionId)
+        gateway.delayApply["config.set:reasoning"] = 1
+        completeLatest()
+        runCurrent()
+        advanceTimeBy(CLEANUP_TIMEOUT * 3)
+        runCurrent()
+        assertTrue(engine.state.value.held!!.awaitingAnswer)
+        assertNull(engine.send("두 번째", null, null, "low"))
+    }
+
+    @Test
+    fun `a creation answered after the user moved on leaves the new screen alone`() = engineTest {
+        val engine = opened()
+        engine.openSession(null)
+        gateway.hold["session.create"] = 1
+        engine.send("첫 번째", null, null, "xhigh")!!
+        runCurrent()
+        engine.openSession("s1")
+        runCurrent()
+        gateway.releaseHeld()
+        runCurrent()
+        val state = engine.state.value
+        assertEquals("s1", state.sessionId)
+        assertNull(state.held)
+        assertTrue(state.items.none { it is TranscriptItem.UserText })
+    }
+
+    @Test
+    fun `a stored id is handed only to the conversation that was open when its turn was sent`() = engineTest {
+        // Conversations are counted as they open: s1 was the first, then two new ones.
+        val engine = opened()
+        engine.openSession(null)
+        engine.openSession(null)
+        engine.adopt(conversation = 2, gateway = GATEWAY_A, storedId = "new-9")
+        assertNull(engine.state.value.sessionId)
+        engine.adopt(conversation = 3, gateway = GATEWAY_A, storedId = "new-9")
+        assertEquals("new-9", engine.state.value.sessionId)
+        // Never over an id it already has.
+        engine.adopt(conversation = 3, gateway = GATEWAY_A, storedId = "new-10")
+        assertEquals("new-9", engine.state.value.sessionId)
+    }
+
+    // ── holds and gateways ───────────────────────────────────────────────
+
+    @Test
+    fun `a hold on one gateway survives switching to another and back, across a restart`() = engineTest {
+        val store = HoldStore.InMemory()
+        val engine = opened(store)
+        spokenTurnWithDelayedRestore(engine, dropSocket = true)
+
+        // The dashboard now points at another gateway, which never had that live session.
+        dashboardUrl = GATEWAY_B
+        engine.recheckHold()
+        advanceTimeBy(30 * 60 * 1_000L)
+        runCurrent()
+        assertEquals(HoldCheck.OtherServer, engine.state.value.held!!.check)
+        assertTrue(other.calls.isEmpty())
+        assertEquals(listOf(StoredHold(GATEWAY_A, "s1", "live-1")), store.load())
+
+        // Back to the first gateway, and the app starts again: still held, still listed there.
+        dashboardUrl = GATEWAY_A
+        scopes.forEach { it.cancel() }
+        val again = opened(store)
+        runCurrent()
+        assertEquals(HoldCheck.StillOpen, again.state.value.held!!.check)
+        assertNull(again.send("두 번째", null, null, "low"))
+
+        // Its own gateway letting the session go is what releases it.
+        gateway.reap()
+        again.recheckHold()
+        runCurrent()
+        assertNull(again.state.value.held)
+        assertTrue(store.load().isEmpty())
+    }
+
+    @Test
+    fun `a change of server during a look does not release the hold`() = engineTest {
+        val engine = opened()
+        spokenTurnWithDelayedRestore(engine, dropSocket = true)
+        gateway.hold["session.active_list"] = 1
+        engine.recheckHold()
+        runCurrent()
+        // The look is out, waiting on the first gateway, when the settings change.
+        dashboardUrl = GATEWAY_B
+        gateway.releaseHeld()
+        runCurrent()
+        assertEquals(HoldCheck.StillOpen, engine.state.value.held!!.check)
+        assertTrue(other.calls.isEmpty())
+    }
+
+    @Test
+    fun `a hold recorded without its server is kept until found there, then released there`() = engineTest {
+        val store = HoldStore.InMemory(listOf(StoredHold(null, "s1", "live-1")))
+        val engine = opened(store)
+        runCurrent()
+        // Not on this gateway's list: no proof, since it may be another gateway's.
+        assertEquals(HoldCheck.UnknownServer, engine.state.value.held!!.check)
+        assertNull(engine.send("두 번째", null, null, "low"))
+        runCurrent()
+        assertEquals(listOf(StoredHold(null, "s1", "live-1")), store.load())
+
+        // Found on this gateway, for this conversation: this gateway's from now on.
+        gateway.openLive("s1")
+        engine.recheckHold()
+        runCurrent()
+        assertEquals(listOf(StoredHold(GATEWAY_A, "s1", "live-1")), store.load())
+        assertEquals(HoldCheck.StillOpen, engine.state.value.held!!.check)
+
+        gateway.reap()
+        engine.recheckHold()
+        runCurrent()
+        assertNull(engine.state.value.held)
     }
 
     // ── stopping and switching ───────────────────────────────────────────
@@ -499,5 +673,7 @@ class RunEngineSocketTest {
     private companion object {
         const val CLEANUP_TIMEOUT = 1_000L
         const val SETUP_TIMEOUT = 30_000L
+        const val GATEWAY_A = "http://gw-a.invalid"
+        const val GATEWAY_B = "http://gw-b.invalid"
     }
 }

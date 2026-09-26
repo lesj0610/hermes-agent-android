@@ -269,9 +269,10 @@ internal class FakeGateway {
                 stored[storedId] = runtime
                 val liveId = "live-${++nextLive}"
                 live[liveId] = Live(storedId, runtime.copyOf(), built = false)
-                // As the gateway does: the pick is echoed back before any build.
+                // As the gateway does: the stored id named, the pick echoed back before any build.
                 reply(buildJsonObject {
                     put("session_id", liveId)
+                    put("stored_session_id", storedId)
                     put("info", buildJsonObject {
                         put("model", runtime.model)
                         if (provider.isNotEmpty()) put("provider", provider)

@@ -165,6 +165,8 @@
     <string name="held_until_released">On hold: a setting an earlier turn sent was never answered, and could still take effect over the next turn’s. This conversation reopens once its active session on the gateway has ended.</string>
     <string name="held_still_open">On hold: the gateway still has this conversation’s active session open — perhaps another device has the conversation open. Close it there; the app keeps checking.</string>
     <string name="held_check_failed">On hold: couldn’t reach the gateway to check whether this conversation’s active session has ended. The app keeps trying.</string>
+    <string name="held_other_server">On hold on another server: this conversation was held while a different dashboard was configured. Only that server can release it, and it is checked when that server is configured again.</string>
+    <string name="held_unknown_server">On hold: an earlier version recorded this hold without its server. It is released only after this conversation’s active session is found on the configured server and has then ended there.</string>
     <string name="held_check">Check again</string>
     <string name="error_dismiss">Dismiss</string>
 

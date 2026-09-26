@@ -42,6 +42,8 @@ data class CleanupReport(
 /** A turn given back: what its cleanup achieved, and what it leaves the next turn to wait on. */
 class Cleanup internal constructor(
     val report: CleanupReport,
+    /** The gateway the turn ran against: its identity, nothing secret. */
+    val gateway: String,
     /** The live session the turn ran on, when the gateway named one. */
     val liveId: String?,
     /** The stored conversation that live session belongs to, when known. */
@@ -94,6 +96,8 @@ internal class LiveTurn(
     private val transport: FrameTransport,
     private val rpc: RpcSession,
     private val timeoutMillis: Long,
+    /** The identity of the gateway [transport] reaches. */
+    private val gateway: String,
 ) {
     @Volatile
     var liveId: String? = null
@@ -128,7 +132,7 @@ internal class LiveTurn(
                 val unsettled = live != null && rpc.awaiting(SESSION_CHANGES)
                 val keep = unsettled && transport.isOpen
                 if (!keep) closeTransport()
-                Cleanup(CleanupReport(restore, unsettled), live, storedId, if (keep) this@LiveTurn else null)
+                Cleanup(CleanupReport(restore, unsettled), gateway, live, storedId, if (keep) this@LiveTurn else null)
                     .also { cleanup = it }
             }
         }

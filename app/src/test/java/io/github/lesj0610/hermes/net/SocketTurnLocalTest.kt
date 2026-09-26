@@ -221,6 +221,7 @@ class SocketTurnLocalTest {
         val before = currentTime
         val cleanup = run.close()
         assertEquals(CleanupReport(StepOutcome.TimedOut, unsettled = true), cleanup.report)
+        assertEquals("http://dashboard.invalid", cleanup.gateway)
         assertEquals("live-1", cleanup.liveId)
         assertEquals("s1", cleanup.storedId)
         assertTrue(currentTime - before <= CLEANUP_TIMEOUT * 2)
@@ -332,6 +333,47 @@ class SocketTurnLocalTest {
         assertEquals(listOf("session.resume"), gateway.methods())
         assertTrue(gateway.connections.single().closed)
         assertEquals("xhigh", gateway.liveRuntime("live-1")!!.reasoning)
+    }
+
+    @Test
+    fun `a created conversation's stored id is handed over before anything after the creation can fail`() = runTest {
+        val created = mutableListOf<String>()
+        gateway.refuseNext("config.set:reasoning", "unknown reasoning value")
+        try {
+            api().startSocketRun(
+                null, "안녕", emptyList(), TurnRuntime(reasoning = "low"), null,
+                onCleanup = { cleanups += it }, onCreated = { created += it },
+            )
+            fail("expected the refusal")
+        } catch (expected: GatewayRpcException) {
+        }
+        assertEquals(listOf("new-1"), created)
+        assertEquals("new-1", cleanups.single().storedId)
+        assertEquals(listOf("session.create", "config.set:reasoning"), gateway.methods())
+    }
+
+    @Test
+    fun `a look at the live list goes to the gateway it was fixed to, whatever is configured`() = runTest {
+        val first = FakeGateway().apply { stored["s1"] = FakeGateway.Runtime("Qwen", "", "xhigh", "anthropic") }
+        val second = FakeGateway()
+        val live = first.openLive("s1")
+        // Configured now: the second gateway. The look was fixed to the first.
+        val api = DashboardApi(
+            { "http://gw-b.invalid" }, { "u" to "p" },
+            { base -> if (base == "http://gw-a.invalid") first.open() else second.open() },
+            CLEANUP_TIMEOUT, SETUP_TIMEOUT,
+        )
+        assertEquals(true, api.liveSessionOpen(live, GatewayTarget("http://gw-a.invalid", "u" to "p")))
+        assertEquals(listOf("session.active_list"), first.methods())
+        assertTrue(second.calls.isEmpty())
+    }
+
+    @Test
+    fun `a gateway's identity carries nothing secret and folds only what cannot change the server`() {
+        assertEquals("https://dash.example:8443/hermes", gatewayIdentity("HTTPS://user:pass@Dash.Example:8443/hermes/?token=x#y"))
+        assertEquals(gatewayIdentity("http://host/"), gatewayIdentity("http://host:80"))
+        assertFalse(gatewayIdentity("http://host/A") == gatewayIdentity("http://host/a"))
+        assertFalse(gatewayIdentity("http://host:9119") == gatewayIdentity("http://host:9120"))
     }
 
     // ── custom endpoints: the pick is sent every turn ─────────────────────

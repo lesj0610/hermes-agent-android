@@ -151,6 +151,8 @@
     <string name="held_until_released">보류 중: 이전 턴이 보낸 설정의 답을 받지 못해 다음 턴 설정 위에 뒤늦게 적용될 수 있습니다. 게이트웨이에서 이 대화의 활성 세션이 끝나면 다시 열립니다.</string>
     <string name="held_still_open">보류 중: 게이트웨이가 이 대화의 활성 세션을 아직 열어 두고 있습니다. 다른 기기에서 이 대화를 열어 두었다면 닫아 주세요. 앱이 계속 확인합니다.</string>
     <string name="held_check_failed">보류 중: 이 대화의 활성 세션이 끝났는지 게이트웨이에 확인하지 못했습니다. 앱이 계속 시도합니다.</string>
+    <string name="held_other_server">다른 서버에서 보류됨: 이 대화는 다른 대시보드가 설정되어 있을 때 보류되었습니다. 그 서버만 풀 수 있으며, 그 서버를 다시 설정하면 확인합니다.</string>
+    <string name="held_unknown_server">보류 중: 이전 버전이 서버 정보 없이 기록한 보류입니다. 설정된 서버에서 이 대화의 활성 세션을 찾은 뒤, 그 세션이 거기서 끝나야 풀립니다.</string>
     <string name="held_check">다시 확인</string>
     <string name="error_dismiss">닫기</string>
 

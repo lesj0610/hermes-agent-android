@@ -194,6 +194,19 @@ enum class HoldCheck {
 
     /** The gateway could not be asked. */
     Unreachable,
+
+    /**
+     * The hold is on another gateway than the one configured now. Only that
+     * gateway can release it, and it is not asked until it is configured again.
+     */
+    OtherServer,
+
+    /**
+     * An earlier version recorded the hold without its gateway. Not finding
+     * the session on the configured one proves nothing; finding it there says
+     * which gateway it is on, and from then on it is looked for there.
+     */
+    UnknownServer,
 }
 
 /**

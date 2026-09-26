@@ -12,38 +12,47 @@ title: Hermes Agent 개인정보 처리방침 · Privacy Policy
 
 시행일: 2026년 9월 26일
 
-Hermes Agent(이하 "앱")는 에스제이상사(SJ Trading, 이하 "회사")가 엘피스SJ(ElpisSJ)라는 이름으로 개발·배포하는 안드로이드 앱으로, 이용자가 직접 지정한 Hermes 게이트웨이 서버에 접속하는 클라이언트입니다. 회사는 「개인정보 보호법」 제30조에 따라 앱이 다루는 정보와 그 처리 방식을 다음과 같이 알립니다.
+Hermes Agent(이하 "앱")는 에스제이상사(SJ Trading, 이하 "회사")가 엘피스SJ(ElpisSJ)라는 이름으로 개발·배포하는 안드로이드 앱으로, 이용자가 직접 지정한 Hermes 게이트웨이 서버에 접속하는 클라이언트입니다. 회사는 「개인정보 보호법」 제30조에 따라 앱과 문의 창구에서 다루는 정보와 그 처리 방식을 다음과 같이 알립니다.
 
 ### 1. 요약
 
-- 회사는 이용자의 개인정보를 수집하지 않습니다. 회사가 운영하는 서버가 없고, 앱에는 분석·광고·오류 보고 도구가 없습니다.
-- 앱이 다루는 정보는 이용자의 기기 안에 저장되거나, 이용자가 지정한 서버로만 전송됩니다.
-- 음성은 기기 안에서 글로 바뀝니다. 앱은 음성을 녹음·저장·전송하지 않습니다.
+- 회사는 앱을 통해 이용자의 개인정보를 수집하지 않습니다. 회사가 운영하는 서버가 없고, 앱에는 광고·분석·오류 보고 도구가 없습니다.
+- 대화 데이터는 이용자가 지정한 서버로 전송됩니다. 음성 기능과 GitHub판의 업데이트 확인은 9절에 적은 외부 서비스와 통신할 수 있습니다. 회사로 전송되는 정보는 없습니다.
+- 앱은 음성 파일을 직접 녹음·저장하지 않으며 회사로 보내지도 않습니다. 음성 인식이 어디에서 이뤄지는지는 4절에 적었습니다.
+- 이용자가 이메일로 문의하면 회사는 답변에 필요한 범위에서 이메일 주소와 문의 내용을 처리하고, 답변을 마치면 바로 삭제합니다.
 
 ### 2. 처리하는 개인정보의 항목과 처리 목적
 
-회사가 수집·처리하는 개인정보는 없습니다. 앱은 기능을 제공하기 위해 아래 정보를 이용자 기기의 앱 전용 저장 공간에만 저장하며, 이 정보는 회사에 전송되지 않습니다.
+**회사가 처리하는 개인정보.** 회사는 앱을 통해 개인정보를 수집하지 않으며, 이용자가 이메일로 문의한 경우에만 아래 정보를 처리합니다.
+
+| 항목 | 목적 |
+|---|---|
+| 보낸 사람의 이메일 주소, 문의 내용(이름 등 이용자가 메일에 적은 정보 포함) | 문의 확인과 답변 |
+
+**앱이 기기에만 저장하는 정보.** 앱은 기능을 제공하기 위해 아래 정보를 이용자 기기의 앱 전용 저장 공간에 저장하며, 이 정보는 회사에 전송되지 않습니다.
 
 | 항목 | 목적 |
 |---|---|
 | 게이트웨이 주소, API 토큰(암호화 저장) | 이용자의 서버 접속 |
 | 대시보드 주소, 사용자 이름, 비밀번호(암호화 저장) | 이용자의 대시보드 로그인 |
-| 모델, 추론 수준, 언어, 화면 배치, 음성 설정 | 이용자가 고른 설정 유지 |
+| 모델, 추론 수준, 언어, 화면 배치, 음성 설정, 업데이트 설정 | 이용자가 고른 설정 유지 |
 | 보류 중인 대화의 식별자 | 서버가 설정 변경을 확인할 때까지 그 대화를 멈춰 두기 |
 | 임시 파일(카메라로 찍은 사진, GitHub판의 업데이트 파일) | 사진 첨부, 업데이트 설치 |
 
 ### 3. 이용자가 지정한 서버로 보내는 정보
 
-앱은 이용자가 입력한 메시지, 첨부한 이미지, 음성 인식으로 만든 글, 모델·추론 수준 같은 대화 설정, 대화 시작·중단 같은 조작을 이용자가 설정한 Hermes 게이트웨이와 대시보드로만 보냅니다. 이 서버는 이용자 본인이나 이용자가 고른 운영자가 운영하며, 서버에 저장되는 대화와 그 처리는 해당 서버 운영자의 책임입니다. 회사는 이 정보를 받거나 볼 수 없습니다.
+앱은 이용자가 입력한 메시지, 첨부한 이미지, 음성 인식으로 만든 글, 모델·추론 수준 같은 대화 설정, 대화 시작·중단 같은 조작, 그리고 접속에 필요한 API 토큰과 대시보드 로그인 정보를 이용자가 설정한 Hermes 게이트웨이와 대시보드로만 보냅니다. 이 서버는 이용자 본인이나 이용자가 고른 운영자가 운영하며, 서버에 저장되는 대화와 그 처리는 해당 서버 운영자의 책임입니다. 회사는 이 정보를 받거나 볼 수 없습니다.
 
 ### 4. 마이크와 음성
 
-- 음성 입력: 앱은 이용자가 음성 입력이나 음성 대화를 시작했을 때만 마이크를 씁니다. 음성은 기기에 설치된 음성 인식 서비스가 글로 바꾸며, 앱은 어느 인식기에든 오프라인 인식만 요청합니다. 앱은 음성을 녹음하거나 저장하거나 전송하지 않습니다. 음성 인식 서비스는 기기 제조사나 Google 등이 제공하는 시스템 구성요소로, 각 제공자의 방침이 적용됩니다.
-- 음성 출력: 답변을 소리로 읽을 때 답변 글을 기기의 음성 합성 엔진에 넘깁니다. 일부 엔진은 네트워크를 통해 음성을 합성할 수 있으며, 이 경우 해당 엔진 제공자의 방침이 적용됩니다.
+- 음성 입력: 앱은 이용자가 음성 입력을 누르거나 음성 대화를 켜 둔 동안에만 기기의 음성 인식 서비스에 인식을 요청하고, 이 서비스가 마이크로 음성을 받아 글로 바꿉니다. 앱은 음성 파일을 직접 녹음·저장하지 않으며 회사로 보내지도 않습니다. 설정에서 기기 기본값을 고르고 그 언어의 기기 내 인식 데이터가 설치되어 있으면 기기 내 전용 인식기를 쓰며, 이때 인식은 기기 안에서 이뤄집니다. 그 밖의 음성 인식 서비스(기기 기본 인식기나 이용자가 고른 인식기)에는 오프라인 처리를 요청하지만, 실제로 네트워크를 쓰는지는 해당 서비스에 따라 달라질 수 있습니다.
+- 음성 출력: 답변을 소리로 읽을 때 답변 글을 기기의 음성 합성 엔진에 넘깁니다. 일부 엔진은 네트워크를 통해 음성을 합성할 수 있습니다.
+- 음성 인식 서비스와 음성 합성 엔진은 기기 제조사나 Google 등이 제공하며, 각 제공자의 방침이 적용됩니다(9절).
 
 ### 5. 처리 및 보유 기간
 
-회사가 보유하는 개인정보는 없습니다. 기기에 저장된 정보는 이용자가 앱에서 지우거나, 안드로이드 설정에서 앱 데이터를 삭제하거나, 앱을 삭제할 때까지 보관됩니다. 임시 파일은 앱의 캐시 공간에 저장되며, 안드로이드가 저장 공간을 확보할 때나 앱 데이터 삭제·앱 삭제 시 지워집니다.
+- 문의 메일: 답변을 마치면 바로 삭제합니다.
+- 앱이 기기에 저장한 정보: 이용자가 앱에서 지우거나, 안드로이드 설정에서 앱 데이터를 삭제하거나, 앱을 삭제할 때까지 기기에 남습니다. 임시 파일은 앱의 캐시 공간에 저장되며, 안드로이드가 저장 공간을 확보할 때나 앱 데이터 삭제·앱 삭제 시 지워집니다.
 
 ### 6. 개인정보의 제3자 제공
 
@@ -51,38 +60,51 @@ Hermes Agent(이하 "앱")는 에스제이상사(SJ Trading, 이하 "회사")가
 
 ### 7. 개인정보 처리의 위탁
 
-회사는 개인정보 처리를 위탁하지 않습니다.
+회사는 개인정보 처리 업무를 위탁하지 않습니다. 다만 문의 메일은 회사가 쓰는 Gmail(Google LLC)에 보관되며, 이에 관해서는 9절에 적었습니다.
 
 ### 8. 민감정보·고유식별정보·가명정보
 
 회사는 민감정보, 고유식별정보, 가명정보를 처리하지 않습니다.
 
-### 9. 외부 서비스 접속과 국외 이전
+### 9. 외부 서비스와 국외 이전
 
-회사가 국외로 이전하는 개인정보는 없습니다. 다만 GitHub에서 내려받아 설치한 앱(GitHub판)은 새 버전을 확인하고 내려받기 위해 GitHub(미국, GitHub, Inc.)에 접속하며, 이때 기기의 IP 주소 등 접속 정보가 GitHub에 전달될 수 있습니다. 이 정보에는 GitHub의 개인정보 처리방침이 적용됩니다. Google Play에서 설치한 앱에는 이 기능이 없으며, 업데이트는 Google Play가 처리합니다.
+아래 서비스는 회사가 아닌 각 제공자가 운영하며, 각 제공자의 개인정보 처리방침이 적용됩니다.
+
+| 서비스 | 전달될 수 있는 정보 | 전달되는 때 |
+|---|---|---|
+| 기기의 음성 인식 서비스 | 마이크로 받은 음성 | 음성 입력·음성 대화 중 |
+| 기기의 음성 합성 엔진 | 읽어 줄 답변 글 | 답변을 소리로 읽을 때 |
+| GitHub(GitHub, Inc., 미국), GitHub판만 해당 | 기기의 IP 주소 등 접속 정보 | 앱을 열 때(설정에서 끌 수 있음), 업데이트 확인을 누를 때, 이용자가 고른 업데이트를 내려받을 때 |
+| Gmail(Google LLC, 미국) | 문의 메일(이메일 주소, 문의 내용) | 이용자가 문의 메일을 보낼 때 |
+
+- 음성 인식·합성 서비스가 네트워크를 쓰면 해당 제공자의 서버로 정보가 전달될 수 있고, 그 서버는 국외에 있을 수 있습니다. Google이 제공하는 서비스에는 [Google 개인정보처리방침](https://policies.google.com/privacy?hl=ko)이 적용됩니다.
+- GitHub에는 [GitHub 개인정보 처리방침](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement)이 적용됩니다. Google Play에서 설치한 앱에는 이 기능이 없으며, 업데이트는 Google Play가 처리합니다.
+- 문의 메일은 Google의 메일 서비스에 보관되므로 Google 데이터센터가 있는 국외(미국 등)에 저장될 수 있으며, 5절에 적은 대로 답변을 마치면 바로 삭제합니다. [Google 개인정보처리방침](https://policies.google.com/privacy?hl=ko)이 적용됩니다.
 
 ### 10. 개인정보의 파기
 
-회사가 보유하는 개인정보가 없어 파기할 대상이 없습니다. 기기에 저장된 정보는 앱 데이터를 삭제하거나 앱을 삭제하면 즉시 지워집니다. 앱 데이터는 클라우드 백업과 기기 간 이전에서 제외되어 백업되거나 새 기기로 옮겨지지 않습니다.
+- 문의 메일: 답변을 마치면 Gmail에서 삭제하고 휴지통까지 비웁니다.
+- 앱 데이터: 안드로이드 설정에서 앱 데이터를 삭제하거나 앱을 삭제하면 기기의 앱 전용 데이터가 삭제됩니다. 앱 데이터는 클라우드 백업과 기기 간 이전에서 제외되어 백업되거나 새 기기로 옮겨지지 않습니다.
+- 앱을 삭제해도 이용자가 지정한 서버에 저장된 대화나 음성 인식·합성 서비스가 보관하는 데이터는 지워지지 않습니다. 이런 데이터의 삭제는 해당 서버 운영자나 서비스 제공자에게 요청해야 합니다.
 
 ### 11. 정보주체와 법정대리인의 권리와 행사 방법
 
-이용자와 법정대리인은 개인정보의 열람, 정정·삭제, 처리정지를 요구할 수 있습니다. 회사는 이용자의 개인정보를 보유하지 않으므로 회사에 요구할 대상 정보가 없습니다. 기기에 저장된 정보는 이용자가 앱 설정에서 직접 고치거나 지울 수 있고, 이용자가 지정한 서버에 저장된 정보는 그 서버 운영자에게 요구해야 합니다. 이 방침에 관한 문의는 아래 개인정보 보호책임자에게 보내 주십시오.
+이용자와 법정대리인은 개인정보의 열람, 정정·삭제, 처리정지를 요구할 수 있습니다. 문의 메일에 관한 요구는 15절의 연락처로 보내 주시면 관계 법령에 따라 처리합니다. 앱이 기기에 저장한 정보는 회사가 보유하지 않으므로, 이용자가 앱 설정에서 직접 고치거나 지울 수 있습니다. 이용자가 지정한 서버에 저장된 정보는 그 서버 운영자에게 요구해야 합니다.
 
 ### 12. 안전성 확보 조치
 
 - API 토큰과 대시보드 비밀번호는 Android Keystore에 보관된 키로 암호화해 저장합니다.
 - 앱 데이터는 클라우드 백업과 기기 간 이전에서 제외합니다.
-- 회사 서버와 분석·광고·오류 보고 도구를 두지 않아 회사 쪽에 정보가 쌓이지 않습니다.
+- 회사 서버와 광고·분석·오류 보고 도구를 두지 않아, 앱을 쓰는 동안 회사 쪽에 정보가 쌓이지 않습니다.
 - 서버 주소가 암호화되지 않은 http:// 주소이면 설정 화면에 그 사실을 표시합니다. 서버에는 https:// 주소나 암호화된 터널(VPN 등)을 통해 접속하기를 권장합니다.
 
 ### 13. 자동 수집 장치의 설치·운영과 거부
 
-앱은 쿠키, 광고 식별자, 분석 도구 같은 개인정보 자동 수집 장치를 사용하지 않습니다.
+앱은 광고 식별자, 분석 도구, 추적 쿠키 같은 광고·분석 목적의 자동 수집 장치를 사용하지 않습니다. 다만 이용자가 지정한 대시보드에 로그인한 상태를 유지하기 위해, 그 대시보드가 발급한 인증 쿠키를 앱이 실행되는 동안 메모리에만 보관하고 그 대시보드에 접속할 때만 보냅니다. 이 쿠키는 기기에 저장되지 않으며 앱이 종료되면 사라집니다. 대시보드를 설정하지 않으면 쿠키도 생기지 않습니다.
 
 ### 14. 아동의 개인정보
 
-앱은 만 14세 미만 아동을 대상으로 하지 않으며, 아동을 포함해 누구의 개인정보도 수집하지 않습니다.
+앱은 만 14세 미만 아동을 대상으로 하지 않으며, 앱을 통해 아동을 포함한 누구의 개인정보도 수집하지 않습니다.
 
 ### 15. 개인정보 보호책임자
 
@@ -102,7 +124,7 @@ Hermes Agent(이하 "앱")는 에스제이상사(SJ Trading, 이하 "회사")가
 
 ### 17. 개인정보 처리방침의 변경
 
-이 방침을 바꾸면 이 페이지에 새 내용과 시행일을 게시합니다. 이전 내용은 앱 저장소의 변경 이력에서 확인할 수 있습니다.
+이 방침을 바꾸면 이 페이지에 새 내용과 시행일을 게시합니다. 이전 내용은 [변경 이력](https://github.com/lesj0610/hermes-agent-android/commits/gh-pages/privacy/index.md)에서 확인할 수 있습니다.
 
 이 방침은 2026년 9월 26일부터 시행합니다.
 
@@ -112,69 +134,99 @@ Hermes Agent(이하 "앱")는 에스제이상사(SJ Trading, 이하 "회사")가
 
 Effective date: September 26, 2026
 
-Hermes Agent ("the app") is an Android app developed and distributed by SJ Trading ("we") under the name ElpisSJ. It is a client for a Hermes gateway server that you choose. This policy explains what information the app handles and how.
+Hermes Agent ("the app") is an Android app developed and distributed by SJ Trading ("we") under the name ElpisSJ. It is a client for a Hermes gateway server that you choose. This policy explains what information the app and our contact address handle, and how.
 
 ### Summary
 
-- We do not collect your personal information. We run no servers, and the app contains no analytics, advertising or crash-reporting tools.
-- Information the app handles stays on your device or goes only to the server you set up.
-- Speech is turned into text on your device. The app does not record, store or send audio.
+- We do not collect your personal information through the app. We run no servers, and the app contains no advertising, analytics or crash-reporting tools.
+- Conversation data goes to the server you choose. Voice features and update checks in the GitHub build may communicate with the outside services listed under "Outside services and international transfers". Nothing is sent to us.
+- The app does not record or store audio files itself, and it does not send audio to us. Where speech recognition takes place is explained under "Microphone and speech".
+- If you email us, we use your email address and message only to answer you, and delete them as soon as we have answered.
 
-### Information stored on your device
+### Personal information we process
 
-We collect and process no personal information. To work, the app keeps the following only in its private storage on your device. None of it is sent to us.
+**What we process.** We collect no personal information through the app. We process the following only when you email us.
+
+| Information | Purpose |
+|---|---|
+| Your email address and message, including anything you write in it such as your name | Reading and answering your inquiry |
+
+**What the app keeps only on your device.** To work, the app keeps the following in its private storage on your device. None of it is sent to us.
 
 | Information | Purpose |
 |---|---|
 | Gateway address, API token (stored encrypted) | Connecting to your server |
 | Dashboard address, user name, password (stored encrypted) | Signing in to your dashboard |
-| Model, reasoning level, language, layout and voice settings | Keeping the settings you chose |
+| Model, reasoning level, language, layout, voice and update settings | Keeping the settings you chose |
 | Identifiers of conversations on hold | Pausing a conversation until your server confirms a settings change |
 | Temporary files (photos taken with the camera, update files in the GitHub build) | Attaching photos, installing updates |
 
 ### Information sent to the server you choose
 
-The app sends the messages you type, the images you attach, the text produced by speech recognition, conversation settings such as the model and reasoning level, and actions such as starting or stopping a conversation, only to the Hermes gateway and dashboard you configure. That server is run by you or by an operator you choose, and what it stores and does is that operator's responsibility. We cannot receive or see this information.
+The app sends the messages you type, the images you attach, the text produced by speech recognition, conversation settings such as the model and reasoning level, actions such as starting or stopping a conversation, and the API token and dashboard sign-in details needed to connect, only to the Hermes gateway and dashboard you configure. That server is run by you or by an operator you choose, and what it stores and does is that operator's responsibility. We cannot receive or see this information.
 
 ### Microphone and speech
 
-- Speech input: the app uses the microphone only when you start dictation or a spoken conversation. The speech recognition service installed on your device turns speech into text, and the app asks every recognizer to work offline only. The app does not record, store or send audio. Speech recognition services are system components provided by your device maker, Google or others, and their own policies apply.
-- Speech output: to read a reply aloud, the app passes its text to your device's text-to-speech engine. Some engines synthesize speech over the network; in that case the engine provider's policy applies.
+- Speech input: the app asks your device's speech recognition service to recognize speech only while you are dictating or have a spoken conversation turned on, and that service takes audio from the microphone and turns it into text. The app does not record or store audio files itself, and it does not send audio to us. If you choose the device default in settings and on-device recognition data for your language is installed, the app uses the device's on-device recognizer, and recognition happens on the device. Other speech recognition services (the device's default recognizer or one you choose) are asked to work offline, but whether they actually use the network depends on the service.
+- Speech output: to read a reply aloud, the app passes its text to your device's text-to-speech engine. Some engines synthesize speech over the network.
+- Speech recognition services and text-to-speech engines are provided by your device maker, Google or others, and their own policies apply (see "Outside services and international transfers").
 
-### Updates (GitHub build only)
+### How long we keep information
 
-If you installed the app from GitHub, it connects to GitHub (GitHub, Inc., United States) to check for and download new versions. GitHub may receive connection information such as your device's IP address, and GitHub's privacy statement applies. The app installed from Google Play does not do this; Google Play handles its updates.
+- Emails you send us: deleted as soon as we have answered.
+- Information the app keeps on your device: stays until you delete it in the app, clear the app's data in Android settings, or uninstall the app. Temporary files live in the app's cache and are removed when Android frees up space or when the app's data is cleared or the app is uninstalled.
 
 ### Sharing and selling
 
-We do not sell, share or disclose personal information, and we do not use it for advertising or tracking. We do not "sell" or "share" personal information as those terms are defined in the California Consumer Privacy Act.
+We do not sell, share or disclose personal information to third parties, and we do not use it for advertising or tracking. We do not "sell" or "share" personal information as those terms are defined in the California Consumer Privacy Act.
 
-### Retention and deletion
+### Service providers
 
-We keep no personal information. Information on your device stays until you delete it in the app, clear the app's data in Android settings, or uninstall the app. Temporary files live in the app's cache and are removed when Android frees up space or when the app's data is cleared or the app is uninstalled. The app's data is excluded from cloud backup and device-to-device transfer.
+We do not hire anyone to process personal information for us. Emails you send us are kept in the Gmail account we use (Google LLC), as described below.
+
+### Outside services and international transfers
+
+The services below are run by their providers, not by us, and their own privacy policies apply.
+
+| Service | Information it may receive | When |
+|---|---|---|
+| Your device's speech recognition service | Audio from the microphone | While dictating or in a spoken conversation |
+| Your device's text-to-speech engine | Reply text to be read aloud | When a reply is read aloud |
+| GitHub (GitHub, Inc., United States), GitHub build only | Connection information such as your device's IP address | When the app opens (can be turned off in settings), when you press check for updates, and when you download an update you chose |
+| Gmail (Google LLC, United States) | Emails you send us (your email address and message) | When you email us |
+
+- When a speech recognition or text-to-speech service uses the network, information may reach that provider's servers, which may be outside your country. Services provided by Google are covered by the [Google Privacy Policy](https://policies.google.com/privacy?hl=en).
+- GitHub is covered by the [GitHub General Privacy Statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement). The app installed from Google Play does not do this; Google Play handles its updates.
+- Emails you send us are kept by Google's mail service and may be stored outside your country, for example in the United States, where Google has data centers. We delete them as soon as we have answered. The [Google Privacy Policy](https://policies.google.com/privacy?hl=en) applies.
+
+### Deleting information
+
+- Emails you send us: we delete them from Gmail as soon as we have answered, and empty the trash.
+- App data: clearing the app's data in Android settings or uninstalling the app deletes the app's private data on your device. The app's data is excluded from cloud backup and device-to-device transfer, so it is neither backed up nor moved to a new device.
+- Uninstalling the app does not delete conversations stored on your server or data kept by speech recognition or text-to-speech services. To delete those, ask that server's operator or the service provider.
+
+### Your rights
+
+Depending on where you live, for example under the EU or UK GDPR or California law, you may have the right to access, correct or delete your personal information, to restrict or object to its processing, and to complain to a data protection authority. For emails you have sent us, contact us at the address below and we will handle your request as the law requires. Information the app keeps on your device is not held by us; you can change or delete it in the app's settings or by clearing the app's data. Requests about information on your server go to its operator.
 
 ### Security
 
 - The API token and dashboard password are encrypted with a key held in the Android Keystore.
 - The app's data is excluded from cloud backup and device-to-device transfer.
-- With no servers of ours and no analytics, advertising or crash-reporting tools, no information builds up on our side.
+- With no servers of ours and no advertising, analytics or crash-reporting tools, no information builds up on our side while you use the app.
 - When the server address uses unencrypted http://, the settings screen says so. We recommend reaching your server over https:// or an encrypted tunnel such as a VPN.
 
-### Your rights
+### Cookies and tracking
 
-Depending on where you live, for example under the EU or UK GDPR or California law, you may have the right to access, correct or delete your personal information, to restrict or object to its processing, and to complain to a data protection authority. Because we hold no personal information about you, there is nothing for us to access, correct or delete. You can change or delete the information on your device in the app's settings or by clearing the app's data, and requests about information on your server go to its operator.
+The app uses no advertising identifiers, analytics tools, tracking cookies or other tracking for advertising or analytics. To keep you signed in to the dashboard you configure, it holds the authentication cookie that dashboard issues in memory while the app runs, and sends it only to that dashboard. The cookie is not stored on your device and is gone when the app is closed. If you do not set up a dashboard, no cookie is created.
 
 ### Children
 
-The app is not directed to children, and we do not collect personal information from anyone, including children under 13 or the minimum age in your country.
-
-### International users
-
-We do not transfer personal information across borders. The GitHub build connects to GitHub in the United States to check for updates, as described above.
+The app is not directed to children, and we do not collect personal information from anyone through the app, including children under 13 or the minimum age in your country.
 
 ### Changes
 
-If we change this policy, we will post the new version and its effective date on this page. Earlier versions can be found in the app repository's history.
+If we change this policy, we will post the new version and its effective date on this page. Earlier versions are in the [change history](https://github.com/lesj0610/hermes-agent-android/commits/gh-pages/privacy/index.md).
 
 ### Contact
 
